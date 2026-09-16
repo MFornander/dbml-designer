@@ -1,0 +1,72 @@
+/* Adapted from holistics/dbml dbml-playground (src/styles/main.css), Apache-2.0. See NOTICE. */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Open Sans', system-ui, sans-serif;
+  --font-mono: 'Inconsolata', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Open Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #2a2a2e;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #55555c;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b6b73;
+}
+
+code, pre {
+  font-family: 'Inconsolata', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Editor line highlight used when hovering a table in the diagram. */
+.dbml-line-highlight {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.dark .dbml-line-highlight {
+  background: rgba(96, 165, 250, 0.18);
+}
+

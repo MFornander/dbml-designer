@@ -1,0 +1,148 @@
+// Welcome to DBML Designer. Type or paste DBML here and the diagram updates live.
+// Docs: https://dbml.dbdiagram.io/docs
+
+Project blog {
+  database_type: 'PostgreSQL'
+  Note: 'A small blogging schema used as the starter example.'
+}
+
+Enum user_role {
+  admin
+  author
+  reader [note: 'Default role for new sign-ups']
+}
+
+Enum post_status {
+  draft
+  published
+  archived
+}
+
+// Reusable columns injected into tables with ~timestamps
+TablePartial timestamps {
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp
+}
+
+Table users [headercolor: #1E69FD] {
+  id integer [pk, increment]
+  username varchar(64) [not null, unique]
+  email varchar(255) [not null, unique, note: 'Used for login and notifications']
+  role user_role [not null, default: 'reader']
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    username [unique, name: 'users_username_idx']
+    (role, created_at)
+  }
+
+  checks {
+    `char_length(username) >= 3` [name: 'username_min_len']
+  }
+
+  Note: 'Registered accounts. One row per person.'
+}
+
+Table profiles {
+  user_id integer [pk]
+  display_name varchar(120)
+  bio text [note: 'Markdown allowed']
+  avatar_url varchar(512)
+}
+
+Table posts [headercolor: #24BAB1] {
+  id integer [pk, increment]
+  author_id integer [not null, ref: > users.id]
+  title varchar(200) [not null]
+  slug varchar(200) [not null, unique]
+  body text
+  status post_status [not null, default: 'draft']
+  published_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (author_id, created_at)
+    slug [unique]
+  }
+
+  Note: 'Articles written by users.'
+}
+
+Table comments [headercolor: #24BAB1] {
+  id integer [pk, increment]
+  post_id integer [not null]
+  user_id integer [not null, ref: > users.id]
+  parent_id integer [ref: >? comments.id, note: 'Null for top-level comments']
+  body text [not null, check: `char_length(body) > 0`]
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table tags {
+  id integer [pk, increment]
+  name varchar(64) [not null, unique]
+  ~timestamps
+}
+
+Table post_tags {
+  post_id integer [not null, ref: > posts.id]
+  tag_id integer [not null, ref: > tags.id]
+
+  indexes {
+    (post_id, tag_id) [pk]
+  }
+}
+
+Table follows {
+  follower_id integer [not null, ref: > users.id]
+  followed_id integer [not null, ref: > users.id]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (follower_id, followed_id) [pk]
+  }
+}
+
+// Derived table: computed nightly from comments (see the Dep block below)
+Table post_stats [headercolor: #8F8DD8] {
+  post_id integer [pk, ref: - posts.id]
+  comment_count integer [not null, default: 0]
+  last_comment_at timestamp
+}
+
+Ref user_profile: profiles.user_id - users.id
+Ref post_comments: comments.post_id > posts.id [delete: cascade, update: no action]
+
+Dep post_stats_rollup [color: #8F8DD8] {
+  comments.post_id -> post_stats.post_id
+  comments.created_at -> post_stats.last_comment_at
+  Note: 'Nightly rollup of comment activity per post'
+}
+
+TableGroup content [color: #24BAB1] {
+  posts
+  comments
+  tags
+  post_tags
+
+  Note: 'Everything a reader sees on the site.'
+}
+
+Metadata Table users {
+  owner: 'identity-team'
+  pii: 'true'
+}
+
+Metadata Column users.email {
+  masking: 'partial'
+}
+
+Note getting_started {
+  '''
+  ## Tips
+
+  - **Drag** tables or a group header to arrange them.
+  - **Hover** a table or a line to highlight its connections.
+  - **Scroll** to zoom, drag the background to pan.
+  - Dashed purple arrows are `Dep` lineage edges.
+  '''
+}

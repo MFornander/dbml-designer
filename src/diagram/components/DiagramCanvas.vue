@@ -1,0 +1,931 @@
+<template>
+  <div
+    ref="root"
+    class="dg-root"
+    :class="{
+      'is-panning': pz.isPanning.value,
+      'is-pan': panning,
+      'is-marquee': marquee !== null,
+      'dg-dark': dark,
+    }"
+    :style="cssVars"
+  >
+    <svg
+      class="dg-svg"
+      @wheel="onWheel"
+      @pointermove="onPointerMove"
+    >
+      <DiagramDefs :viewport="pz.viewport.value" />
+      <rect
+        class="dg-bg-fill"
+        width="100%"
+        height="100%"
+        @pointerdown="onBackgroundDown"
+        @click="onBackgroundClick"
+      />
+      <rect
+        class="dg-bg-grid"
+        width="100%"
+        height="100%"
+        fill="url(#dg-grid)"
+        @pointerdown="onBackgroundDown"
+        @click="onBackgroundClick"
+      />
+      <g
+        class="dg-viewport"
+        :transform="viewportTransform"
+      >
+        <g class="dg-layer-groups">
+          <TableGroupNode
+            v-for="g in geo.groupBoxes.value"
+            :key="g.group.key"
+            :group="g.group"
+            :box="g.box"
+            :name-w="g.nameW"
+            :dark="dark"
+            :collapsed="g.collapsed"
+            :member-count="g.memberCount"
+            :is-dragging="drag.dragging.value?.key === g.group.key"
+          />
+        </g>
+        <g class="dg-layer-notes">
+          <StickyNoteNode
+            v-for="n in notesInRenderOrder"
+            :key="n.note.key"
+            :note="n.note"
+            :box="n.box"
+            :selected="selection.has(n.note.key)"
+            :is-dragging="isDraggingKey(n.note.key)"
+          />
+        </g>
+        <g class="dg-layer-refs">
+          <RefEdge
+            v-for="r in edgesInRenderOrder"
+            :key="r.edge.key"
+            :edge="r.edge"
+            :kind="r.kind"
+            :geo="r.geo"
+            :highlighted="r.highlighted"
+            :animated="r.animated"
+          />
+        </g>
+        <g class="dg-layer-tables">
+          <TableNode
+            v-for="t in tablesInRenderOrder"
+            :key="t.table.key"
+            :table="t.table"
+            :box="t.box"
+            :rows="t.rows"
+            :size="t.size"
+            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :selected="selection.has(t.table.key)"
+            :is-dragging="isDraggingKey(t.table.key)"
+            :dimmed="lineageLayout && geo.unrelatedTables.value.has(t.table.key)"
+          />
+        </g>
+        <rect
+          v-if="marquee"
+          class="dg-marquee"
+          :x="marquee.x"
+          :y="marquee.y"
+          :width="marquee.w"
+          :height="marquee.h"
+          vector-effect="non-scaling-stroke"
+        />
+        <g class="dg-layer-controls">
+          <RefEdgeControls
+            v-if="selectedRef"
+            :edge="selectedRef.edge"
+            :geo="selectedRef.geo"
+            :customized="!!edgeRoutes[selectedRef.edge.key]"
+            @rails-change="onRailsChange"
+            @open-color="openRefColor"
+          />
+        </g>
+      </g>
+    </svg>
+    <DiagramTooltip
+      :content="tooltip.content.value"
+      :anchor="tooltip.anchor.value"
+      :view-size="pz.viewSize.value"
+    />
+    <ColorPickerPopover
+      v-if="colorPicker"
+      :title="colorPicker.title"
+      :current="colorPicker.current"
+      :used-colors="usedColors"
+      :anchor="colorPicker.anchor"
+      :view-size="pz.viewSize.value"
+      @pick="onPickColor"
+      @close="closeColorPicker"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import {
+  computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, toRef, useTemplateRef, watch,
+} from 'vue';
+import type {
+  ColorChangePayload, ColorTarget, DetailLevel, PositionChange, PositionsMap, TableLinkPayload,
+} from '@/types/diagram';
+import type { DepLineVM, DiagramModel, RefVM } from '../types';
+import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
+import { autoLod } from '../geometry/lod';
+import { placeNewItems, placeNewNotes } from '../geometry/layout';
+import {
+  GROUP_HEADER_H, NOTE_MIN_H, NOTE_MIN_W, ROW_H,
+} from '../geometry/constants';
+import {
+  intersects, snap8, type Point, type Rect,
+} from '../geometry/rect';
+import { screenToWorld, worldToScreen } from '../geometry/viewport';
+import { DARK, LIGHT, paletteToCssVars } from '../theme/palette';
+import { DIAGRAM_CTX, type DiagramContext } from '../state/context';
+import {
+  useDiagramGeometry, type DragOverride, type RefGeometry, type RouteDragOverride,
+} from '../state/useDiagramGeometry';
+import { useDrag, type DragTarget } from '../state/useDrag';
+import { useHover } from '../state/useHover';
+import { usePanZoom } from '../state/usePanZoom';
+import { useTooltip } from '../state/useTooltip';
+import DiagramDefs from './DiagramDefs.vue';
+import TableNode from './TableNode.vue';
+import RefEdge from './RefEdge.vue';
+import TableGroupNode from './TableGroupNode.vue';
+import StickyNoteNode from './StickyNoteNode.vue';
+import DiagramTooltip from './DiagramTooltip.vue';
+import ColorPickerPopover from './ColorPickerPopover.vue';
+import RefEdgeControls from './RefEdgeControls.vue';
+import '../theme/diagram.css';
+
+const props = withDefaults(defineProps<{
+  model: DiagramModel;
+  positions: PositionsMap;
+  detailLevel: DetailLevel;
+  dark: boolean;
+  collapsedGroups?: ReadonlySet<string>;
+  showRefs?: boolean;
+  showLineage?: boolean;
+  /** Lineage layout: positions derived from dependency order; groups and notes hidden. */
+  lineageLayout?: boolean;
+  /** Highlight every visible edge: walking ants, names, and endpoint cardinalities. */
+  highlightAll?: boolean;
+  /** Hand-drawn relationship routes by ref key (alternating x/y rails, see routing.ts). */
+  edgeRoutes?: Readonly<Record<string, readonly number[]>>;
+  /** Pan tool: dragging the bare canvas pans instead of drawing a selection box. Space does the same while held. */
+  panMode?: boolean;
+  /** Tables and notes hidden by the active diagram view. */
+  hidden?: ReadonlySet<string>;
+}>(), {
+  collapsedGroups: () => new Set<string>(),
+  showRefs: true,
+  showLineage: true,
+  lineageLayout: false,
+  highlightAll: false,
+  edgeRoutes: () => ({}),
+  panMode: false,
+  hidden: () => new Set<string>(),
+});
+
+const emit = defineEmits<{
+  'position-change': [changes: PositionChange[]];
+  'table-click': [payload: TableLinkPayload];
+  'table-hover': [payload: TableLinkPayload | null];
+  'toggle-group': [key: string];
+  'zoom-change': [k: number];
+  /** A color was chosen in the picker; the host writes it into the DBML text. */
+  'set-color': [payload: ColorChangePayload];
+  /** A relationship's route was hand-drawn (rails) or reset (null). */
+  'edge-route-change': [key: string, rails: number[] | null];
+}>();
+
+const root = useTemplateRef<HTMLElement>('root');
+const model = toRef(props, 'model');
+
+// Measurement
+const measurer = createMeasurer();
+const measureVersion = ref(0);
+onMounted(() => {
+  loadDiagramFonts().then(() => {
+    measurer.clear();
+    measureVersion.value += 1;
+  });
+});
+
+// Viewport
+const pz = usePanZoom(root);
+const viewportTransform = computed(() => {
+  const vp = pz.viewport.value;
+  return `translate(${vp.x} ${vp.y}) scale(${vp.k})`;
+});
+const lod = computed(() => autoLod(pz.viewport.value.k));
+watch(() => pz.viewport.value.k, (k) => emit('zoom-change', k), {
+  immediate: true,
+});
+
+// Geometry
+const dragOverride = shallowRef<DragOverride | null>(null);
+const routeDragOverride = shallowRef<RouteDragOverride | null>(null);
+const geo = useDiagramGeometry({
+  model,
+  positions: toRef(props, 'positions'),
+  detailLevel: toRef(props, 'detailLevel'),
+  collapsedGroups: toRef(props, 'collapsedGroups'),
+  showRefs: toRef(props, 'showRefs'),
+  showLineage: toRef(props, 'showLineage'),
+  lineageLayout: toRef(props, 'lineageLayout'),
+  dragOverride,
+  edgeRoutes: toRef(props, 'edgeRoutes'),
+  routeDragOverride,
+  hidden: toRef(props, 'hidden'),
+  measurer,
+  measureVersion,
+});
+
+// Selected relationship: clicking a line pins it, which shows its control points and tools.
+const selectedRef = computed(() => {
+  const p = hover.pinned.value;
+  if (!p || p.kind !== 'ref' || !props.showRefs) return null;
+  const edge = model.value.refs.find((r) => r.key === p.key);
+  const g = geo.routes.value.get(p.key);
+  return edge && g
+    ? {
+        edge,
+        geo: g,
+      }
+    : null;
+});
+
+function onRailsChange (rails: number[] | null, commit: boolean) {
+  const key = selectedRef.value?.edge.key;
+  if (!key) return;
+  if (!commit) {
+    routeDragOverride.value = {
+      key,
+      rails: rails ?? [],
+    };
+    return;
+  }
+  routeDragOverride.value = null;
+  emit('edge-route-change', key, rails);
+}
+
+// Selection: a marquee on the bare canvas (select mode) or a click picks tables and notes;
+// dragging one selected element moves them all.
+const selection = shallowRef<ReadonlySet<string>>(new Set());
+const marquee = shallowRef<Rect | null>(null);
+/** Space held: pan instead of select until it is released. */
+const spaceHeld = ref(false);
+const panning = computed(() => props.panMode || spaceHeld.value);
+
+function clearSelection () {
+  if (selection.value.size > 0) selection.value = new Set();
+}
+
+/** Members of a group or selection drag also render as dragging. */
+function isDraggingKey (key: string): boolean {
+  const d = drag.dragging.value;
+  if (!d) return false;
+  if (d.key === key) return true;
+  return d.kind === 'selection' && selection.value.has(key);
+}
+
+// Drag: tables and notes move (all selected ones together), notes resize, groups move all their members.
+let dragOrigin: Point = {
+  x: 0,
+  y: 0,
+};
+/** Shift, Cmd, or Ctrl was held when the drag (or click) started: the click adds to or removes from the selection. */
+let dragAdditive = false;
+
+function isAdditive (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): boolean {
+  return e.shiftKey || e.metaKey || e.ctrlKey;
+}
+
+function groupMembers (groupKey: string): ReadonlySet<string> {
+  return new Set(model.value.groups.find((g) => g.key === groupKey)?.tableKeys ?? []);
+}
+
+/** Members moved by a delta drag: a group's tables, or the current selection. */
+function deltaMembers (target: DragTarget): ReadonlySet<string> {
+  return target.kind === 'group' ? groupMembers(target.key) : selection.value;
+}
+
+/** Offset of a group or selection drag, snapped so every member stays on the grid. */
+function groupDelta (pos: Point): Point {
+  return {
+    x: snap8(pos.x - dragOrigin.x),
+    y: snap8(pos.y - dragOrigin.y),
+  };
+}
+
+const drag = useDrag({
+  viewport: pz.viewport,
+  onMove (target, pos) {
+    switch (target.kind) {
+      case 'note-resize':
+        dragOverride.value = {
+          key: target.key,
+          size: {
+            w: Math.max(NOTE_MIN_W, pos.x),
+            h: Math.max(NOTE_MIN_H, pos.y),
+          },
+        };
+        break;
+      case 'group':
+      case 'selection':
+        dragOverride.value = {
+          key: target.key,
+          delta: groupDelta(pos),
+          memberKeys: deltaMembers(target),
+        };
+        break;
+      default:
+        dragOverride.value = {
+          key: target.key,
+          pos,
+        };
+    }
+  },
+  onEnd (target, pos, moved) {
+    if (moved) {
+      emit('position-change', changesFor(target, pos));
+    } else if (target.kind === 'table' || target.kind === 'note' || target.kind === 'selection') {
+      onElementClick(target.key);
+    }
+    dragOverride.value = null;
+  },
+});
+
+/** A click on a table or note selects it alone; with Shift, Cmd, or Ctrl it toggles it in the selection. Tables also pin. */
+function onElementClick (key: string) {
+  const next = new Set(dragAdditive ? selection.value : []);
+  if (dragAdditive && next.has(key)) next.delete(key);
+  else next.add(key);
+  selection.value = next;
+
+  const table = model.value.tablesByKey.get(key);
+  if (!table) return;
+  hover.togglePin({
+    kind: 'table',
+    key,
+  });
+  if (table.token) {
+    emit('table-click', {
+      key,
+      token: table.token,
+    });
+  }
+}
+
+function changesFor (target: DragTarget, pos: Point): PositionChange[] {
+  switch (target.kind) {
+    case 'note-resize': {
+      const stored = props.positions[target.key];
+      if (!stored) return [];
+      return [{
+        key: target.key,
+        x: stored.x,
+        y: stored.y,
+        w: Math.max(NOTE_MIN_W, pos.x),
+        h: Math.max(NOTE_MIN_H, pos.y),
+      }];
+    }
+    case 'group':
+    case 'selection': {
+      const { x: dx, y: dy } = groupDelta(pos);
+      const changes: PositionChange[] = [];
+      for (const key of deltaMembers(target)) {
+        const stored = props.positions[key];
+        if (!stored) continue;
+        changes.push({
+          key,
+          x: stored.x + dx,
+          y: stored.y + dy,
+        });
+      }
+      return changes;
+    }
+    default:
+      return [{
+        key: target.key,
+        x: pos.x,
+        y: pos.y,
+      }];
+  }
+}
+
+// Hover and highlight
+const suppressed = computed(() => drag.dragging.value !== null || pz.isPanning.value || marquee.value !== null);
+const hover = useHover(model, suppressed);
+
+watch(hover.hover, (target, prev) => {
+  const tableOf = (t: typeof target) => {
+    if (!t) return null;
+    if (t.kind === 'table') return t.key;
+    if (t.kind === 'field') return t.tableKey;
+    return null;
+  };
+  const key = tableOf(target);
+  if (key === tableOf(prev)) return;
+  if (!key) {
+    emit('table-hover', null);
+    return;
+  }
+  const table = model.value.tablesByKey.get(key);
+  if (table?.token) {
+    emit('table-hover', {
+      key,
+      token: table.token,
+    });
+  }
+});
+
+/** Last pointer position in pane pixels; edge tooltips trail it. */
+const pointer = shallowRef<{ x: number; y: number } | null>(null);
+
+function onPointerMove (e: PointerEvent) {
+  const r = root.value?.getBoundingClientRect();
+  if (r) {
+    pointer.value = {
+      x: e.clientX - r.left,
+      y: e.clientY - r.top,
+    };
+  }
+}
+
+// Color picker (opened from the gear on a hovered table, group, or note)
+const colorTarget = shallowRef<ColorTarget | null>(null);
+
+function closeColorPicker () {
+  if (colorTarget.value) colorTarget.value = null;
+}
+
+/** Title, current color, and pane-pixel anchor for the open picker; null once its element is gone. */
+const colorPicker = computed(() => {
+  const t = colorTarget.value;
+  if (!t) return null;
+  const vp = pz.viewport.value;
+  const toScreen = (r: Rect): Rect => {
+    const tl = worldToScreen(vp, r);
+    return {
+      x: tl.x,
+      y: tl.y,
+      w: r.w * vp.k,
+      h: r.h * vp.k,
+    };
+  };
+  if (t.kind === 'table') {
+    const table = model.value.tablesByKey.get(t.key);
+    const box = geo.boxes.value.get(t.key);
+    if (!table || !box || !geo.visibleTableKeys.value.has(t.key)) return null;
+    return {
+      title: 'Header Color',
+      current: table.headerColor ?? table.groupColor,
+      anchor: toScreen({
+        ...box,
+        h: ROW_H,
+      }),
+    };
+  }
+  if (t.kind === 'group') {
+    const g = geo.groupBoxes.value.find((x) => x.group.key === t.key);
+    if (!g) return null;
+    return {
+      title: 'Header Color',
+      current: g.group.color,
+      anchor: toScreen({
+        ...g.box,
+        h: GROUP_HEADER_H,
+      }),
+    };
+  }
+  if (t.kind === 'ref') {
+    const ref = model.value.refs.find((r) => r.key === t.key);
+    const g = geo.routes.value.get(t.key);
+    if (!ref || !g || !props.showRefs) return null;
+    return {
+      title: 'Color',
+      current: ref.color ?? ref.lineColor,
+      anchor: toScreen({
+        x: g.mid.x,
+        y: g.mid.y,
+        w: 0,
+        h: 0,
+      }),
+    };
+  }
+  const note = model.value.notes.find((n) => n.key === t.key);
+  const box = geo.noteBoxes.value.get(t.key);
+  if (!note || !box) return null;
+  return {
+    title: 'Note Color',
+    current: note.color,
+    anchor: toScreen({
+      ...box,
+      h: ROW_H,
+    }),
+  };
+});
+
+function openRefColor () {
+  const key = selectedRef.value?.edge.key;
+  if (key) {
+    colorTarget.value = {
+      kind: 'ref',
+      key,
+    };
+  }
+}
+watch(colorPicker, (v) => {
+  if (!v) closeColorPicker();
+});
+
+/** Distinct colors already used by tables, groups, and notes, for the picker's "Currently Used" row. */
+const usedColors = computed(() => {
+  const set = new Set<string>();
+  for (const t of model.value.tables) if (t.headerColor) set.add(t.headerColor.toUpperCase());
+  for (const g of model.value.groups) if (g.color) set.add(g.color.toUpperCase());
+  for (const n of model.value.notes) if (n.color) set.add(n.color.toUpperCase());
+  for (const r of model.value.refs) if (r.color) set.add(r.color.toUpperCase());
+  return [...set];
+});
+
+function onPickColor (color: string) {
+  const t = colorTarget.value;
+  if (t) {
+    emit('set-color', {
+      ...t,
+      color,
+    });
+  }
+}
+
+const tooltip = useTooltip({
+  target: hover.hover,
+  model,
+  boxes: geo.boxes,
+  rowsByTable: geo.rowsByTable,
+  routes: geo.routes,
+  groupBoxes: geo.groupBoxes,
+  viewport: pz.viewport,
+  pointer,
+  // The picker sits where the tooltip would; keep the two from stacking. No tooltips mid route-drag either.
+  suppressed: computed(() => suppressed.value || colorTarget.value !== null || routeDragOverride.value !== null),
+});
+
+function onWheel (e: WheelEvent) {
+  stopAutoFit();
+  pz.onWheel(e);
+}
+
+// Bare canvas: pan (Pan tool or Space) or draw a selection marquee.
+function onBackgroundDown (e: PointerEvent) {
+  if (e.button !== 0) return;
+  stopAutoFit();
+  if (panning.value) {
+    pz.onBackgroundPointerDown(e);
+    return;
+  }
+  startMarquee(e);
+}
+
+/** Pane pixels to diagram coordinates. */
+function worldPoint (e: { clientX: number; clientY: number }): Point {
+  const r = root.value?.getBoundingClientRect();
+  return screenToWorld(pz.viewport.value, {
+    x: e.clientX - (r?.left ?? 0),
+    y: e.clientY - (r?.top ?? 0),
+  });
+}
+
+let marqueeStart: Point | null = null;
+let marqueeAdditive = false;
+/** The click that follows a marquee drag must not clear what the drag just selected. */
+let skipBackgroundClick = false;
+const MARQUEE_SLOP_PX = 3;
+
+function startMarquee (e: PointerEvent) {
+  e.preventDefault();
+  marqueeStart = worldPoint(e);
+  marqueeAdditive = isAdditive(e);
+  window.addEventListener('pointermove', onMarqueeMove);
+  window.addEventListener('pointerup', onMarqueeUp);
+  window.addEventListener('pointercancel', onMarqueeUp);
+}
+
+function onMarqueeMove (e: PointerEvent) {
+  if (!marqueeStart) return;
+  const p = worldPoint(e);
+  const r: Rect = {
+    x: Math.min(marqueeStart.x, p.x),
+    y: Math.min(marqueeStart.y, p.y),
+    w: Math.abs(p.x - marqueeStart.x),
+    h: Math.abs(p.y - marqueeStart.y),
+  };
+  if (marquee.value || (r.w + r.h) * pz.viewport.value.k >= MARQUEE_SLOP_PX) marquee.value = r;
+}
+
+/** Tables and notes touching a rectangle. */
+function keysInside (r: Rect): string[] {
+  const out: string[] = [];
+  for (const [key, box] of geo.boxes.value) {
+    if (geo.visibleTableKeys.value.has(key) && intersects(box, r)) out.push(key);
+  }
+  for (const [key, box] of geo.noteBoxes.value) if (intersects(box, r)) out.push(key);
+  return out;
+}
+
+function onMarqueeUp () {
+  window.removeEventListener('pointermove', onMarqueeMove);
+  window.removeEventListener('pointerup', onMarqueeUp);
+  window.removeEventListener('pointercancel', onMarqueeUp);
+  if (marquee.value) {
+    selection.value = new Set([...(marqueeAdditive ? selection.value : []), ...keysInside(marquee.value)]);
+    skipBackgroundClick = true;
+  }
+  marquee.value = null;
+  marqueeStart = null;
+}
+
+function onBackgroundClick () {
+  if (skipBackgroundClick) {
+    skipBackgroundClick = false;
+    return;
+  }
+  hover.clearPin();
+  clearSelection();
+}
+
+/**
+ * Text fields and dropdowns own the keys typed into them; Space must not pan while one has focus.
+ * Monaco's input is a `div[role=textbox]` driven by the EditContext API, neither a textarea nor
+ * contentEditable, so it is recognized by its role and its editor ancestor.
+ */
+function isTypingTarget (el: Element | null): boolean {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    || (el as HTMLElement).isContentEditable
+    || el.getAttribute('role') === 'textbox'
+    || el.closest('.monaco-editor') !== null;
+}
+
+function onKeyDown (e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    hover.clearPin();
+    closeColorPicker();
+    clearSelection();
+  } else if (e.code === 'Space' && !e.repeat) {
+    const active = document.activeElement;
+    if (isTypingTarget(active)) return;
+    // A toolbar button left focused after a click would otherwise activate on Space; drop its focus and pan.
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
+    spaceHeld.value = true;
+    e.preventDefault();
+  }
+}
+
+function onKeyUp (e: KeyboardEvent) {
+  if (e.code === 'Space') spaceHeld.value = false;
+}
+
+function onWindowBlur () {
+  spaceHeld.value = false;
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onWindowBlur);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown);
+  window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('blur', onWindowBlur);
+  onMarqueeUp();
+});
+
+// Context for child nodes
+const ctx: DiagramContext = {
+  viewport: pz.viewport,
+  lod,
+  highlight: hover.highlight,
+  dark: toRef(props, 'dark'),
+  dragging: drag.dragging,
+  setHover: hover.setHover,
+  clearHover: hover.clearHover,
+  togglePin: hover.togglePin,
+  beginDrag: (e: PointerEvent, target: DragTarget, origin: Point) => {
+    // Lineage-layout positions are derived from the dependency order, so nothing is movable there.
+    if (props.lineageLayout) return;
+    stopAutoFit();
+    dragOrigin = { ...origin };
+    dragAdditive = isAdditive(e);
+    // Dragging one of several selected elements moves them all.
+    const multi = (target.kind === 'table' || target.kind === 'note')
+      && selection.value.has(target.key) && selection.value.size > 1;
+    drag.begin(e, multi
+      ? {
+          kind: 'selection',
+          key: target.key,
+        }
+      : target, origin);
+  },
+  toggleGroup: (key: string) => emit('toggle-group', key),
+  openColorPicker: (target: ColorTarget) => {
+    colorTarget.value = target;
+  },
+};
+provide(DIAGRAM_CTX, ctx);
+
+// Render lists
+const tablesInRenderOrder = computed(() => {
+  const draggingKey = drag.dragging.value?.key;
+  const list = model.value.tables
+    .filter((t) => geo.visibleTableKeys.value.has(t.key))
+    .map((t) => ({
+      table: t,
+      box: geo.boxes.value.get(t.key)!,
+      rows: geo.rowsByTable.value.get(t.key) ?? [],
+      size: geo.sizes.value.get(t.key)!,
+    }));
+  if (!draggingKey) return list;
+  const idx = list.findIndex((t) => t.table.key === draggingKey);
+  if (idx < 0) return list;
+  const [dragged] = list.splice(idx, 1);
+  list.push(dragged!);
+  return list;
+});
+
+interface RenderEdge {
+  edge: RefVM | DepLineVM;
+  kind: 'ref' | 'dep';
+  geo: RefGeometry;
+  highlighted: boolean;
+  /** Whether the walking-ants overlay is mounted (capped when everything is highlighted). */
+  animated: boolean;
+}
+
+/** Above this many highlighted edges, highlight-all mode drops the animated overlay to stay smooth. */
+const MAX_ANIMATED_EDGES = 80;
+
+const edgesInRenderOrder = computed<RenderEdge[]>(() => {
+  const hl = hover.highlight.value;
+  const all = props.highlightAll;
+  const list: RenderEdge[] = [];
+  for (const r of props.showRefs ? model.value.refs : []) {
+    const g = geo.routes.value.get(r.key);
+    if (g) {
+      list.push({
+        edge: r,
+        kind: 'ref',
+        geo: g,
+        highlighted: all || hl.refKeys.has(r.key),
+        animated: true,
+      });
+    }
+  }
+  if (props.showLineage) {
+    for (const d of model.value.deps) {
+      const g = geo.routes.value.get(d.key);
+      if (g) {
+        list.push({
+          edge: d,
+          kind: 'dep',
+          geo: g,
+          highlighted: all || hl.depKeys.has(d.key),
+          animated: true,
+        });
+      }
+      // Column-level mappings show only while one of their fields is hovered or pinned.
+      for (const c of d.columns) {
+        const cg = hl.depColumnKeys.has(c.key) ? geo.routes.value.get(c.key) : undefined;
+        if (cg) {
+          list.push({
+            edge: c,
+            kind: 'dep',
+            geo: cg,
+            highlighted: true,
+            animated: true,
+          });
+        }
+      }
+    }
+  }
+  const hovered = (e: RenderEdge) => (e.kind === 'ref'
+    ? hl.refKeys.has(e.edge.key)
+    : hl.depKeys.has(e.edge.key) || hl.depColumnKeys.has(e.edge.key));
+  if (all && list.length > MAX_ANIMATED_EDGES) {
+    for (const e of list) e.animated = hovered(e);
+  }
+  // Hovered edges draw last so they sit above their neighbours.
+  return [...list.filter((e) => !hovered(e)), ...list.filter(hovered)];
+});
+
+const notesInRenderOrder = computed(() => model.value.notes
+  .filter((n) => geo.noteBoxes.value.has(n.key))
+  .map((n) => ({
+    note: n,
+    box: geo.noteBoxes.value.get(n.key)!,
+  })));
+
+// Auto-placement of elements without a stored position
+watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes], ([tables, notes]) => {
+  if (tables.length === 0 && notes.length === 0) return;
+  const changes: PositionChange[] = [];
+  // Group boxes count as occupied so new tables and notes land outside existing groups.
+  const occupied: Rect[] = [
+    ...geo.boxes.value.values(),
+    ...geo.noteBoxes.value.values(),
+    ...geo.groupBoxes.value.map((g) => g.box),
+  ];
+
+  if (tables.length > 0) {
+    const groupOrder = new Map(model.value.groups.map((g, i) => [g.key, i]));
+    const items = tables.map((key) => {
+      const t = model.value.tablesByKey.get(key)!;
+      const size = geo.fullSizes.value.get(key)!;
+      return {
+        key,
+        w: size.width,
+        h: size.height,
+        order: t.order,
+        ...(t.groupKey && groupOrder.has(t.groupKey) ? { groupOrder: groupOrder.get(t.groupKey)! } : {}),
+      };
+    });
+    for (const [key, pos] of placeNewItems(items, occupied)) {
+      changes.push({
+        key,
+        x: pos.x,
+        y: pos.y,
+      });
+      const item = items.find((i) => i.key === key)!;
+      occupied.push({
+        x: pos.x,
+        y: pos.y,
+        w: item.w,
+        h: item.h,
+      });
+    }
+  }
+  if (notes.length > 0) {
+    for (const [key, pos] of placeNewNotes(notes, occupied)) {
+      changes.push({
+        key,
+        x: pos.x,
+        y: pos.y,
+      });
+    }
+  }
+  if (changes.length > 0) emit('position-change', changes);
+}, {
+  immediate: true,
+  flush: 'post',
+});
+
+// Keep the diagram fitted while the pane is still settling (fonts, editor, split sizes) until the
+// user zooms, pans, or drags. After that the viewport is theirs.
+let autoFit = true;
+function stopAutoFit () {
+  autoFit = false;
+}
+watch([geo.contentBounds, pz.viewSize], ([bounds, size]) => {
+  if (!autoFit || !bounds || size.w === 0 || size.h === 0) return;
+  if (geo.unplacedTables.value.length > 0) return;
+  // Never zoom past 1:1 on the initial fit; small diagrams should not look blown up.
+  pz.fitTo(bounds, 1);
+}, {
+  immediate: true,
+  flush: 'post',
+});
+
+// Entering or leaving the lineage layout changes every position: refit once the new geometry is in.
+watch(() => props.lineageLayout, () => {
+  autoFit = true;
+  nextTick(() => pz.fitTo(geo.contentBounds.value, 1));
+});
+
+const cssVars = computed(() => paletteToCssVars(props.dark ? DARK : LIGHT));
+
+defineExpose({
+  fitToScreen: () => {
+    stopAutoFit();
+    pz.fitTo(geo.contentBounds.value);
+  },
+  resetZoom: () => {
+    stopAutoFit();
+    pz.reset(geo.contentBounds.value);
+  },
+  zoomIn: () => {
+    stopAutoFit();
+    pz.zoomIn();
+  },
+  zoomOut: () => {
+    stopAutoFit();
+    pz.zoomOut();
+  },
+});
+</script>

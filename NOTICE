@@ -1,0 +1,37 @@
+DBML Designer (dbml-designer)
+Copyright 2026 Mattias Fornander
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This product includes software adapted from the DBML project
+(https://github.com/holistics/dbml), Copyright Holistics Software,
+licensed under the Apache License, Version 2.0.
+
+The following files are adapted from the dbml-playground application
+in that repository and carry a header comment naming their source:
+
+  eslint.config.js                      <- dbml-playground/eslint.config.ts
+  src/main.ts                           <- dbml-playground/src/main.ts
+  src/styles/main.css                   <- dbml-playground/src/styles/main.css
+  src/types/diagnostics.ts              <- dbml-playground/src/types/index.ts
+  src/utils/logger.ts                   <- dbml-playground/src/utils/logger.ts
+  src/utils/markdown.ts                 <- dbml-playground/src/utils/markdown.ts
+  src/stores/parserStore.ts             <- dbml-playground/src/stores/parserStore.ts
+  src/editor/DbmlEditor.vue             <- dbml-playground/src/components/editor/DbmlEditor.vue
+  src/editor/dbml_language.ts           <- dbml-playground/src/components/editor/dbml_language.ts
+  src/editor/dbml_services.ts           <- dbml-playground/src/components/editor/dbml_services.ts
+  src/editor/useMonacoModel.ts          <- dbml-playground/src/components/editor/useMonacoModel.ts
+  src/components/SplitPanel.vue         <- dbml-playground/src/components/SplitPanel.vue
+  src/components/EditorPane.vue         <- dbml-playground/src/components/panes/editor/EditorPane.vue (in part)
+  src/components/common/DropdownSelect.vue          <- dbml-playground/src/components/common/DropdownSelect.vue
+  src/components/problems/ProblemEntry.vue          <- dbml-playground/src/components/panes/editor/problems/ProblemEntry.vue
+
+The DBML language, the @dbml/parse compiler, and the @dbml/core model are
+used as npm dependencies under the Apache License, Version 2.0.
+
+Fonts: Open Sans and Inconsolata are distributed via the @fontsource packages
+under the SIL Open Font License, Version 1.1.
+
+The diagram renderer under src/diagram/ is original work. Its visual
+constants (dimensions and colors) were chosen to resemble dbdiagram.io;
+no code from dbdiagram.io is included.
