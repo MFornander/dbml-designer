@@ -4,6 +4,50 @@
     ref="pane"
     class="flex flex-col h-full bg-white border-r border-gray-200 dark:bg-[#1e1e1e] dark:border-gray-800"
   >
+    <!-- The followed file moved on while the editor had unsaved edits: the user decides which wins. -->
+    <div
+      v-if="link.pending"
+      class="flex shrink-0 flex-wrap items-center gap-2 border-b border-yellow-300 bg-yellow-50 px-3 py-1.5 text-xs text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-100"
+      role="status"
+    >
+      <span class="min-w-0 flex-1">{{ link.name }} changed on disk while you have unsaved edits.</span>
+      <button
+        type="button"
+        class="rounded bg-yellow-200 px-2 py-0.5 font-medium hover:bg-yellow-300 cursor-pointer dark:bg-yellow-700 dark:hover:bg-yellow-600"
+        @click="link.reloadFromDisk()"
+      >
+        Reload from disk
+      </button>
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 font-medium hover:bg-yellow-200 cursor-pointer dark:hover:bg-yellow-700"
+        @click="link.save(true)"
+      >
+        Overwrite with mine
+      </button>
+    </div>
+    <div
+      v-else-if="link.path && link.status === 'error'"
+      class="flex shrink-0 flex-wrap items-center gap-2 border-b border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-900/40 dark:text-red-100"
+      role="status"
+    >
+      <span class="min-w-0 flex-1">{{ link.name }}: {{ link.error }}</span>
+      <button
+        type="button"
+        class="rounded bg-red-200 px-2 py-0.5 font-medium hover:bg-red-300 cursor-pointer dark:bg-red-800 dark:hover:bg-red-700"
+        @click="link.follow(link.path!, { applyLayout: false })"
+      >
+        Retry
+      </button>
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 font-medium hover:bg-red-200 cursor-pointer dark:hover:bg-red-800"
+        @click="link.stop()"
+      >
+        Stop following
+      </button>
+    </div>
+
     <div class="flex-1 min-h-0 relative">
       <DbmlEditor
         v-model="editor.text"
@@ -70,6 +114,7 @@ import DbmlEditor from '@/editor/DbmlEditor.vue';
 import LayoutYamlView from '@/components/LayoutYamlView.vue';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { useEditorStore } from '@/stores/editorStore';
+import { useFileLinkStore } from '@/stores/fileLinkStore';
 import { useUiStore } from '@/stores/uiStore';
 
 /** Neither side of the handle gets smaller than this while dragging. */
@@ -78,6 +123,7 @@ const MIN_LAYOUT_PX = 96;
 
 const editor = useEditorStore();
 const ui = useUiStore();
+const link = useFileLinkStore();
 const editorInstance = useEditorInstance();
 
 const pane = useTemplateRef<HTMLElement>('pane');

@@ -101,6 +101,10 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Errors button and floating panel like dbdiagram's, replacing the docked Problems panel: a red (or amber for warnings only) pill above the zoom buttons appears while the DBML has problems and toggles a list grouped by the parser's category, with jump-to-location (expanding a hidden editor first), explanations, and quick fixes kept from the old panel.
 
+- [x] Follow a file: through a dev-server bridge (`plugins/fileBridge.ts`, `.dbml` files under `DBML_ROOTS` only, same origin), the app shows a file from disk, picks up every change written to it within a second while keeping the layout arranged here, and writes text plus footer back on ⌘S. Changes arriving while the editor is dirty wait behind a reload/overwrite bar; a save that would clobber a newer file is refused unless forced. The followed path persists and is resumed without touching the layout.
+
+- [x] Command line: `npm run check -- file.dbml` reports the app's DBML errors and warnings, the diagram adapter's warnings, and layout footer problems as `file:line:col: severity: message` (exit 1 on errors); `npm run graph -- file.dbml [--text]` prints the schema as deterministic JSON or a compact listing (tables, fields, refs with cardinalities, lineage edges with column mappings, groups, views, notes, enums). Built on the same `@dbml/parse` compiler and adapter as the app, run through `tsx`, so an agent editing the DBML gets the same feedback the Errors button gives.
+
 - [x] Toolchain: TypeScript 6.0, ESLint 10, Vite 8, Vitest 5, Pinia 4, Monaco 0.56 (EditContext input; Space-to-pan leaves typing in either editor alone), `yaml` for the layout comment; floating-vue dropped in favour of the hand-rolled menus.
 
 - [x] Sticky note Markdown styled after dbdiagram: GitHub-style heading sizes with a hairline under h1 and h2, roomier list spacing, and notes that scroll inside their paper with a thin scrollbar (the wheel zooms the canvas only when the note has nothing to scroll).

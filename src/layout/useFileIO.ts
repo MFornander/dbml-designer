@@ -112,7 +112,9 @@ export function useFileIO () {
     message,
     exportText,
     exportFile,
+    importText,
     importFiles,
     loadExample,
+    replaceText,
   };
 }

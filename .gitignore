@@ -5,3 +5,4 @@ coverage/
 *.log
 .vite/
 .claude/
+.env.local

@@ -90,15 +90,81 @@ Other scripts:
 | Command | What it does |
 |---|---|
 | `npm test` | Unit and component tests with Vitest |
-| `npm run type-check` | `vue-tsc` against `tsconfig.app.json` |
+| `npm run type-check` | `vue-tsc` for the app and `tsc` for the command line |
 | `npm run lint` | ESLint over the whole project |
 | `npm run build` | Type-check and produce a production build in `dist/` |
 | `npm run preview` | Serve the production build locally |
+
+## Following a file
+
+To work on a `.dbml` together with another program, an agent or an editor, let the app follow the file instead of importing it. Choose Follow file… in the menu, pick a file or type its path, and the editor shows it; every change written to the file appears within a second, and the layout you arranged stays put. ⌘S (Ctrl-S) writes the text and the layout footer back to the file; the status next to the title says whether you have unsaved changes. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
+
+Following works through the dev server only. It reaches `.dbml` files in this repo by default; to add folders, put them in `.env.local`, colon-separated, and restart the dev server:
+
+```bash
+DBML_ROOTS=/Users/me/pipeline-wiki:/Users/me/other-repo
+```
+
+The bridge reads and writes only `.dbml` files under those roots, from the same origin. Remember the dev server listens on the network, so keep the roots to what you mean to share.
+
+## Working with an agent
+
+The follow-file bridge and the command line together let an agent write the DBML while you watch the diagram and arrange it. Using `~/github/pipeline-wiki` as the repo the model lives in:
+
+1. Point the dev server at that repo, once, and restart it:
+
+   ```bash
+   echo 'DBML_ROOTS=/Users/me/github/pipeline-wiki' > .env.local
+   ```
+
+   Colon-separate several folders if the agent should also reach the repos being modeled.
+
+2. In DBML Designer, choose Follow file… from the menu and type `/Users/me/github/pipeline-wiki/schema.dbml`. A path that does not exist yet is fine: press ⌘S once and the file is created with the layout footer.
+
+3. Start the agent in that repo and give it the instructions as the first prompt, rather than through a `CLAUDE.md`, so they travel with the task:
+
+   ```markdown
+   The model lives in schema.dbml. DBML spec: ~/github/dbml/dbml-homepage/docs/docs.md
+   and ~/github/dbml/dbml-homepage/docs/syntax/. Edit the DBML with normal file edits;
+   a human watches the diagram live and arranges it.
+
+   After every edit run this and fix what it reports before moving on:
+     npm run --prefix ~/github/dbml-edit check -- $PWD/schema.dbml
+   To read the model back as data:
+     npm run --prefix ~/github/dbml-edit graph -- $PWD/schema.dbml --text
+
+   Conventions: one Table per dataset, schemas for systems (kafka.events, s3.raw_orders);
+   Dep blocks for lineage with column mappings; Note for what a table is and where it
+   comes from; Metadata for owner, repo, schedule; TableGroup per stage; a DiagramView
+   per pipeline. Never edit or remove the /* === DBML DESIGNER FOOTER === ... */ comment
+   at the end; it holds the human's layout.
+   ```
+
+Each write the agent makes lands in the diagram within a second. You arrange, press ⌘S, and both of you commit the one file.
+
+## Command line
+
+Two commands expose what the app knows about a `.dbml` file, for scripts and for an agent that writes DBML and needs feedback without a browser:
+
+```bash
+npm run check -- path/to/schema.dbml
+```
+
+`check` prints the same errors and warnings the Errors button shows, plus the diagram adapter's warnings (duplicate refs, view entries that resolve to nothing) and any problems in the layout footer, as `file:line:col: severity: message`. It exits 1 when there are errors, 0 otherwise, and takes several files at once.
+
+```bash
+npm run graph -- path/to/schema.dbml
+npm run graph -- path/to/schema.dbml --text
+```
+
+`graph` prints the schema as data in declaration order: project, tables with their fields and group, refs with both ends and cardinalities, lineage edges with their column mappings, groups, views, notes, and enums. JSON by default, or a compact listing with `--text`. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
 
 ## Layout of the code
 
 - `src/editor/` wraps Monaco and registers the DBML language services.
 - `src/layout/` is the layout: its YAML format and writer, the validator that turns imported YAML into diagnostics and a snapshot, the comment handling that puts it into and lifts it out of a `.dbml`, and the import/export composable.
+- `src/cli/` is the pure logic behind the `check` and `graph` commands; `cli/` is their Node entry point.
+- `plugins/fileBridge.ts` is the dev-server side of following a file; `src/files/` is its browser client and `src/stores/fileLinkStore.ts` the state around it.
 - `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, and UI preferences.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
 - `src/diagram/` is the renderer. `adapter/` turns the raw parser output into a view model, `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.

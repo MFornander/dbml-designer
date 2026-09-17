@@ -36,16 +36,39 @@
           <span>Import</span>
           <span :class="MENU_HINT">.dbml</span>
         </button>
-        <button
-          :class="ITEM"
-          role="menuitem"
-          title="Replace the text and layout with the starter blog schema"
-          @click="run(io.loadExample)"
-        >
-          <PhFileText class="w-4 h-4 shrink-0" />
-          <span>Load Example</span>
-          <span :class="MENU_HINT">blog schema</span>
-        </button>
+        <template v-if="link.available !== false">
+          <div :class="MENU_DIVIDER" />
+          <button
+            :class="ITEM"
+            role="menuitem"
+            title="Show a .dbml from disk and pick up every change written to it"
+            @click="run(() => { followOpen = true; })"
+          >
+            <PhFolderOpen class="w-4 h-4 shrink-0" />
+            <span>Follow file…</span>
+            <span :class="MENU_HINT">live from disk</span>
+          </button>
+          <button
+            :class="ITEM"
+            role="menuitem"
+            :disabled="!link.path"
+            title="Write the text and the layout footer to the followed file"
+            @click="run(() => { void link.save(); })"
+          >
+            <PhFloppyDisk class="w-4 h-4 shrink-0" />
+            <span>Save to file</span>
+            <span :class="MENU_HINT">⌘S</span>
+          </button>
+          <button
+            v-if="link.path"
+            :class="ITEM"
+            role="menuitem"
+            @click="run(() => link.stop())"
+          >
+            <PhLinkBreak class="w-4 h-4 shrink-0" />
+            <span>Stop following</span>
+          </button>
+        </template>
         <div :class="MENU_DIVIDER" />
         <button
           :class="ITEM"
@@ -62,6 +85,16 @@
           />
           <span>{{ ui.isDark ? 'Light mode' : 'Dark mode' }}</span>
         </button>
+        <button
+          :class="ITEM"
+          role="menuitem"
+          title="Replace the text and layout with the starter blog schema"
+          @click="run(io.loadExample)"
+        >
+          <PhFileText class="w-4 h-4 shrink-0" />
+          <span>Load Example</span>
+          <span :class="MENU_HINT">blog schema</span>
+        </button>
         <a
           :class="ITEM"
           role="menuitem"
@@ -77,6 +110,19 @@
       </div>
     </div>
     <span class="text-white font-semibold text-sm tracking-tight">DBML Designer</span>
+    <!-- The followed file and its state -->
+    <span
+      v-if="link.path"
+      class="ml-2 flex items-center gap-1.5 rounded bg-white/10 px-2 py-0.5 text-xs text-gray-200"
+      :title="link.path"
+    >
+      <PhFileText class="w-3.5 h-3.5 shrink-0" />
+      <span class="max-w-[16rem] truncate">{{ link.name }}</span>
+      <span
+        class="text-gray-400"
+        :class="{ 'text-yellow-300': link.dirty || link.pending, 'text-red-300': link.status === 'error' }"
+      >· {{ linkState }}</span>
+    </span>
     <span
       v-if="io.message.value"
       class="ml-auto mr-2 text-xs text-gray-300 truncate max-w-[50vw]"
@@ -90,17 +136,24 @@
       accept=".dbml,.txt"
       @change="onPick"
     >
+    <FollowFileDialog
+      v-if="followOpen"
+      @close="followOpen = false"
+    />
   </header>
 </template>
 
 <script setup lang="ts">
 import {
-  onBeforeUnmount, onMounted, ref, useTemplateRef,
+  computed, onBeforeUnmount, onMounted, ref, useTemplateRef,
 } from 'vue';
 import {
-  PhArrowSquareOut, PhBookOpen, PhDownloadSimple, PhFileText, PhList, PhMoon, PhSun, PhUploadSimple,
+  PhArrowSquareOut, PhBookOpen, PhDownloadSimple, PhFileText, PhFloppyDisk, PhFolderOpen, PhLinkBreak, PhList, PhMoon,
+  PhSun, PhUploadSimple,
 } from '@phosphor-icons/vue';
+import FollowFileDialog from '@/components/FollowFileDialog.vue';
 import { useFileIO } from '@/layout/useFileIO';
+import { useFileLinkStore } from '@/stores/fileLinkStore';
 import { useUiStore } from '@/stores/uiStore';
 
 import {
@@ -112,9 +165,26 @@ const ITEM = MENU_ITEM;
 
 const ui = useUiStore();
 const io = useFileIO();
+const link = useFileLinkStore();
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput');
 const menuRoot = useTemplateRef<HTMLElement>('menuRoot');
 const menuOpen = ref(false);
+const followOpen = ref(false);
+
+const linkState = computed(() => {
+  if (link.status === 'error') return link.error ?? 'error';
+  if (link.pending) return 'changed on disk';
+  if (link.dirty) return 'unsaved changes';
+  return link.following ? 'following' : 'not following';
+});
+
+/** ⌘S / Ctrl-S saves the followed file, or downloads the export when nothing is followed. */
+function onSaveShortcut (e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 's' || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  if (link.path) void link.save();
+  else io.exportFile();
+}
 
 /** Run a menu action and close the menu. */
 function run (action: () => void) {
@@ -139,10 +209,13 @@ function onKeyDown (e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', onSaveShortcut);
+  void link.resume();
   window.addEventListener('pointerdown', onWindowPointerDown, true);
   window.addEventListener('keydown', onKeyDown);
 });
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onSaveShortcut);
   window.removeEventListener('pointerdown', onWindowPointerDown, true);
   window.removeEventListener('keydown', onKeyDown);
 });
