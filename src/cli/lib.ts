@@ -6,7 +6,9 @@
 import {
   Compiler, DBMLDiagnosticsProvider, DEFAULT_ENTRY, MemoryProjectLayout,
 } from '@dbml/parse';
-import type { Database, Diagnostic } from '@dbml/parse';
+import type { Database, Diagnostic, Filepath } from '@dbml/parse';
+
+type DbmlProjectLayout = ConstructorParameters<typeof Compiler>[0];
 import { buildDiagramModel } from '@/diagram/adapter/buildModel';
 import type { DiagramModel, EdgeEndpointVM, RefEndpointVM } from '@/diagram/types';
 import { splitLayoutComment, validateLayout } from '@/layout';
@@ -23,6 +25,14 @@ export interface CliDiagnostic {
   message: string;
   /** The DBML itself, or the layout YAML in the footer comment. */
   source: 'dbml' | 'layout';
+  /** Absolute path of the file the problem is in when it is an imported file, not the entry. */
+  file?: string;
+}
+
+/** Where the text lives and how its imports are found; the defaults are a lone in-memory file. */
+export interface CompileOptions {
+  entry?: Filepath;
+  layout?: DbmlProjectLayout;
 }
 
 export interface CheckResult {
@@ -41,17 +51,31 @@ interface Compiled {
   crash: string | null;
 }
 
-/** Run the DBML compiler the way the app does: one in-memory file, last-good semantics. */
-export function compileDbml (text: string): Compiled {
-  const layout = new MemoryProjectLayout();
+/** Distinct diagnostics: imported files' problems are reported once per file they reach. */
+function dedupe (list: unknown): Diagnostic[] {
+  const seen = new Set<string>();
+  return (list as Diagnostic[]).filter((d) => {
+    const key = `${d.filepath.absolute}|${d.startRow}|${d.startColumn}|${d.text}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Run the DBML compiler the way the app does, with last-good semantics. By default the text is a
+ * lone in-memory file; given an entry and a layout, `use` imports resolve through the layout.
+ */
+export function compileDbml (text: string, opts: CompileOptions = {}): Compiled {
+  const entry = opts.entry ?? DEFAULT_ENTRY;
+  const layout = opts.layout ?? new MemoryProjectLayout();
+  if (layout instanceof MemoryProjectLayout) layout.setSource(entry, text);
   const compiler = new Compiler(layout);
   const provider = new DBMLDiagnosticsProvider(compiler);
-  layout.setSource(DEFAULT_ENTRY, text);
-  const own = (list: unknown) => (list as Diagnostic[]).filter((d) => d.filepath.equals(DEFAULT_ENTRY));
   try {
-    const report = compiler.interpretFile(DEFAULT_ENTRY);
-    const errors = own(provider.provideErrors(DEFAULT_ENTRY));
-    const warnings = own(provider.provideWarnings(DEFAULT_ENTRY));
+    const report = compiler.interpretFile(entry);
+    const errors = dedupe(provider.provideErrors(entry));
+    const warnings = dedupe(provider.provideWarnings(entry));
     const db = errors.length === 0 ? (report.getValue() as Database | undefined) ?? null : null;
     return {
       db,
@@ -69,13 +93,14 @@ export function compileDbml (text: string): Compiled {
   }
 }
 
-function fromCompiler (d: Diagnostic, severity: Severity): CliDiagnostic {
+function fromCompiler (d: Diagnostic, severity: Severity, entry: Filepath): CliDiagnostic {
   return {
     line: Number(d.startRow),
     column: Number(d.startColumn),
     severity,
     message: String(d.text ?? ''),
     source: 'dbml',
+    ...(d.filepath.equals(entry) ? {} : { file: d.filepath.absolute }),
   };
 }
 
@@ -96,8 +121,9 @@ const byPosition = (a: CliDiagnostic, b: CliDiagnostic) => a.line - b.line || a.
  * adapter's warnings (duplicate refs, view entries that resolve to nothing), and problems in the
  * layout footer, reported at their position in the file.
  */
-export function checkText (text: string): CheckResult {
-  const compiled = compileDbml(text);
+export function checkText (text: string, opts: CompileOptions = {}): CheckResult {
+  const entry = opts.entry ?? DEFAULT_ENTRY;
+  const compiled = compileDbml(text, opts);
   const diagnostics: CliDiagnostic[] = [];
   if (compiled.crash) {
     diagnostics.push({
@@ -108,8 +134,8 @@ export function checkText (text: string): CheckResult {
       source: 'dbml',
     });
   }
-  for (const d of compiled.errors) diagnostics.push(fromCompiler(d, 'error'));
-  for (const d of compiled.warnings) diagnostics.push(fromCompiler(d, 'warning'));
+  for (const d of compiled.errors) diagnostics.push(fromCompiler(d, 'error', entry));
+  for (const d of compiled.warnings) diagnostics.push(fromCompiler(d, 'warning', entry));
 
   const model = compiled.db ? buildDiagramModel(compiled.db) : null;
   if (model) {
@@ -307,8 +333,8 @@ export function graphOfModel (model: DiagramModel, db: Database): Graph {
 }
 
 /** The graph of a text, or null with the check result when the DBML has errors. */
-export function graphOf (text: string): { graph: Graph | null; check: CheckResult } {
-  const check = checkText(text);
+export function graphOf (text: string, opts: CompileOptions = {}): { graph: Graph | null; check: CheckResult } {
+  const check = checkText(text, opts);
   if (!check.db) {
     return {
       graph: null,
@@ -361,7 +387,7 @@ export function formatGraphText (g: Graph): string {
 
 /** `file:line:col: severity: message`, one per line, then a summary. */
 export function formatCheck (file: string, result: CheckResult): string {
-  const lines = result.diagnostics.map((d) => `${file}:${d.line}:${d.column}: ${d.severity}: ${d.message}${d.source === 'layout' ? ' (layout footer)' : ''}`);
+  const lines = result.diagnostics.map((d) => `${d.file ?? file}:${d.line}:${d.column}: ${d.severity}: ${d.message}${d.source === 'layout' ? ' (layout footer)' : ''}`);
   const count = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
   lines.push(`${file}: ${count(result.errors, 'error')}, ${count(result.warnings, 'warning')}`);
   return `${lines.join('\n')}\n`;

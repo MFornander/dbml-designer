@@ -664,9 +664,14 @@ function rangeOf (token: NonNullable<DiagramModel['views'][number]['token']>) {
   };
 }
 
+/** A view declared in an imported file is shown but cannot be rewritten from this text. */
+function editable (v: { token?: { file?: string } } | null): boolean {
+  return !!v && (v.token?.file === undefined || v.token.file === parser.entryPath);
+}
+
 function save () {
   const v = views.view;
-  if (!v || !canSave.value) return;
+  if (!v || !canSave.value || !editable(v)) return;
   textEdits.apply(upsertDiagramView(textEdits.text(), v.token ? rangeOf(v.token) : null, blockFor(v.name)));
   views.adopt(v.name);
 }
@@ -730,7 +735,7 @@ function submitName () {
     }
     textEdits.apply(upsertDiagramView(textEdits.text(), null, blockFor(name)));
   } else {
-    if (!current?.token) return;
+    if (!current?.token || !editable(current)) return;
     textEdits.apply(renameDiagramView(textEdits.text(), rangeOf(current.token), name));
   }
   // The header shows the active name right away; the next parse brings the block itself.
@@ -742,7 +747,7 @@ function submitName () {
 function deleteView () {
   const v = views.view;
   openMenu.value = null;
-  if (!v?.token || parser.isStale) return;
+  if (!v?.token || parser.isStale || !editable(v)) return;
   textEdits.apply(deleteDiagramView(textEdits.text(), rangeOf(v.token)));
   views.select(null, props.model);
 }

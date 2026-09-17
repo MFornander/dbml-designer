@@ -20,8 +20,9 @@ export function setupDbmlServices (compiler: Compiler, layout: MemoryProjectLayo
   if (registered) return;
   registered = true;
 
+  // fsPath decodes the URI, so a path with spaces maps to the same file the parser store uses.
   const sync = (model: monaco.editor.ITextModel): void => {
-    layout.setSource(Filepath.fromUri(String(model.uri)), model.getValue());
+    layout.setSource(Filepath.from(model.uri.fsPath), model.getValue());
   };
 
   monaco.languages.registerDefinitionProvider(languageId, {
@@ -56,7 +57,7 @@ export function setupDbmlServices (compiler: Compiler, layout: MemoryProjectLayo
 
 export function updateDiagnosticMarkers (model: monaco.editor.ITextModel): void {
   if (!services) return;
-  const filepath = model.uri ? Filepath.fromUri(String(model.uri)) : undefined;
+  const filepath = model.uri ? Filepath.from(model.uri.fsPath) : undefined;
   if (!filepath) return;
   const markers = services.diagnosticsProvider.provideMarkers(filepath);
   monaco.editor.setModelMarkers(model, languageId, markers as monaco.editor.IMarkerData[]);

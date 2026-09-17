@@ -171,6 +171,12 @@ onMounted(async () => {
   emit('editor-mounted', editor.value);
 });
 
+// The parser store replaces its compiler when imported files come and go; the services follow.
+watch(() => parser.compiler, (compiler) => {
+  setupDbmlServices(compiler, parser.layout);
+  updateDiagnosticMarkers(model.value);
+});
+
 onBeforeUnmount(() => {
   const _editor = editor.value;
   editor.value = null;

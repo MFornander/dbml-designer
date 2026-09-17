@@ -48,17 +48,17 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 | Element | dbdiagram.io | DBML Designer | Match |
 |---|---|---|---|
 | Dep block and inline `dep` (data lineage) | Table-level lineage edges with column-level mappings in the tooltip, in a separate lineage view | One curved dashed arrow per table pair with the column mappings in its tooltip and drawn on field hover, a Deps-only filter, and a Lineage Layout toggle that orders tables by dependency | Full |
-| Module system: `use`, selective import, aliases, `reuse` | Multi-file projects | Single file; an import is reported as an error | Not supported by design |
+| Module system: `use`, selective import, aliases, `reuse` | Multi-file projects | Imports resolve next to a followed file (and on the command line); imported elements are drawn, refs and deps cross files, their problems are listed by file. The virtual, unfollowed text cannot import | Full |
 | Multi-line strings, comments | Parser level | Parser level | Full |
 
 ### Summary
 
 | Rating | Count |
 |---|---|
-| Full | 29 |
+| Full | 30 |
 | Partial | 1 |
 | Not surfaced (parsed, no UI) | 1 |
-| Missing or unsupported | 1 |
+| Missing or unsupported | 0 |
 
 ## Work items
 
@@ -103,6 +103,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Follow a file: through a dev-server bridge (`plugins/fileBridge.ts`, `.dbml` files under `DBML_ROOTS` only, same origin), the app shows a file from disk, picks up every change written to it within a second while keeping the layout arranged here, and writes text plus footer back on ⌘S. Changes arriving while the editor is dirty wait behind a reload/overwrite bar; a save that would clobber a newer file is refused unless forced. The followed path persists and is resumed without touching the layout.
 
+- [x] Module system: the parser store's entry is the followed file's real path, `use` imports are fetched through the file bridge on demand (the compiler is rebuilt when files appear or vanish, since it caches resolution), imported files are watched for changes, and their diagnostics are tagged with the file. Elements declared in imported files are drawn but cannot be recolored, revealed, or have their views rewritten from this text. The command line resolves imports from disk through `DiskProjectLayout`.
+
 - [x] Command line: `npm run check -- file.dbml` reports the app's DBML errors and warnings, the diagram adapter's warnings, and layout footer problems as `file:line:col: severity: message` (exit 1 on errors); `npm run graph -- file.dbml [--text]` prints the schema as deterministic JSON or a compact listing (tables, fields, refs with cardinalities, lineage edges with column mappings, groups, views, notes, enums). Built on the same `@dbml/parse` compiler and adapter as the app, run through `tsx`, so an agent editing the DBML gets the same feedback the Errors button gives.
 
 - [x] Toolchain: TypeScript 6.0, ESLint 10, Vite 8, Vitest 5, Pinia 4, Monaco 0.56 (EditContext input; Space-to-pan leaves typing in either editor alone), `yaml` for the layout comment; floating-vue dropped in favour of the hand-rolled menus.
@@ -118,5 +120,4 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 ### Out of scope by design
 
-- Module system (`use`, selective import, `reuse`): the app is a single-file REPL.
 - Publish, accounts, workspaces. Export and import exist only as the `.dbml` file (layout in its closing comment); there is no SQL or image export.

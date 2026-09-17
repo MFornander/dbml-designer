@@ -147,9 +147,14 @@ watch(items, () => {
   expanded.value = null;
 });
 
-/** Bring the editor into view, then jump to the problem. */
+/** Bring the editor into view, then jump to the problem; problems in imported files only expand. */
 function onEntryClick (item: DiagnosticItem) {
   const d = item.diagnostic;
+  const hasDetails = !!(d.explanation || d.quickFixes?.length);
+  if (d.file) {
+    expanded.value = hasDetails && expanded.value !== d ? d : null;
+    return;
+  }
   if (ui.editorCollapsed) ui.setEditorCollapsed(false);
   editorInstance.revealRange({
     startLineNumber: d.location.line,
@@ -160,7 +165,6 @@ function onEntryClick (item: DiagnosticItem) {
     select: true,
     focus: true,
   });
-  const hasDetails = !!(d.explanation || d.quickFixes?.length);
   expanded.value = hasDetails && expanded.value !== d ? d : null;
 }
 

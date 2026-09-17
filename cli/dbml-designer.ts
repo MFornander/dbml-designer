@@ -9,9 +9,12 @@
  * tables, relationships, and lineage as JSON, or as a compact listing with `--text`.
  */
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Filepath } from '@dbml/parse';
 import {
   checkText, formatCheck, formatGraphText, graphOf,
 } from '../src/cli/lib';
+import { DiskProjectLayout } from './diskLayout';
 
 const USAGE = `Usage:
   dbml-designer check <file.dbml> [...]   Report errors and warnings; exit 1 on errors
@@ -22,6 +25,19 @@ function read (file: string): string {
   return readFileSync(file, 'utf8');
 }
 
+/** The file as the entry of a project on disk, so its `use` imports resolve next to it. */
+function project (file: string) {
+  const text = read(file);
+  const entry = Filepath.from(resolve(file));
+  return {
+    text,
+    opts: {
+      entry,
+      layout: new DiskProjectLayout(entry, text),
+    },
+  };
+}
+
 function main (argv: string[]): number {
   const [command, ...rest] = argv;
   const flags = new Set(rest.filter((a) => a.startsWith('--')));
@@ -30,7 +46,8 @@ function main (argv: string[]): number {
   if (command === 'check' && files.length > 0) {
     let failed = false;
     for (const file of files) {
-      const result = checkText(read(file));
+      const { text, opts } = project(file);
+      const result = checkText(text, opts);
       process.stdout.write(formatCheck(file, result));
       if (result.errors > 0) failed = true;
     }
@@ -39,7 +56,8 @@ function main (argv: string[]): number {
 
   if (command === 'graph' && files.length === 1) {
     const file = files[0]!;
-    const { graph, check } = graphOf(read(file));
+    const { text, opts } = project(file);
+    const { graph, check } = graphOf(text, opts);
     if (!graph) {
       process.stderr.write(formatCheck(file, check));
       return 1;

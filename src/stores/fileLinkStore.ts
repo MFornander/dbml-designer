@@ -5,13 +5,16 @@
  * silently: a change that arrives while the editor is dirty waits for the user to reload or
  * overwrite.
  */
-import { computed, ref, shallowRef } from 'vue';
+import {
+  computed, ref, shallowRef, watch,
+} from 'vue';
 import { defineStore } from 'pinia';
 import { BridgeError, fileBridge } from '@/files/fileBridge';
 import { splitLayoutComment, withLayoutPlaceholder } from '@/layout';
 import { useFileIO } from '@/layout/useFileIO';
 import { usePersistedRef } from '@/utils/persistedRef';
 import { useEditorStore } from './editorStore';
+import { useParserStore } from './parserStore';
 
 interface FileLinkState {
   version: 1;
@@ -31,8 +34,19 @@ export type FileLinkStatus = 'idle' | 'following' | 'error';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Reads a file a `use` statement points at through the bridge; missing or off-limits files count as absent. */
+async function loadImport (absolutePath: string): Promise<string | null> {
+  try {
+    return (await fileBridge.read(absolutePath)).text;
+  } catch (e) {
+    if (e instanceof BridgeError && (e.status === 404 || e.status === 403)) return null;
+    throw e;
+  }
+}
+
 export const useFileLinkStore = defineStore('fileLink', () => {
   const editor = useEditorStore();
+  const parser = useParserStore();
   const io = useFileIO();
 
   const state = usePersistedRef<FileLinkState>('fileLink', () => ({
@@ -63,6 +77,28 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   let stopWatching: (() => void) | null = null;
   /** The text of our own last write, so its change event is not mistaken for someone else's. */
   let lastWritten: string | null = null;
+  /** Watchers on the files the entry imports, by absolute path. */
+  const importWatchers = new Map<string, () => void>();
+
+  // Imports resolve next to the followed file and are read through the bridge; follow their changes too.
+  watch(() => parser.importPaths, (paths) => {
+    for (const [abs, stopImport] of importWatchers) {
+      if (!paths.includes(abs)) {
+        stopImport();
+        importWatchers.delete(abs);
+      }
+    }
+    for (const abs of paths) {
+      if (importWatchers.has(abs)) continue;
+      importWatchers.set(abs, fileBridge.watch(abs, () => {
+        void loadImport(abs).then((text) => parser.updateImport(abs, text)).catch(() => undefined);
+      }));
+    }
+  });
+  function stopImportWatchers (): void {
+    for (const stopImport of importWatchers.values()) stopImport();
+    importWatchers.clear();
+  }
 
   async function refreshFiles (): Promise<boolean> {
     try {
@@ -120,6 +156,8 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     }
     // Someone else changed the footer: take their layout. Otherwise keep ours and take the DBML.
     applyFile(file.text, file.mtimeMs, parts.layout !== synced.value?.footer);
+    // A new `use` may point at a file that did not exist a moment ago.
+    parser.retryImports();
   }
 
   function startWatching (p: string): void {
@@ -135,12 +173,15 @@ export const useFileLinkStore = defineStore('fileLink', () => {
    */
   async function follow (target: string, opts: { applyLayout?: boolean } = {}): Promise<boolean> {
     stop(false);
+    parser.setSourceLoader(loadImport);
     try {
       const file = await fileBridge.read(target);
       state.value = {
         version: 1,
         path: file.path,
       };
+      // Imports in the text resolve relative to this path from now on.
+      parser.setEntryPath(file.path);
       applyFile(file.text, file.mtimeMs, opts.applyLayout ?? true);
       startWatching(file.path);
       status.value = 'following';
@@ -153,6 +194,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
           version: 1,
           path: target,
         };
+        parser.setEntryPath(target);
         synced.value = {
           dbml: '',
           footer: null,
@@ -221,6 +263,9 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   function stop (forget = true): void {
     stopWatching?.();
     stopWatching = null;
+    stopImportWatchers();
+    parser.setEntryPath(null);
+    parser.setSourceLoader(null);
     synced.value = null;
     pending.value = null;
     lastWritten = null;

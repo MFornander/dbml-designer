@@ -1,12 +1,13 @@
 // Adapted from holistics/dbml dbml-playground (src/stores/parserStore.ts), Apache-2.0. See NOTICE.
-// Single-file variant: one compiler, one entry, last-good database semantics.
+// Single-entry variant: one entry file, last-good database semantics, and `use` imports loaded
+// on demand from wherever the entry file lives.
 import {
   ref, shallowRef, computed, watch, markRaw,
 } from 'vue';
 import { defineStore } from 'pinia';
 import { debounce } from 'lodash-es';
 import {
-  Compiler, DBMLDiagnosticsProvider, DEFAULT_ENTRY, MemoryProjectLayout,
+  Compiler, DBMLDiagnosticsProvider, DEFAULT_ENTRY, Filepath, MemoryProjectLayout,
 } from '@dbml/parse';
 import type { Database, Diagnostic } from '@dbml/parse';
 import type { ParserDiagnostic } from '@/types/diagnostics';
@@ -15,10 +16,17 @@ import { useEditorStore } from './editorStore';
 
 const DEBOUNCE_MS = 300;
 
-function toParserDiagnostic (diagnostic: Diagnostic): ParserDiagnostic {
+/** Reads a file a `use` statement points at, by absolute path; null when there is no such file. */
+export type SourceLoader = (absolutePath: string) => Promise<string | null>;
+
+const IMPORT_HINT = 'Imports resolve relative to the file\'s own folder. Follow the file from the menu so the app can read the files next to it.';
+
+function toParserDiagnostic (diagnostic: Diagnostic, entry: Filepath): ParserDiagnostic {
+  const foreign = !diagnostic.filepath.equals(entry);
+  const text = String(diagnostic.text ?? '');
   return {
     code: diagnostic.code ?? -1,
-    message: String(diagnostic.text ?? ''),
+    message: foreign ? `${diagnostic.filepath.basename}: ${text}` : text,
     location: {
       line: Number(diagnostic.startRow),
       column: Number(diagnostic.startColumn),
@@ -27,18 +35,23 @@ function toParserDiagnostic (diagnostic: Diagnostic): ParserDiagnostic {
       line: Number(diagnostic.endRow),
       column: Number(diagnostic.endColumn),
     },
+    ...(foreign ? { file: diagnostic.filepath.absolute } : {}),
     ...(diagnostic.category ? { category: diagnostic.category } : {}),
     ...(diagnostic.explanation ? { explanation: diagnostic.explanation } : {}),
-    ...(diagnostic.quickFixes?.length ? { quickFixes: diagnostic.quickFixes } : {}),
+    // Quick fixes edit the text at hand; they cannot reach into another file.
+    ...(!foreign && diagnostic.quickFixes?.length ? { quickFixes: diagnostic.quickFixes } : {}),
   };
 }
 
 export const useParserStore = defineStore('parser', () => {
   // markRaw keeps Vue/Pinia from proxying the compiler objects (and keeps their types intact).
   const layout = markRaw(new MemoryProjectLayout());
-  const compiler = markRaw(new Compiler(layout));
-  const diagnosticsProvider = markRaw(new DBMLDiagnosticsProvider(compiler));
-  const filepath = markRaw(DEFAULT_ENTRY);
+  // The compiler caches which files exist; it is replaced when imported files appear or vanish.
+  const compiler = shallowRef(markRaw(new Compiler(layout)));
+  let diagnosticsProvider = markRaw(new DBMLDiagnosticsProvider(compiler.value));
+  /** The file being edited: a virtual one, or the followed file's real path so imports resolve next to it. */
+  const entry = shallowRef<Filepath>(markRaw(DEFAULT_ENTRY));
+  const entryPath = computed(() => entry.value.absolute);
   const editor = useEditorStore();
 
   const isLoading = ref(false);
@@ -57,18 +70,82 @@ export const useParserStore = defineStore('parser', () => {
   /** True when the diagram shows an older, valid model because the current text has errors. */
   const isStale = computed(() => hasErrors.value && rawDatabase.value !== undefined);
 
-  function collect (provide: (fp: typeof DEFAULT_ENTRY) => unknown): ParserDiagnostic[] {
-    const list = provide(DEFAULT_ENTRY) as Diagnostic[];
-    return list
-      .filter((d) => d.filepath.equals(DEFAULT_ENTRY))
-      .map(toParserDiagnostic);
+  /** Sources of the files the entry imports, by absolute path. */
+  const imports = shallowRef<ReadonlyMap<string, string>>(new Map());
+  const importPaths = computed(() => [...imports.value.keys()]);
+  let loader: SourceLoader | null = null;
+  const pendingLoads = new Set<string>();
+  /** Imports the loader could not find; asked for again only when `retryImports` says so. */
+  const missing = new Set<string>();
+
+  function rebuildCompiler (): void {
+    compiler.value = markRaw(new Compiler(layout));
+    diagnosticsProvider = markRaw(new DBMLDiagnosticsProvider(compiler.value));
+  }
+
+  function collect (provide: (fp: Filepath) => unknown): ParserDiagnostic[] {
+    const list = provide(entry.value) as Diagnostic[];
+    const seen = new Set<string>();
+    const out: ParserDiagnostic[] = [];
+    for (const raw of list) {
+      const d = toParserDiagnostic(raw, entry.value);
+      const key = `${d.file ?? ''}|${d.location.line}|${d.location.column}|${d.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const needsHint = !d.file && loader === null && /non-existent file/.test(d.message);
+      out.push(needsHint ? { ...d, explanation: IMPORT_HINT } : d);
+    }
+    return out;
+  }
+
+  /** The files the entry reaches through `use`, besides itself, whether or not they are loaded yet. */
+  function dependencies (): Filepath[] {
+    try {
+      return compiler.value.reachableFiles(entry.value).filter((f) => !f.equals(entry.value));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Ask the loader for imports the layout does not have yet; each answer triggers a re-parse. */
+  function requestImports (): void {
+    const load = loader;
+    // The virtual entry has no folder for imports to live in.
+    if (!load || entry.value.equals(DEFAULT_ENTRY)) return;
+    const forEntry = entry.value;
+    for (const fp of dependencies()) {
+      const abs = fp.absolute;
+      if (imports.value.has(abs) || pendingLoads.has(abs) || missing.has(abs)) continue;
+      pendingLoads.add(abs);
+      load(abs).then((text) => {
+        pendingLoads.delete(abs);
+        // The answer belongs to an earlier entry or loader: nobody wants it any more.
+        if (load !== loader || forEntry !== entry.value) return;
+        if (text === null) {
+          missing.add(abs);
+        } else {
+          layout.setSource(Filepath.from(abs), text);
+          imports.value = new Map(imports.value).set(abs, text);
+          rebuildCompiler();
+        }
+        parseNow();
+      }).catch((err: unknown) => {
+        pendingLoads.delete(abs);
+        missing.add(abs);
+        logger.warn('Failed to load an imported file', abs, err);
+        parseNow();
+      });
+    }
   }
 
   function parseNow (text: string = editor.text): void {
     isLoading.value = true;
+    layout.setSource(entry.value, text);
+    requestImports();
+    // Nothing is published until the imports have arrived; each answer runs this again.
+    if (pendingLoads.size > 0) return;
     try {
-      layout.setSource(DEFAULT_ENTRY, text);
-      const report = compiler.interpretFile(DEFAULT_ENTRY);
+      const report = compiler.value.interpretFile(entry.value);
       errors.value = collect((fp) => diagnosticsProvider.provideErrors(fp));
       const db = report.getValue() as Database | undefined;
       if (errors.value.length === 0 && db) {
@@ -104,6 +181,57 @@ export const useParserStore = defineStore('parser', () => {
     }
   }
 
+  function clearImports (): void {
+    for (const abs of imports.value.keys()) layout.deleteSource(Filepath.from(abs));
+    imports.value = new Map();
+    pendingLoads.clear();
+    missing.clear();
+  }
+
+  /** Where the edited text lives. Null returns to the virtual entry; imports are dropped either way. */
+  function setEntryPath (absolutePath: string | null): void {
+    const next = absolutePath ? Filepath.from(absolutePath) : DEFAULT_ENTRY;
+    if (next.equals(entry.value)) return;
+    layout.deleteSource(entry.value);
+    clearImports();
+    entry.value = markRaw(next);
+    rebuildCompiler();
+    parseNow();
+  }
+
+  /** How imported files are read; null when nothing can read them (no followed file). */
+  function setSourceLoader (load: SourceLoader | null): void {
+    loader = load;
+    missing.clear();
+  }
+
+  /** An imported file changed on disk (or vanished, with null). */
+  function updateImport (absolutePath: string, text: string | null): void {
+    const fp = Filepath.from(absolutePath);
+    const next = new Map(imports.value);
+    if (text === null) {
+      if (!next.has(absolutePath)) return;
+      layout.deleteSource(fp);
+      next.delete(absolutePath);
+      rebuildCompiler();
+    } else {
+      if (next.get(absolutePath) === text) return;
+      layout.setSource(fp, text);
+      if (!next.has(absolutePath)) rebuildCompiler();
+      next.set(absolutePath, text);
+    }
+    imports.value = next;
+    missing.clear();
+    parseNow();
+  }
+
+  /** Look again for imports that were missing, for example after files were created next to the entry. */
+  function retryImports (): void {
+    if (missing.size === 0) return;
+    missing.clear();
+    parseNow();
+  }
+
   const scheduleParse = debounce(() => parseNow(), DEBOUNCE_MS);
 
   watch(() => editor.text, () => {
@@ -117,7 +245,8 @@ export const useParserStore = defineStore('parser', () => {
   return {
     compiler,
     layout,
-    filepath,
+    entryPath,
+    importPaths,
     isLoading,
     parseVersion,
     lastGoodVersion,
@@ -128,5 +257,9 @@ export const useParserStore = defineStore('parser', () => {
     hasErrors,
     isStale,
     parseNow,
+    setEntryPath,
+    setSourceLoader,
+    updateImport,
+    retryImports,
   };
 });

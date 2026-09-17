@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'node',
-      include: ['src/**/__tests__/**/*.test.ts', 'plugins/__tests__/**/*.test.ts'],
+      include: ['src/**/__tests__/**/*.test.ts', 'plugins/__tests__/**/*.test.ts', 'cli/__tests__/**/*.test.ts'],
     },
   };
 });

@@ -51,6 +51,7 @@
     <div class="flex-1 min-h-0 relative">
       <DbmlEditor
         v-model="editor.text"
+        :filepath="parser.entryPath"
         @editor-mounted="editorInstance.set"
       />
     </div>
@@ -115,6 +116,7 @@ import LayoutYamlView from '@/components/LayoutYamlView.vue';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { useEditorStore } from '@/stores/editorStore';
 import { useFileLinkStore } from '@/stores/fileLinkStore';
+import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
 
 /** Neither side of the handle gets smaller than this while dragging. */
@@ -124,6 +126,7 @@ const MIN_LAYOUT_PX = 96;
 const editor = useEditorStore();
 const ui = useUiStore();
 const link = useFileLinkStore();
+const parser = useParserStore();
 const editorInstance = useEditorInstance();
 
 const pane = useTemplateRef<HTMLElement>('pane');

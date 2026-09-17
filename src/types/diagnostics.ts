@@ -35,4 +35,6 @@ export interface ParserDiagnostic {
   readonly category?: string;
   readonly explanation?: string;
   readonly quickFixes?: readonly QuickFixAction[];
+  /** Absolute path of the file the problem is in when it is not the file being edited (an import). */
+  readonly file?: string;
 }

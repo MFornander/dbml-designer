@@ -99,6 +99,8 @@ Other scripts:
 
 To work on a `.dbml` together with another program, an agent or an editor, let the app follow the file instead of importing it. Choose Follow file… in the menu, pick a file or type its path, and the editor shows it; every change written to the file appears within a second, and the layout you arranged stays put. ⌘S (Ctrl-S) writes the text and the layout footer back to the file; the status next to the title says whether you have unsaved changes. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
 
+A followed file can `use` others. DBML's [module system](https://dbml.dbdiagram.io/syntax/module-system) resolves `use * from './schema'` relative to the followed file, so a `pipeline.dbml` can import a `schema.dbml` next to it: the imported tables appear in the diagram, refs and `Dep` blocks may cross files, and changes to the imported files are picked up too. Imported elements are shown but not edited from here; problems in them are listed with the file's name. Without a followed file the text has no folder, so imports cannot resolve and the Errors list says so.
+
 Following works through the dev server only. It reaches `.dbml` files in this repo by default; to add folders, put them in `.env.local`, colon-separated, and restart the dev server:
 
 ```bash
@@ -150,7 +152,7 @@ Two commands expose what the app knows about a `.dbml` file, for scripts and for
 npm run check -- path/to/schema.dbml
 ```
 
-`check` prints the same errors and warnings the Errors button shows, plus the diagram adapter's warnings (duplicate refs, view entries that resolve to nothing) and any problems in the layout footer, as `file:line:col: severity: message`. It exits 1 when there are errors, 0 otherwise, and takes several files at once.
+`check` prints the same errors and warnings the Errors button shows, plus the diagram adapter's warnings (duplicate refs, view entries that resolve to nothing) and any problems in the layout footer, as `file:line:col: severity: message`. `use` imports resolve next to the file on disk, and a problem inside an imported file is printed with that file's path. It exits 1 when there are errors, 0 otherwise, and takes several files at once.
 
 ```bash
 npm run graph -- path/to/schema.dbml
