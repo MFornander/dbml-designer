@@ -31,12 +31,9 @@ import AppHeader from '@/components/AppHeader.vue';
 import SplitPanel from '@/components/SplitPanel.vue';
 import DiagramPane from '@/components/DiagramPane.vue';
 import EditorPane from '@/components/EditorPane.vue';
-import { useLayoutTextStore } from '@/stores/layoutTextStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
 
 const parser = useParserStore();
 const ui = useUiStore();
-// Created up front so the diagram's first placements are written into the layout text.
-useLayoutTextStore();
 </script>

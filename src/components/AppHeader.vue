@@ -21,11 +21,11 @@
         <button
           :class="ITEM"
           role="menuitem"
-          @click="run(io.exportFiles)"
+          @click="run(io.exportFile)"
         >
           <PhDownloadSimple class="w-4 h-4 shrink-0" />
           <span>Export</span>
-          <span :class="MENU_HINT">.dbml + .dbml.yaml</span>
+          <span :class="MENU_HINT">.dbml, layout included</span>
         </button>
         <button
           :class="ITEM"
@@ -34,7 +34,17 @@
         >
           <PhUploadSimple class="w-4 h-4 shrink-0" />
           <span>Import</span>
-          <span :class="MENU_HINT">.dbml or .dbml.yaml</span>
+          <span :class="MENU_HINT">.dbml</span>
+        </button>
+        <button
+          :class="ITEM"
+          role="menuitem"
+          title="Replace the text and layout with the starter blog schema"
+          @click="run(io.loadExample)"
+        >
+          <PhFileText class="w-4 h-4 shrink-0" />
+          <span>Load Example</span>
+          <span :class="MENU_HINT">blog schema</span>
         </button>
         <div :class="MENU_DIVIDER" />
         <button
@@ -66,27 +76,7 @@
         </a>
       </div>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-white font-semibold text-sm tracking-tight">DBML Designer</span>
-      <div
-        class="flex items-center rounded bg-white/10 p-0.5"
-        role="tablist"
-        aria-label="Editor view"
-      >
-        <button
-          v-for="v in VIEWS"
-          :key="v.value"
-          type="button"
-          role="tab"
-          :aria-selected="ui.editorView === v.value"
-          :class="[TAB, ui.editorView === v.value ? TAB_ACTIVE : TAB_IDLE]"
-          :title="v.title"
-          @click="ui.setEditorView(v.value)"
-        >
-          {{ v.label }}
-        </button>
-      </div>
-    </div>
+    <span class="text-white font-semibold text-sm tracking-tight">DBML Designer</span>
     <span
       v-if="io.message.value"
       class="ml-auto mr-2 text-xs text-gray-300 truncate max-w-[50vw]"
@@ -97,7 +87,7 @@
       type="file"
       class="hidden"
       multiple
-      accept=".dbml,.yaml,.yml,.txt"
+      accept=".dbml,.txt"
       @change="onPick"
     >
   </header>
@@ -108,10 +98,10 @@ import {
   onBeforeUnmount, onMounted, ref, useTemplateRef,
 } from 'vue';
 import {
-  PhArrowSquareOut, PhBookOpen, PhDownloadSimple, PhList, PhMoon, PhSun, PhUploadSimple,
+  PhArrowSquareOut, PhBookOpen, PhDownloadSimple, PhFileText, PhList, PhMoon, PhSun, PhUploadSimple,
 } from '@phosphor-icons/vue';
 import { useFileIO } from '@/layout/useFileIO';
-import { useUiStore, type EditorView } from '@/stores/uiStore';
+import { useUiStore } from '@/stores/uiStore';
 
 import {
   MENU_DIVIDER, MENU_HINT, MENU_ITEM, MENU_PANEL,
@@ -119,22 +109,6 @@ import {
 
 const BUTTON = 'h-8 w-8 flex items-center justify-center rounded text-[#8696b6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer';
 const ITEM = MENU_ITEM;
-const TAB = 'px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded cursor-pointer transition-colors';
-const TAB_ACTIVE = 'bg-white/20 text-white';
-const TAB_IDLE = 'text-gray-400 hover:text-white';
-
-const VIEWS: ReadonlyArray<{ value: EditorView; label: string; title: string }> = [
-  {
-    value: 'dbml',
-    label: 'DBML',
-    title: 'Edit the DBML text',
-  },
-  {
-    value: 'layout',
-    label: 'Layout',
-    title: 'View the .dbml.yaml layout sidecar (read-only, follows the diagram)',
-  },
-];
 
 const ui = useUiStore();
 const io = useFileIO();

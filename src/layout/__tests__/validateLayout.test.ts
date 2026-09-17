@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { refKeyOf, serializeLayout, validateLayout } from '@/layout/sidecar';
+import { refKeyOf, serializeLayout, validateLayout } from '@/layout';
 import type { LayoutKeys } from '@/layout/schemaKeys';
 
 const keys: LayoutKeys = {
@@ -28,7 +28,7 @@ describe('validateLayout', () => {
       },
       collapsedGroups: ['group:public.content'],
       edgeRoutes: { [refKeyOf(null, 'public.users(id)', 'public.posts(author_id)')]: [264.5, 72, 320] },
-    }, 'blog.dbml');
+    });
     const v = validateLayout(text, keys);
     expect(v.ok).toBe(true);
     expect(v.errors).toEqual([]);

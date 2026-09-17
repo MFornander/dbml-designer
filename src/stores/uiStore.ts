@@ -6,11 +6,8 @@ import { usePersistedRef } from '@/utils/persistedRef';
 /** Which connections the diagram draws: relationships, both, or lineage edges only. */
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
-/** What the left pane shows: the DBML text, or the layout sidecar as YAML. */
-export type EditorView = 'dbml' | 'layout';
-
 interface UiState {
-  version: 6;
+  version: 8;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -21,20 +18,25 @@ interface UiState {
   lineageLayout: boolean;
   /** Highlight every relationship and lineage edge (walking ants, names, cardinalities). */
   highlightAll: boolean;
-  editorView: EditorView;
+  /** The read-only layout YAML panel under the DBML editor is expanded. */
+  layoutOpen: boolean;
+  /** Height of that panel as a percentage of the editor pane. */
+  layoutSize: number;
   /** The editor pane is hidden behind the split handle's chevron. */
   editorCollapsed: boolean;
 }
 
+/** The layout panel's share of the editor pane until the user drags its handle. */
+export const DEFAULT_LAYOUT_SIZE = 40;
+
 const THEMES: readonly ThemeMode[] = ['light', 'dark'];
 const LEVELS: readonly DetailLevel[] = ['all', 'keys', 'names'];
 const EDGE_MODES: readonly EdgeMode[] = ['erd', 'erd+deps', 'deps'];
-const EDITOR_VIEWS: readonly EditorView[] = ['dbml', 'layout'];
 
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 6
+  return s.version === 8
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -43,7 +45,8 @@ function isUiState (v: unknown): v is UiState {
     && EDGE_MODES.includes(s.edgeMode as EdgeMode)
     && typeof s.lineageLayout === 'boolean'
     && typeof s.highlightAll === 'boolean'
-    && EDITOR_VIEWS.includes(s.editorView as EditorView)
+    && typeof s.layoutOpen === 'boolean'
+    && typeof s.layoutSize === 'number' && s.layoutSize > 0 && s.layoutSize < 100
     && typeof s.editorCollapsed === 'boolean';
 }
 
@@ -51,25 +54,37 @@ function isUiState (v: unknown): v is UiState {
  * Version 1 stored [diagram, editor] sizes with the diagram on the left and had
  * no lineage flag; version 2 had a boolean `showLineage`; version 3 introduced
  * `edgeMode`; version 4 added the lineage-layout and highlight-all toggles;
- * version 5 added the editor view (DBML text or layout YAML); version 6 adds
- * the collapsed-editor flag.
+ * version 5 added the editor view (DBML text or layout YAML); version 6 added
+ * the collapsed-editor flag; version 7 replaced the editor view with the
+ * collapsible layout panel's open flag; version 8 adds that panel's height.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const version = parsed.version as number;
-  if (version >= 6) return parsed as unknown as UiState;
-  if (version === 5) {
+  if (version >= 8) return parsed as unknown as UiState;
+  if (version === 7) {
     return {
       ...(parsed as unknown as UiState),
-      version: 6,
-      editorCollapsed: false,
+      version: 8,
+      layoutSize: DEFAULT_LAYOUT_SIZE,
+    };
+  }
+  if (version === 5 || version === 6) {
+    const { editorView, ...rest } = parsed;
+    return {
+      ...(rest as unknown as UiState),
+      version: 8,
+      layoutOpen: editorView === 'layout',
+      layoutSize: DEFAULT_LAYOUT_SIZE,
+      editorCollapsed: version === 6 ? (parsed.editorCollapsed as boolean) : false,
     };
   }
   if (version === 4) {
     return {
       ...(parsed as unknown as UiState),
-      version: 6,
-      editorView: 'dbml',
+      version: 8,
+      layoutOpen: false,
+      layoutSize: DEFAULT_LAYOUT_SIZE,
       editorCollapsed: false,
     };
   }
@@ -80,7 +95,8 @@ export function migrateUiState (raw: string): UiState {
     problemsOpen: parsed.problemsOpen as boolean,
     lineageLayout: false,
     highlightAll: false,
-    editorView: 'dbml' as EditorView,
+    layoutOpen: false,
+    layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
   };
   let splitSizes = parsed.splitSizes as [number, number];
@@ -95,7 +111,7 @@ export function migrateUiState (raw: string): UiState {
     edgeMode = parsed.edgeMode as EdgeMode;
   }
   return {
-    version: 6,
+    version: 8,
     ...base,
     splitSizes,
     edgeMode,
@@ -111,7 +127,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 6,
+    version: 8,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -119,7 +135,8 @@ export const useUiStore = defineStore('ui', () => {
     edgeMode: 'erd+deps',
     lineageLayout: false,
     highlightAll: false,
-    editorView: 'dbml',
+    layoutOpen: false,
+    layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
   }), {
     validate: isUiState,
@@ -135,7 +152,8 @@ export const useUiStore = defineStore('ui', () => {
   const showLineage = computed(() => state.value.edgeMode !== 'erd');
   const lineageLayout = computed(() => state.value.lineageLayout);
   const highlightAll = computed(() => state.value.highlightAll);
-  const editorView = computed(() => state.value.editorView);
+  const layoutOpen = computed(() => state.value.layoutOpen);
+  const layoutSize = computed(() => state.value.layoutSize);
   const editorCollapsed = computed(() => state.value.editorCollapsed);
 
   const splitSizes = computed<number[]>({
@@ -179,8 +197,16 @@ export const useUiStore = defineStore('ui', () => {
     state.value.highlightAll = !state.value.highlightAll;
   }
 
-  function setEditorView (view: EditorView): void {
-    state.value.editorView = view;
+  function setLayoutOpen (open: boolean): void {
+    state.value.layoutOpen = open;
+  }
+
+  function toggleLayout (): void {
+    state.value.layoutOpen = !state.value.layoutOpen;
+  }
+
+  function setLayoutSize (percent: number): void {
+    state.value.layoutSize = Math.min(95, Math.max(5, percent));
   }
 
   function setEditorCollapsed (collapsed: boolean): void {
@@ -205,7 +231,8 @@ export const useUiStore = defineStore('ui', () => {
     showLineage,
     lineageLayout,
     highlightAll,
-    editorView,
+    layoutOpen,
+    layoutSize,
     editorCollapsed,
     splitSizes,
     setTheme,
@@ -216,7 +243,9 @@ export const useUiStore = defineStore('ui', () => {
     setEdgeMode,
     toggleLineageLayout,
     toggleHighlightAll,
-    setEditorView,
+    setLayoutOpen,
+    toggleLayout,
+    setLayoutSize,
     setEditorCollapsed,
   };
 });

@@ -109,15 +109,9 @@ function createEditorInstance (editSource: string) {
   };
 }
 
-const dbmlEditor = createEditorInstance('dbml-edit.color');
-const layoutEditor = createEditorInstance('dbml-edit.layout');
+const dbmlEditor = createEditorInstance('dbml-edit.text');
 
 /** The DBML editor. */
 export function useEditorInstance () {
   return dbmlEditor;
-}
-
-/** The `.dbml.yaml` layout editor, mounted only while the Layout view is showing. */
-export function useLayoutEditorInstance () {
-  return layoutEditor;
 }

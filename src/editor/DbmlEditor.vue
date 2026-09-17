@@ -125,7 +125,7 @@ function editorConfig (): monaco.editor.IStandaloneEditorConstructionOptions {
     cursorBlinking: 'solid',
     automaticLayout: true,
     fixedOverflowWidgets: true,
-    glyphMargin: true,
+    glyphMargin: false,
     folding: true,
     showFoldingControls: 'always',
     foldingStrategy: 'indentation',

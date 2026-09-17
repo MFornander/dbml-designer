@@ -91,7 +91,7 @@ describe('lineageLayout', () => {
     expect(r.positions.size).toBe(2);
   });
 
-  it('stacks tables without lineage in a trailing column and snaps everything', () => {
+  it('leaves tables without lineage out of the layout and snaps everything', () => {
     const ts = tables('src', 'dst', 'lonely', 'other');
     const r = lineageLayout({
       tables: ts,
@@ -99,11 +99,7 @@ describe('lineageLayout', () => {
       sizes: sizes(ts),
     });
     expect(r.unrelated).toEqual(['public.lonely', 'public.other']);
-    const lonely = r.positions.get('public.lonely')!;
-    const other = r.positions.get('public.other')!;
-    expect(lonely.x).toBeGreaterThan(r.positions.get('public.dst')!.x);
-    expect(other.x).toBe(lonely.x);
-    expect(other.y).toBeGreaterThan(lonely.y);
+    expect([...r.positions.keys()].sort()).toEqual(['public.dst', 'public.src']);
     for (const p of r.positions.values()) {
       expect(p.x % 8).toBe(0);
       expect(p.y % 8).toBe(0);

@@ -81,7 +81,6 @@
             :highlighted-fields="hover.highlight.value.fieldKeys"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
-            :dimmed="lineageLayout && geo.unrelatedTables.value.has(t.table.key)"
           />
         </g>
         <rect

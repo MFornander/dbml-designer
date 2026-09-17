@@ -17,10 +17,11 @@ export interface LineageLayoutOptions {
 }
 
 export interface LineageLayoutResult {
+  /** Positions of the tables that take part in lineage; the others get none and are not drawn. */
   positions: Map<TableKey, Point>;
   /** Dependency layer of every table that takes part in lineage (0 = pure source). */
   layers: Map<TableKey, number>;
-  /** Tables with no lineage edges, placed in a trailing column. */
+  /** Tables with no lineage edges; left out of the layout. */
   unrelated: TableKey[];
 }
 
@@ -30,10 +31,11 @@ const DEFAULTS: LineageLayoutOptions = {
 };
 
 /**
- * Layer tables by dependency order (upstream left, downstream right), order
+ * Layer tables by dependency order (upstream left, downstream right) and order
  * each layer by the average position of its upstream neighbours to reduce
- * crossings, and stack tables that have no lineage in a final column.
- * Cycles are tolerated: a back edge is ignored when it would otherwise stall.
+ * crossings. Tables with no lineage edges are left out, so the lineage view
+ * shows only what takes part in it. Cycles are tolerated: a back edge is
+ * ignored when it would otherwise stall.
  */
 export function lineageLayout (input: LineageLayoutInput, opts: Partial<LineageLayoutOptions> = {}): LineageLayoutResult {
   const o = {
@@ -122,7 +124,6 @@ export function lineageLayout (input: LineageLayoutInput, opts: Partial<LineageL
     }
     col.forEach((k, i) => indexIn.set(k, i));
   });
-  if (unrelated.length) columns.push([...unrelated].sort(byOrder));
 
   // Place columns left to right; center each column on the tallest one.
   const sizeOf = (k: TableKey) => input.sizes.get(k) ?? {

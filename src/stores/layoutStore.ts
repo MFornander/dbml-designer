@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import type { PositionChange, PositionsMap, XY } from '@/types/diagram';
 import { usePersistedRef } from '@/utils/persistedRef';
 import type { Database } from '@dbml/parse';
-import type { LayoutSnapshot } from '@/layout/sidecar';
+import type { LayoutSnapshot } from '@/layout';
 import { layoutKeysOf } from '@/layout/schemaKeys';
 import { useParserStore } from './parserStore';
 
@@ -159,7 +159,7 @@ export const useLayoutStore = defineStore('layout', () => {
     immediate: true,
   });
 
-  /** The view state for a `.dbml.yaml` sidecar. */
+  /** The view state as the layout comment carries it. */
   function snapshot (): LayoutSnapshot {
     return {
       positions: { ...state.value.positions },
@@ -168,7 +168,7 @@ export const useLayoutStore = defineStore('layout', () => {
     };
   }
 
-  /** Replace the view state from a sidecar, keeping only entries the current schema still has. */
+  /** Replace the view state from an imported layout, keeping only entries the current schema still has. */
   function replaceLayout (snap: LayoutSnapshot): void {
     state.value = {
       version: 1,

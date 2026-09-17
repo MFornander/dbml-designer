@@ -41,8 +41,8 @@
         v-if="ui.lineageLayout"
         class="px-2.5 py-1 rounded bg-[#8F8DD8]/20 text-[#5b57b3] text-xs font-medium shadow dark:bg-[#8F8DD8]/25 dark:text-[#cfcbf7]"
       >
-        Lineage layout: tables ordered by dependency, upstream on the left
-        <span v-if="model.deps.length === 0"> (no Dep edges in this schema)</span>
+        Lineage layout: only tables with lineage edges, ordered by dependency with upstream on the left
+        <span v-if="model.deps.length === 0"> (no Dep edges in this schema, so nothing to show)</span>
       </div>
     </div>
 

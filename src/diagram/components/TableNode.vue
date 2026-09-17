@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-table"
-    :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging, 'is-dimmed': dimmed }"
+    :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging }"
     :data-key="table.key"
     :transform="`translate(${box.x} ${box.y})`"
     @pointerenter="onEnter"
@@ -206,8 +206,6 @@ const props = defineProps<{
   /** Part of the current multi-selection. */
   selected?: boolean;
   isDragging: boolean;
-  /** Faded: the table takes no part in the lineage being viewed. */
-  dimmed?: boolean;
 }>();
 
 const ctx = useDiagramContext();

@@ -46,7 +46,7 @@ function xOf (wrapper: ReturnType<typeof mount>, key: string): number {
 }
 
 describe('DiagramCanvas lineage layout', () => {
-  it('lays tables out by dependency order and hides groups and notes but keeps filtered edges', async () => {
+  it('lays tables with lineage out by dependency order, hides everything else, and keeps filtered edges', async () => {
     const wrapper = mount(DiagramCanvas, {
       props: {
         model: buildDiagramModel(compile(DBML)),
@@ -66,14 +66,12 @@ describe('DiagramCanvas lineage layout', () => {
     expect(wrapper.findAll('.dg-dep')).toHaveLength(2);
     expect(wrapper.findAll('.dg-group')).toHaveLength(0);
     expect(wrapper.findAll('.dg-note')).toHaveLength(0);
-    expect(wrapper.findAll('.dg-table')).toHaveLength(4);
+    // Only tables that take part in lineage are drawn; the lonely one is left out.
+    expect(wrapper.findAll('.dg-table').map((t) => t.attributes('data-key')).sort()).toEqual(['public.fct', 'public.raw', 'public.stg']);
 
     // Stored positions are ignored: raw (source) sits left of stg, which sits left of fct.
     expect(xOf(wrapper, 'public.raw')).toBeLessThan(xOf(wrapper, 'public.stg'));
     expect(xOf(wrapper, 'public.stg')).toBeLessThan(xOf(wrapper, 'public.fct'));
-    expect(xOf(wrapper, 'public.lonely')).toBeGreaterThan(xOf(wrapper, 'public.fct'));
-    expect(wrapper.find('.dg-table[data-key="public.lonely"]').classes()).toContain('is-dimmed');
-    expect(wrapper.find('.dg-table[data-key="public.raw"]').classes()).not.toContain('is-dimmed');
 
     // Nothing is placed or moved in this view.
     expect(wrapper.emitted('position-change')).toBeUndefined();

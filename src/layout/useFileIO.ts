@@ -1,22 +1,28 @@
 import { computed, ref } from 'vue';
 import { useEditorStore } from '@/stores/editorStore';
-import { useLayoutTextStore } from '@/stores/layoutTextStore';
+import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
-import { useUiStore } from '@/stores/uiStore';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { downloadTextFile } from '@/utils/download';
-import { baseFileName, dbmlFileName, sidecarFileName } from './sidecar';
+import {
+  baseFileName, dbmlFileName, serializeLayout, splitLayoutComment, validateLayout, withLayoutComment,
+  withLayoutPlaceholder,
+} from '@/layout';
+import { layoutKeysOf } from '@/layout/schemaKeys';
+import EXAMPLE_DBML from '@/sample/example.dbml?raw';
 
 const MESSAGE_MS = 5000;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** Export and import of the DBML text together with its `.dbml.yaml` layout sidecar. */
+/**
+ * Export and import of one `.dbml` file that carries the layout as YAML in a comment at its end.
+ * The editor text itself only ever holds the placeholder for that comment.
+ */
 export function useFileIO () {
   const editor = useEditorStore();
-  const layoutText = useLayoutTextStore();
+  const layout = useLayoutStore();
   const parser = useParserStore();
-  const ui = useUiStore();
   const editorInstance = useEditorInstance();
 
   /** Transient status line for the header. */
@@ -36,13 +42,15 @@ export function useFileIO () {
     return baseFileName(project?.name);
   });
 
-  function exportFiles (): void {
-    const dbml = dbmlFileName(baseName.value);
-    const sidecar = sidecarFileName(baseName.value);
-    downloadTextFile(dbml, editor.text, 'text/plain');
-    // The Layout view's text is the sidecar, comments and all.
-    downloadTextFile(sidecar, layoutText.text, 'application/yaml');
-    notify(`Downloaded ${dbml} and ${sidecar}`);
+  /** The file Export writes: the text with the layout YAML in a comment at the end. */
+  function exportText (): string {
+    return withLayoutComment(editor.text, serializeLayout(layout.snapshot()));
+  }
+
+  function exportFile (): void {
+    const name = dbmlFileName(baseName.value);
+    downloadTextFile(name, exportText(), 'text/plain');
+    notify(`Downloaded ${name} with the layout in a comment at the end`);
   }
 
   /** Replace the whole text as one undoable edit and parse it right away. */
@@ -58,30 +66,33 @@ export function useFileIO () {
     parser.parseNow(text);
   }
 
-  const isSidecar = (f: File) => /\.ya?ml$/i.test(f.name);
-
   /**
-   * Import `.dbml` and `.dbml.yaml` files; either alone is fine. A layout file becomes the Layout
-   * view's text as it is, so its problems show up there instead of being dropped quietly; it is
-   * applied to the diagram only when it has no errors. Returns what was applied and what failed.
+   * Take in one file's text. A layout comment at the end is lifted out: the layout is checked
+   * against the schema and applied to the diagram, and the comment becomes the placeholder that
+   * Export overwrites. Returns the line for the status message, or the failure.
    */
+  function importText (name: string, text: string): { done: string } | { failed: string } {
+    const { dbml, layout: yaml, hadComment } = splitLayoutComment(text);
+    replaceText(hadComment ? withLayoutPlaceholder(dbml) : dbml);
+    if (yaml === null) return { done: name };
+    const v = validateLayout(yaml, parser.rawDatabase ? layoutKeysOf(parser.rawDatabase) : undefined);
+    if (!v.ok) return { failed: `${name}: layout comment not applied, ${v.errors[0]!.message}` };
+    layout.replaceLayout(v.snapshot);
+    return {
+      done: v.warnings.length
+        ? `${name} (layout: ${plural(v.warnings.length, 'entry')} not in the schema, ignored)`
+        : name,
+    };
+  }
+
+  /** Import `.dbml` files, each through `importText`. Returns what was applied and what failed. */
   async function importFiles (files: Iterable<File>): Promise<{ done: string[]; failed: string[] }> {
-    const list = [...files];
     const done: string[] = [];
     const failed: string[] = [];
-    // Text first, so a layout arriving with it is checked against the schema it belongs to.
-    for (const f of list.filter((x) => !isSidecar(x))) {
-      replaceText(await f.text());
-      done.push(f.name);
-    }
-    for (const f of list.filter(isSidecar)) {
-      layoutText.setText(await f.text());
-      layoutText.syncNow();
-      const errors = layoutText.errors.length;
-      const warnings = layoutText.warnings.length;
-      if (errors) failed.push(`${f.name}: ${plural(errors, 'error')}, layout not applied`);
-      else done.push(warnings ? `${f.name} (${plural(warnings, 'warning')})` : f.name);
-      if (errors || warnings) ui.setEditorView('layout');
+    for (const f of files) {
+      const result = importText(f.name, await f.text());
+      if ('done' in result) done.push(result.done);
+      else failed.push(result.failed);
     }
     notify([done.length ? `Imported ${done.join(', ')}` : '', ...failed].filter(Boolean).join(' · '));
     return {
@@ -90,10 +101,18 @@ export function useFileIO () {
     };
   }
 
+  /** The starter blog schema, a `.dbml` with its arranged layout in the footer, imported like any file. */
+  function loadExample (): void {
+    importText('example', EXAMPLE_DBML);
+    notify('Loaded the example schema and its layout');
+  }
+
   return {
     baseName,
     message,
-    exportFiles,
+    exportText,
+    exportFile,
     importFiles,
+    loadExample,
   };
 }

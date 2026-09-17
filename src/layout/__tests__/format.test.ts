@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  baseFileName, dbmlFileName, parseLayout, refKeyOf, serializeLayout, sidecarFileName, SidecarError, type LayoutSnapshot,
-} from '@/layout/sidecar';
+  baseFileName, dbmlFileName, parseLayout, refKeyOf, serializeLayout, SidecarError, type LayoutSnapshot,
+} from '@/layout';
 
 const snap: LayoutSnapshot = {
   positions: {
@@ -27,22 +27,20 @@ const snap: LayoutSnapshot = {
   },
 };
 
-describe('sidecar file names', () => {
+describe('file names', () => {
   it('derives a safe base name from the project, falling back to schema', () => {
     expect(baseFileName('blog')).toBe('blog');
     expect(baseFileName(' My Schema! ')).toBe('My_Schema');
     expect(baseFileName(null)).toBe('schema');
     expect(baseFileName('***')).toBe('schema');
     expect(dbmlFileName('blog')).toBe('blog.dbml');
-    expect(sidecarFileName('blog')).toBe('blog.dbml.yaml');
   });
 });
 
 describe('serializeLayout', () => {
-  it('writes a commented, versioned document with tables nested by schema and one-line positions', () => {
-    const text = serializeLayout(snap, 'blog.dbml');
-    expect(text.startsWith('# Diagram layout for blog.dbml')).toBe(true);
-    expect(text).toContain('\nversion: 1\n');
+  it('writes a versioned document with tables nested by schema and one-line positions', () => {
+    const text = serializeLayout(snap);
+    expect(text.startsWith('version: 1\n')).toBe(true);
     expect(text).toMatch(/\ntables:\n {2}public:\n {4}posts: \{ ?x: 0, y: 64 ?\}\n {4}users: \{ ?x: 288, y: 0 ?\}\n/);
     expect(text).toMatch(/\nnotes:\n {2}tips: \{ ?x: 800, y: 0, w: 192, h: 160 ?\}\n/);
     expect(text).toMatch(/\ngroups:\n {2}public:\n {4}content: \{ ?collapsed: true ?\}\n {2}sales:\n {4}reporting: \{ ?collapsed: true ?\}\n/);
@@ -72,7 +70,7 @@ describe('serializeLayout', () => {
       },
       collapsedGroups: [],
       edgeRoutes: { '#public.a(id)->public.b(a_id)': [-0] },
-    }, 'x.dbml');
+    });
     expect(text).not.toContain('-0');
     expect(text).toMatch(/\n {4}a: \{ ?x: 0, y: 0 ?\}/);
   });
@@ -82,7 +80,7 @@ describe('serializeLayout', () => {
       positions: {},
       collapsedGroups: [],
       edgeRoutes: {},
-    }, 'x.dbml');
+    });
     expect(text).toContain('version: 1');
     expect(text).not.toContain('tables:');
     expect(text).not.toContain('refs:');
@@ -91,7 +89,7 @@ describe('serializeLayout', () => {
 
 describe('parseLayout', () => {
   it('round-trips a snapshot', () => {
-    expect(parseLayout(serializeLayout(snap, 'blog.dbml'))).toEqual(snap);
+    expect(parseLayout(serializeLayout(snap))).toEqual(snap);
   });
 
   it('accepts a hand-written file with only some sections, in nested or flat form', () => {

@@ -6,7 +6,6 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import ErrorsPopover from '@/components/problems/ErrorsPopover.vue';
-import { useLayoutTextStore } from '@/stores/layoutTextStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -52,32 +51,6 @@ describe('ErrorsPopover', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await nextTick();
     expect(wrapper.find('#dbml-errors-panel').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('counts layout problems too and jumps to the Layout view for them', async () => {
-    useParserStore().parseNow('Table users { id int [pk] }');
-    const layoutText = useLayoutTextStore();
-    layoutText.setText('version: 1\ntables:\n  public:\n    ghost: { x: 1, y: 2 }\n');
-    layoutText.syncNow();
-    const ui = useUiStore();
-    ui.setEditorView('dbml');
-
-    const wrapper = mount(ErrorsPopover, { attachTo: document.body });
-    await nextTick();
-    const pill = wrapper.find('button[aria-controls="dbml-errors-panel"]');
-    expect(pill.text()).toBe('1 warning');
-    expect(pill.classes().some((c) => c.startsWith('bg-amber'))).toBe(true);
-
-    await pill.trigger('click');
-    const panel = wrapper.find('#dbml-errors-panel');
-    expect(panel.find('h2').text()).toBe('Warnings');
-    expect(panel.text()).toContain('1 in the layout');
-    expect(panel.find('button[aria-expanded]').text().toLowerCase()).toContain('layout');
-    expect(panel.text()).toContain('Table "ghost" is not in the DBML');
-
-    await panel.find('.explanation').trigger('click');
-    expect(ui.editorView).toBe('layout');
     wrapper.unmount();
   });
 });

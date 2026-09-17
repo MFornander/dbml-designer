@@ -25,13 +25,13 @@
       id="dbml-errors-panel"
       class="absolute bottom-full left-0 mb-2 flex w-[28rem] max-w-[80vw] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white text-gray-800 shadow-2xl dark:border-gray-700 dark:bg-[#1f2126] dark:text-gray-100"
       :style="{ maxHeight: 'min(40rem, calc(100vh - 9rem))' }"
-      aria-label="Problems in the DBML and the layout"
+      aria-label="Problems in the DBML"
     >
       <header class="flex items-baseline gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700">
         <h2 class="text-[15px] font-semibold">
           {{ title }}
         </h2>
-        <span class="text-xs text-gray-500 dark:text-gray-400">{{ where }}</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">{{ total }} in this file</span>
       </header>
       <div class="min-h-0 flex-1 overflow-y-auto">
         <template
@@ -54,13 +54,13 @@
           <template v-if="!collapsed.has(group.category)">
             <ProblemEntry
               v-for="item in group.items"
-              :key="`${item.file}:${item.diagnostic.location.line}:${item.diagnostic.location.column}:${item.severity}:${item.diagnostic.message}`"
+              :key="`${item.diagnostic.location.line}:${item.diagnostic.location.column}:${item.severity}:${item.diagnostic.message}`"
               :diagnostic="item.diagnostic"
               :severity="item.severity"
               :expanded="expanded === item.diagnostic"
-              :source="item.file === 'layout' ? layoutText.text : editorStore.text"
+              :source="editorStore.text"
               @click="onEntryClick(item)"
-              @apply-fix="onApplyFix(item, $event)"
+              @apply-fix="onApplyFix($event)"
             />
           </template>
         </template>
@@ -77,61 +77,40 @@ import * as monaco from 'monaco-editor';
 import { PhCaretDown, PhXCircle } from '@phosphor-icons/vue';
 import type { DiagnosticSeverity, ParserDiagnostic, QuickFixAction } from '@/types/diagnostics';
 import ProblemEntry from '@/components/problems/ProblemEntry.vue';
-import { useEditorInstance, useLayoutEditorInstance } from '@/editor/editorInstance';
+import { useEditorInstance } from '@/editor/editorInstance';
 import { useEditorStore } from '@/stores/editorStore';
-import { useLayoutTextStore } from '@/stores/layoutTextStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
 
 /**
- * dbdiagram's Errors button: a pill at the bottom left of the diagram that appears while the
- * DBML, or the `.dbml.yaml` layout text, has errors or warnings and toggles a floating list of
- * them. Entries jump to their location in the right editor and expand to explanations and
- * quick fixes.
+ * dbdiagram's Errors button: a pill above the zoom buttons that appears while the DBML has
+ * errors or warnings and toggles a floating list of them. Entries jump to their location in the
+ * editor and expand to explanations and quick fixes.
  */
-type ProblemFile = 'dbml' | 'layout';
-
 interface DiagnosticItem {
   diagnostic: ParserDiagnostic;
   severity: DiagnosticSeverity;
-  file: ProblemFile;
 }
 
 const parser = useParserStore();
 const editorStore = useEditorStore();
-const layoutText = useLayoutTextStore();
 const ui = useUiStore();
 const editorInstance = useEditorInstance();
-const layoutEditorInstance = useLayoutEditorInstance();
 
-const errors = computed(() => [...parser.errors, ...layoutText.errors]);
-const warnings = computed(() => [...parser.warnings, ...layoutText.warnings]);
-
-const byPosition = (a: DiagnosticItem, b: DiagnosticItem) => a.diagnostic.location.line - b.diagnostic.location.line
-  || a.diagnostic.location.column - b.diagnostic.location.column;
+const errors = computed(() => parser.errors);
+const warnings = computed(() => parser.warnings);
 
 const items = computed<DiagnosticItem[]>(() => {
-  const dbml: DiagnosticItem[] = [];
-  for (const d of parser.errors) dbml.push({ diagnostic: d, severity: 'error', file: 'dbml' });
-  for (const d of parser.warnings) dbml.push({ diagnostic: d, severity: 'warning', file: 'dbml' });
-  for (const d of parser.infos) dbml.push({ diagnostic: d, severity: 'info', file: 'dbml' });
-  const layout: DiagnosticItem[] = [];
-  for (const d of layoutText.errors) layout.push({ diagnostic: d, severity: 'error', file: 'layout' });
-  for (const d of layoutText.warnings) layout.push({ diagnostic: d, severity: 'warning', file: 'layout' });
-  return [...dbml.sort(byPosition), ...layout.sort(byPosition)];
+  const out: DiagnosticItem[] = [];
+  for (const d of parser.errors) out.push({ diagnostic: d, severity: 'error' });
+  for (const d of parser.warnings) out.push({ diagnostic: d, severity: 'warning' });
+  for (const d of parser.infos) out.push({ diagnostic: d, severity: 'info' });
+  return out.sort((a, b) => a.diagnostic.location.line - b.diagnostic.location.line
+    || a.diagnostic.location.column - b.diagnostic.location.column);
 });
 
 /** Errors and warnings decide whether the button shows; infos only ride along in the list. */
 const total = computed(() => errors.value.length + warnings.value.length);
-
-/** "N in this file" as in the original, or split by file when the layout has problems too. */
-const where = computed(() => {
-  const inDbml = parser.errors.length + parser.warnings.length;
-  const inLayout = layoutText.errors.length + layoutText.warnings.length;
-  if (inLayout === 0) return `${total.value} in this file`;
-  if (inDbml === 0) return `${total.value} in the layout`;
-  return `${inDbml} in the DBML, ${inLayout} in the layout`;
-});
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const label = computed(() => [
@@ -168,14 +147,11 @@ watch(items, () => {
   expanded.value = null;
 });
 
-const instanceFor = (file: ProblemFile) => (file === 'layout' ? layoutEditorInstance : editorInstance);
-
-/** Show the editor the problem lives in, then jump; the layout editor mounts on demand and reveals once it has. */
+/** Bring the editor into view, then jump to the problem. */
 function onEntryClick (item: DiagnosticItem) {
   const d = item.diagnostic;
-  ui.setEditorView(item.file);
   if (ui.editorCollapsed) ui.setEditorCollapsed(false);
-  instanceFor(item.file).revealRange({
+  editorInstance.revealRange({
     startLineNumber: d.location.line,
     startColumn: d.location.column,
     endLineNumber: d.endLocation.line,
@@ -188,29 +164,13 @@ function onEntryClick (item: DiagnosticItem) {
   expanded.value = hasDetails && expanded.value !== d ? d : null;
 }
 
-/** Apply a fix's edits to a string, last edit first so earlier offsets stay valid. */
-function withEdits (source: string, fix: QuickFixAction): string {
-  let out = source;
-  for (const e of [...fix.edits].sort((a, b) => b.start - a.start)) {
-    out = out.slice(0, e.start) + e.newText + out.slice(e.end);
-  }
-  return out;
-}
-
-function onApplyFix (item: DiagnosticItem, fix: QuickFixAction) {
-  const model = instanceFor(item.file).instance.value?.getModel();
-  if (model) {
-    model.pushEditOperations([], fix.edits.map((e) => ({
-      range: monaco.Range.fromPositions(model.getPositionAt(e.start), model.getPositionAt(e.end)),
-      text: e.newText,
-    })), () => null);
-    return;
-  }
-  // The layout editor is not mounted while the DBML view is showing; edit the text directly.
-  if (item.file === 'layout') {
-    layoutText.setText(withEdits(layoutText.text, fix));
-    layoutText.syncNow();
-  }
+function onApplyFix (fix: QuickFixAction) {
+  const model = editorInstance.instance.value?.getModel();
+  if (!model) return;
+  model.pushEditOperations([], fix.edits.map((e) => ({
+    range: monaco.Range.fromPositions(model.getPositionAt(e.start), model.getPositionAt(e.end)),
+    text: e.newText,
+  })), () => null);
 }
 
 function onKeyDown (e: KeyboardEvent) {

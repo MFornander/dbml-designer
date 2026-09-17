@@ -41,9 +41,6 @@
   cursor: grabbing;
 }
 
-.dg-table.is-dimmed {
-  opacity: 0.45;
-}
 
 .dg-table-shadow {
   fill: var(--dg-shadow);

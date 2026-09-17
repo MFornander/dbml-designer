@@ -102,7 +102,7 @@ describe('layoutStore', () => {
     expect(layout.edgeRoutes).toEqual({});
   });
 
-  it('snapshots the view state and replaces it from a sidecar, pruned against the current parse', async () => {
+  it('snapshots the view state and replaces it from an imported layout, pruned against the current parse', async () => {
     const layout = useLayoutStore();
     const parser = useParserStore();
     parser.parseNow('Table a { id int [pk] }\nNote n { \'x\' }');

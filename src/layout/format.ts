@@ -1,26 +1,27 @@
 /**
- * The `.dbml.yaml` layout sidecar: everything about a diagram that the DBML spec has no place
- * for, kept beside the `.dbml` file. Table positions, sticky note positions and sizes,
- * collapsed table groups, and hand-drawn relationship routes. Colors and notes stay in the DBML,
- * where the spec puts them and where dbdiagram and dbdocs read them.
+ * The layout as YAML: everything about a diagram that the DBML spec has no place for. Table
+ * positions, sticky note positions and sizes, collapsed table groups, and hand-drawn relationship
+ * routes. Colors and notes stay in the DBML proper, where the spec puts them and where dbdiagram
+ * and dbdocs read them. Export writes this YAML inside a comment at the end of the `.dbml`
+ * (see `layoutComment.ts`); the Layout view shows it read-only.
  *
  * Tables and groups are nested by schema (`tables: { public: { users: {x, y} } }`); ref ends are
  * written like DBML, `table(fields)` with the schema omitted when it is the default one.
  *
- * This module holds the format's shared vocabulary and the canonical writer. Reading and
- * checking a file is `validateLayout.ts`; editing one in place is `layoutTextEdit.ts`.
+ * This module holds the format's shared vocabulary and the writer. Reading and checking is
+ * `validateLayout.ts`.
  */
 import { Document, isScalar, visit } from 'yaml';
 import type { XY } from '@/types/diagram';
 import { DEFAULT_SCHEMA, isNoteKey } from '@/diagram/keys';
 
-/** Version of the sidecar format this build writes and reads. */
+/** Version of the layout format this build writes and reads. */
 export const SIDECAR_VERSION = 1;
 
 /** Top-level sections in the order the canonical writer emits them. */
 export const SECTION_ORDER = ['version', 'tables', 'notes', 'groups', 'refs'] as const;
 
-/** The view state that travels in a sidecar, in the layout store's key space. */
+/** The view state that travels in the layout comment, in the layout store's key space. */
 export interface LayoutSnapshot {
   /** Table keys (`schema.table`) and note keys (`note:name`) to positions; notes carry a size. */
   positions: Record<string, XY>;
@@ -34,10 +35,6 @@ export class SidecarError extends Error {}
 
 export function dbmlFileName (base: string): string {
   return `${base}.dbml`;
-}
-
-export function sidecarFileName (base: string): string {
-  return `${base}.dbml.yaml`;
 }
 
 /** A file-name-safe base taken from the DBML `Project` name, else `schema`. */
@@ -127,8 +124,8 @@ function sorted<T> (by: BySchema<T>): BySchema<T> {
   return out;
 }
 
-/** Serialize a snapshot as the YAML sidecar for `dbmlName`. Keys are sorted so diffs stay small. */
-export function serializeLayout (snap: LayoutSnapshot, dbmlName: string): string {
+/** Serialize a snapshot as the layout YAML. Keys are sorted so diffs stay small. */
+export function serializeLayout (snap: LayoutSnapshot): string {
   const tables: BySchema<{ x: number; y: number }> = {};
   const notes: Record<string, { x: number; y: number; w?: number; h?: number }> = {};
   for (const [key, p] of Object.entries(snap.positions).sort(([a], [b]) => a.localeCompare(b))) {
@@ -159,13 +156,6 @@ export function serializeLayout (snap: LayoutSnapshot, dbmlName: string): string
     ...(Object.keys(groups).length ? { groups: sorted(groups) } : {}),
     ...(refs.length ? { refs } : {}),
   });
-  doc.commentBefore = [
-    ` Diagram layout for ${dbmlName}, written by DBML Designer. Keep it next to the .dbml file.`,
-    ' Positions are diagram pixels. Tables and groups are listed under their schema, notes by',
-    ' name. Refs name their two ends as table(fields), with the schema left out when it is the',
-    ' default one, and the referenced table first; rails are the x, y, x, ... coordinates of a',
-    ' hand-drawn route\'s movable segments. Edit freely: the diagram follows valid changes.',
-  ].join('\n');
   // Leaf collections (a position, a rails list) read best on one line.
   visit(doc, {
     Map (_, node) {

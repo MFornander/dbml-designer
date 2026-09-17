@@ -2,17 +2,19 @@
 
 A single-page DBML editor and diagram in the spirit of [dbdiagram.io](https://dbdiagram.io). Type or paste [DBML](https://dbml.dbdiagram.io/docs) on the left and the entity-relationship diagram on the right updates as you type.
 
-Everything runs in the browser: no accounts, no server. Your text and layout are kept in `localStorage`, and can be exported as a `.dbml` file with a `.dbml.yaml` layout sidecar.
+Everything runs in the browser: no accounts, no server. Your text and layout are kept in `localStorage`, and export as one `.dbml` file that carries the layout in a comment at its end.
+
+![DBML Designer showing the example blog schema: the DBML editor and the collapsible Layout panel on the left, the diagram with tables, a table group, relationships, a lineage edge, and a sticky note on the right](docs/screenshot.png)
 
 ## Features
 
 ### Editor
 
 - Monaco editor with DBML highlighting, completions, go-to-definition, and inline diagnostics from the official `@dbml/parse` compiler.
-- An Errors button appears above the zoom buttons while the DBML or the layout text has errors or warnings, and toggles a floating list of them like dbdiagram's. Click an entry to jump to it in the right editor; entries with explanations or quick fixes expand in place. While the DBML has errors, the diagram keeps showing the last valid schema.
+- An Errors button appears above the zoom buttons while the DBML has errors or warnings, and toggles a floating list of them like dbdiagram's. Click an entry to jump to it; entries with explanations or quick fixes expand in place. While the DBML has errors, the diagram keeps showing the last valid schema.
 - Click a table in the diagram to reveal its declaration in the editor.
 - A thin handle between the panes resizes them. Its chevrons hide the editor (`<`) or show and widen it (`>`).
-- The DBML / Layout switch in the header swaps the editor for the layout sidecar as YAML. It is a real editor: valid changes are applied to the diagram after a short pause, and arranging the diagram edits the text in place, keeping your comments and ordering. Syntax and shape problems are underlined and stop the text from being applied; entries for tables, notes, groups, or relationships the DBML does not have are kept with a warning instead of being dropped. The footer shows the state, and Reset to diagram rewrites the text from the diagram.
+- A collapsible Layout panel under the editor, closed by default, shows the layout as read-only YAML, exactly what Export writes into the footer comment at the end of the file. It follows the diagram as you arrange it, and the handle above it resizes it like the one between the panes.
 
 ### Diagram
 
@@ -28,7 +30,7 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 - Drag tables, notes, or a whole group by its header, snapped to an 8px grid. Resize notes from their corner.
 - Drag on the empty canvas to select; the selected tables and notes move together. Shift-click or Cmd-click adds or removes one.
 - Hold Space, or switch on the Pan tool, to drag the canvas around. Scroll to zoom.
-- Lineage Layout arranges tables in dependency order, upstream on the left.
+- Lineage Layout shows only the tables that take part in `Dep` lineage, arranged in dependency order with upstream on the left.
 - Click a relationship to reroute it: drag a control point to move a segment, drag the mid-point between two points to add a bend, and reset to return to the automatic route.
 
 ### Colors and views, written back into the DBML
@@ -39,13 +41,17 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 ### Toolbar and menu
 
 - Bottom toolbar: zoom, fit, and the Pan tool on the left; the Table and Lineage menus, Highlight Relationships, Lineage Layout, and Diagram Views on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
-- The menu at the top left holds Export, Import, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` and the Layout view's text as `<project>.dbml.yaml`. Import accepts either file, or both at once; an imported layout is shown as it is in the Layout view, with its problems flagged, and is applied to the diagram when it has no errors.
+- The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end. Import reads any `.dbml`; if it ends with such a comment, the layout is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
 
-## Layout sidecar
+## Layout comment
 
-DBML holds the schema and the presentation the spec allows in the text: `headercolor` on tables, `color` on groups, refs, and notes, `Note` documentation, and `DiagramView` blocks. Everything else about a diagram has no place in the spec, so it lives in a sidecar named after the DBML file, `blog.dbml.yaml` next to `blog.dbml` (the base name comes from the `Project`, else `schema`):
+DBML holds the schema and the presentation the spec allows in the text: `headercolor` on tables, `color` on groups, refs, and notes, `Note` documentation, and `DiagramView` blocks. Everything else about a diagram has no place in the spec, so Export writes it as YAML inside a multi-line comment at the very end of the `.dbml`. DBML ignores comments, so the file stays valid for any DBML tool, and one file carries both the schema and its layout (the file name comes from the `Project`, else `schema`):
 
-```yaml
+```dbml
+Table users { id int [pk] }
+Table posts { id int [pk]  author_id int [ref: > users.id] }
+
+/* === DBML DESIGNER FOOTER ===
 version: 1
 tables:
   public:
@@ -60,13 +66,15 @@ refs:
   - from: users(id)
     to: posts(author_id)
     rails: [ 264.5, 72, 320 ]
+*/
 ```
 
+- The Layout panel under the editor is a read-only preview of this YAML and follows the diagram as you arrange it.
+- Import lifts the comment out of the file, checks it against the schema, applies it to the diagram, and leaves a short placeholder comment where Export will write the layout again. The placeholder is static while you arrange; Export replaces it. Entries for tables, notes, groups, or relationships the DBML does not have are ignored and counted in the status line; a comment that is not valid layout YAML is reported and skipped.
 - Positions are diagram pixels. Tables and groups are nested under their schema; notes are keyed by name.
-- A ref is identified by its optional `name` and its two ends, written like DBML as `table(fields)` with the schema left out when it is `public` (`sales.orders(id)` otherwise). The referenced table comes first: an inline `ref: > users.id` on `posts.author_id` is `from: users(id)`, `to: posts(author_id)`. A route written the other way round gets a warning with a one-click swap.
+- A ref is identified by its optional `name` and its two ends, written like DBML as `table(fields)` with the schema left out when it is `public` (`sales.orders(id)` otherwise). The referenced table comes first: an inline `ref: > users.id` on `posts.author_id` is `from: users(id)`, `to: posts(author_id)`.
 - `rails` are the alternating x, y, x, ... coordinates of the movable segments of a hand-drawn route.
-- Empty sections are left out. Entries the DBML does not have are ignored by the diagram and flagged in the Layout view; when a table leaves the DBML, its entry leaves the text.
-- Both the text and the layout it describes are kept in `localStorage` between sessions, so the sidecar file is for sharing and versioning alongside the `.dbml`.
+- Empty sections are left out. The layout is kept in `localStorage` between sessions, so the exported file is for sharing and versioning.
 
 ## Development
 
@@ -90,8 +98,8 @@ Other scripts:
 ## Layout of the code
 
 - `src/editor/` wraps Monaco and registers the DBML language services.
-- `src/layout/` is the `.dbml.yaml` sidecar: its format and writer, the validator that turns a file into diagnostics and a snapshot, and the in-place editor that writes diagram changes back into the text.
-- `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, the layout text, and UI preferences.
+- `src/layout/` is the layout: its YAML format and writer, the validator that turns imported YAML into diagnostics and a snapshot, the comment handling that puts it into and lifts it out of a `.dbml`, and the import/export composable.
+- `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, and UI preferences.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
 - `src/diagram/` is the renderer. `adapter/` turns the raw parser output into a view model, `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.
 

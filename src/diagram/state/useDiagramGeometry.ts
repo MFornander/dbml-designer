@@ -72,7 +72,7 @@ export interface GeometryInputs {
   collapsedGroups: Ref<ReadonlySet<GroupKey>>;
   showRefs: Ref<boolean>;
   showLineage: Ref<boolean>;
-  /** Lineage layout: tables laid out by dependency order; groups and notes hidden. */
+  /** Lineage layout: tables with lineage edges laid out by dependency order; everything else hidden. */
   lineageLayout: Ref<boolean>;
   dragOverride: Ref<DragOverride | null>;
   /** Custom orthogonal routes by ref key. */
@@ -158,7 +158,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     return map;
   });
 
-  /** Derived positions for the lineage layout (never persisted). */
+  /** Derived positions for the lineage layout (never persisted); tables without lineage get none. */
   const lineage = computed(() => {
     if (!input.lineageLayout.value) return null;
     return lineageLayout({
@@ -167,9 +167,6 @@ export function useDiagramGeometry (input: GeometryInputs) {
       sizes: sizes.value,
     });
   });
-
-  /** Tables that take no part in lineage; dimmed in the lineage layout. */
-  const unrelatedTables = computed<ReadonlySet<TableKey>>(() => new Set(lineage.value?.unrelated ?? []));
 
   const boxes = computed(() => {
     const map = new Map<TableKey, Rect>();
@@ -442,6 +439,5 @@ export function useDiagramGeometry (input: GeometryInputs) {
     groupBoxes,
     collapsedBoxByTable,
     contentBounds,
-    unrelatedTables,
   };
 }

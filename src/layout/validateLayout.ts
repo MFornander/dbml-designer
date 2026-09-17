@@ -1,8 +1,9 @@
 /**
- * Reads a `.dbml.yaml` layout and reports what is wrong with it: YAML syntax, the shape of each
- * section, and, given the schema's keys, references to tables, notes, groups, and relationships
- * the DBML does not have. Structural problems are errors and keep the file from being applied;
- * unknown references are warnings, since the diagram simply ignores those entries.
+ * Reads layout YAML (from the comment at the end of an imported `.dbml`) and reports what is
+ * wrong with it: YAML syntax, the shape of each section, and, given the schema's keys, references
+ * to tables, notes, groups, and relationships the DBML does not have. Structural problems are
+ * errors and keep the layout from being applied; unknown references are warnings, since the
+ * diagram simply ignores those entries.
  */
 import {
   LineCounter, isMap, isScalar, isSeq, parseDocument,
