@@ -7,6 +7,7 @@ const FLAGS = {
   layoutOpen: false,
   layoutSize: 40,
   editorCollapsed: false,
+  viewsOpen: false,
 };
 
 describe('migrateUiState', () => {
@@ -19,7 +20,7 @@ describe('migrateUiState', () => {
       problemsOpen: true,
     });
     expect(migrateUiState(v1)).toEqual({
-      version: 8,
+      version: 9,
       theme: 'dark',
       detailLevel: 'keys',
       splitSizes: [40, 60],
@@ -41,7 +42,7 @@ describe('migrateUiState', () => {
     expect(migrateUiState(v2(false)).edgeMode).toBe('erd');
     expect(migrateUiState(v2(true)).edgeMode).toBe('erd+deps');
     expect(migrateUiState(v2(true)).splitSizes).toEqual([35, 65]);
-    expect(migrateUiState(v2(true)).version).toBe(8);
+    expect(migrateUiState(v2(true)).version).toBe(9);
   });
 
   it('keeps the version 3 edge mode and adds the new toggles switched off', () => {
@@ -54,7 +55,7 @@ describe('migrateUiState', () => {
       edgeMode: 'deps',
     });
     expect(migrateUiState(v3)).toEqual({
-      version: 8,
+      version: 9,
       theme: 'light',
       detailLevel: 'all',
       splitSizes: [35, 65],
@@ -75,13 +76,14 @@ describe('migrateUiState', () => {
     highlightAll: true,
   };
 
-  it('adds the layout panel and collapsed flags when upgrading from version 4, keeping the toggles', () => {
+  it('adds the layout panel, collapsed, and views panel flags when upgrading from version 4, keeping the toggles', () => {
     expect(migrateUiState(JSON.stringify(v4))).toEqual({
       ...v4,
-      version: 8,
+      version: 9,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: false,
+      viewsOpen: false,
     });
   });
 
@@ -93,10 +95,11 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v5))).toEqual({
       ...v4,
-      version: 8,
+      version: 9,
       layoutOpen: true,
       layoutSize: 40,
       editorCollapsed: false,
+      viewsOpen: false,
     });
     const v6 = {
       ...v4,
@@ -106,10 +109,11 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v6))).toEqual({
       ...v4,
-      version: 8,
+      version: 9,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: true,
+      viewsOpen: false,
     });
   });
 
@@ -122,12 +126,13 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v7))).toEqual({
       ...v7,
-      version: 8,
+      version: 9,
       layoutSize: 40,
+      viewsOpen: false,
     });
   });
 
-  it('passes version 8 state through unchanged', () => {
+  it('adds the views panel flag when upgrading from version 8, and passes version 9 through unchanged', () => {
     const v8 = {
       ...v4,
       version: 8,
@@ -135,6 +140,16 @@ describe('migrateUiState', () => {
       layoutSize: 55,
       editorCollapsed: true,
     };
-    expect(migrateUiState(JSON.stringify(v8))).toEqual(v8);
+    expect(migrateUiState(JSON.stringify(v8))).toEqual({
+      ...v8,
+      version: 9,
+      viewsOpen: false,
+    });
+    const v9 = {
+      ...v8,
+      version: 9,
+      viewsOpen: true,
+    };
+    expect(migrateUiState(JSON.stringify(v9))).toEqual(v9);
   });
 });

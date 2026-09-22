@@ -14,6 +14,8 @@ export interface LayoutKeys {
   groups: ReadonlySet<string>;
   /** `name#from->to`, the diagram model's ref keys. */
   refs: ReadonlySet<string>;
+  /** Names of the `DiagramView` blocks. */
+  views: ReadonlySet<string>;
 }
 
 export function layoutKeysOf (db: Database): LayoutKeys {
@@ -23,11 +25,12 @@ export function layoutKeysOf (db: Database): LayoutKeys {
   for (const n of db.notes) notes.add(noteKey(n.name));
   const groups = new Set<string>();
   db.tableGroups.forEach((g, i) => groups.add(groupKey(g.schemaName, groupDisplayName(g.name, i))));
-  const refs = new Set(buildDiagramModel(db).refs.map((r) => r.key));
+  const model = buildDiagramModel(db);
   return {
     tables,
     notes,
     groups,
-    refs,
+    refs: new Set(model.refs.map((r) => r.key)),
+    views: new Set(model.views.map((v) => v.name)),
   };
 }

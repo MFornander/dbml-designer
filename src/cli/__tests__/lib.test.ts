@@ -68,6 +68,10 @@ describe('checkText', () => {
     expect(formatCheck('x.dbml', r)).toContain(`x.dbml:${footerLine}:5: warning: Table "ghost"`);
     expect(formatCheck('x.dbml', r)).toContain('(layout footer)');
 
+    const views = checkText(`${DBML}\n/* === DBML DESIGNER FOOTER ===\nversion: 1\nviews:\n  nope:\n    tables:\n      public:\n        users: { x: 1, y: 2 }\n*/\n`);
+    expect(views.errors).toBe(0);
+    expect(views.diagnostics.map((d) => d.message)).toEqual(['DiagramView "nope" is not in the DBML; its layout is ignored']);
+
     const broken = checkText(`${DBML}\n/* === DBML DESIGNER FOOTER ===\nversion: 1\ntables: [\n*/\n`);
     expect(broken.errors).toBe(1);
     expect(broken.diagnostics[0]!.message).toMatch(/^Not valid YAML/);

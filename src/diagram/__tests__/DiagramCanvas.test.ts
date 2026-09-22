@@ -355,6 +355,53 @@ describe('DiagramCanvas', () => {
     wrapper.unmount();
   });
 
+  it('paints bottom to top: open bodies largest first, their tables, collapsed groups, free tables, then notes', async () => {
+    const model = buildDiagramModel(compile(`
+      Table a { id int [pk] }
+      Table b { id int [pk] }
+      Table c { id int [pk] }
+      Table d { id int [pk] }
+      Table free { id int [pk] }
+      Note hint { 'hello' }
+      TableGroup inner { b }
+      TableGroup wide { a \n c }
+      TableGroup small { d }
+    `));
+    const positions = {
+      'public.a': { x: 0, y: 0 },
+      'public.b': { x: 400, y: 0 },
+      'public.c': { x: 1200, y: 0 },
+      'public.d': { x: 800, y: 0 },
+      'public.free': { x: 600, y: 0 },
+      'note:hint': { x: 200, y: 0 },
+    };
+    const wrapper = mount(DiagramCanvas, {
+      props: {
+        model,
+        positions,
+        detailLevel: 'all',
+        dark: false,
+        collapsedGroups: new Set(['group:public.inner']),
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+    const names = (sel: string) => wrapper.findAll(sel).map((g) => g.find('.dg-group-name').text());
+    // The layer under everything holds only open bodies, the widest first.
+    expect(names('.dg-layer-groups .dg-group')).toEqual(['wide', 'small']);
+    // Then, in one layer: the open groups' own tables, the collapsed group, and the table in no group last.
+    const tablesLayer = wrapper.find('.dg-layer-tables').element;
+    const items = [...tablesLayer.children].map((el) => (el.classList.contains('dg-group')
+      ? `group:${el.querySelector('.dg-group-name')!.textContent}`
+      : el.getAttribute('data-key')));
+    expect(items).toEqual(['public.a', 'public.c', 'public.d', 'group:inner', 'public.free']);
+    expect(wrapper.find('.dg-layer-tables .dg-group').classes()).toContain('is-collapsed');
+    // Edges go under the tables, notes above everything.
+    const layers = [...wrapper.find('.dg-viewport').element.children].map((el) => el.className.baseVal ?? el.getAttribute('class')).filter((c) => c?.startsWith('dg-layer'));
+    expect(layers).toEqual(['dg-layer-groups', 'dg-layer-refs', 'dg-layer-tables', 'dg-layer-notes', 'dg-layer-controls']);
+    wrapper.unmount();
+  });
+
   it('leaves hidden tables and notes, and the edges and groups that depend on them, out of the drawing', async () => {
     const model = buildDiagramModel(compile(`
       Table users { id int [pk] }
@@ -563,11 +610,10 @@ describe('DiagramCanvas', () => {
     await nextTick();
     expect(wrapper.find('.dg-root').classes()).not.toContain('is-pan');
 
-    // The Pan tool does the same without the key.
-    await wrapper.setProps({ panMode: true });
-    expect(wrapper.find('.dg-root').classes()).toContain('is-pan');
-    await wrapper.find('.dg-bg-fill').trigger('pointerdown', {
-      button: 0,
+    // A middle-button drag pans from anywhere, even from a table, and moves nothing else.
+    const before = transform();
+    await wrapper.find('.dg-table[data-key="public.users"]').trigger('pointerdown', {
+      button: 1,
       clientX: 0,
       clientY: 0,
     });
@@ -580,8 +626,9 @@ describe('DiagramCanvas', () => {
       clientY: 0,
     }));
     await nextTick();
+    expect(transform()).not.toBe(before);
     expect(transform()).toBe('translate(0 20) scale(1)');
-    expect(wrapper.findAll('.dg-table.is-selected')).toHaveLength(0);
+    expect(wrapper.emitted('position-change')?.some((c) => (c[0] as { key: string }[]).some((x) => x.key === 'public.users'))).toBeFalsy();
     wrapper.unmount();
   });
 
@@ -820,6 +867,31 @@ describe('DiagramCanvas', () => {
     await wrapper.setProps({ highlightAll: false });
     expect(wrapper.findAll('.dg-ref.is-highlighted')).toHaveLength(0);
     expect(wrapper.findAll('.dg-edge-cardinality')).toHaveLength(0);
+    wrapper.unmount();
+  });
+});
+
+describe('DiagramCanvas while the model is loading', () => {
+  it('waits with auto-placement until the model has caught up with the text', async () => {
+    const wrapper = mount(DiagramCanvas, {
+      props: {
+        model: buildDiagramModel(compile(DBML)),
+        positions: {},
+        detailLevel: 'all',
+        dark: false,
+        loading: true,
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    await nextTick();
+    expect(wrapper.emitted('position-change')).toBeUndefined();
+
+    await wrapper.setProps({ loading: false });
+    await flushPromises();
+    await nextTick();
+    const events = wrapper.emitted('position-change') as PositionChange[][];
+    expect(events.at(-1)![0]!.map((c) => c.key).sort()).toEqual(['note:hint', 'public.posts', 'public.users']);
     wrapper.unmount();
   });
 });

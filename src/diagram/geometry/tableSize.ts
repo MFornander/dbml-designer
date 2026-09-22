@@ -1,9 +1,10 @@
 import {
   FONT_FIELD, FONT_FIELD_BOLD, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD,
-  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, ROW_H, WIDTH_EXTRA,
+  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, ROW_H, SCHEMA_GAP, WIDTH_EXTRA,
 } from './constants';
 import type { Measurer } from './measure';
 import { isKeyField } from './lod';
+import { DEFAULT_SCHEMA } from '../keys';
 import type { FieldVM, TableVM } from '../types';
 
 export interface RowMetrics {
@@ -18,7 +19,12 @@ export interface RowMetrics {
 export interface TableSize {
   width: number;
   height: number;
+  /** Everything the header needs: name, icon, and the schema label with its gap. */
   headerW: number;
+  /** The table name alone; the note icon follows it. */
+  nameW: number;
+  /** The faded schema label at the right, 0 for the default schema. */
+  schemaW: number;
   rows: RowMetrics[];
 }
 
@@ -88,7 +94,9 @@ export function hasTableDetails (t: TableVM): boolean {
 }
 
 export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measurer): TableSize {
-  const headerW = m.measure(t.displayName, FONT_TABLE_NAME) + (hasTableDetails(t) ? ICON_W + ICON_GAP : 0);
+  const nameW = m.measure(t.name, FONT_TABLE_NAME);
+  const schemaW = t.schema === DEFAULT_SCHEMA ? 0 : m.measure(t.schema, FONT_FIELD);
+  const headerW = nameW + (hasTableDetails(t) ? ICON_GAP + ICON_W : 0) + (schemaW ? SCHEMA_GAP + schemaW : 0);
   const metrics = rows.map((f) => rowMetrics(f, m));
   let rowMax = 0;
   for (const r of metrics) {
@@ -98,6 +106,8 @@ export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measu
     width: Math.ceil(Math.max(rowMax, headerW) + WIDTH_EXTRA),
     height: ROW_H * (rows.length + 1),
     headerW,
+    nameW,
+    schemaW,
     rows: metrics,
   };
 }

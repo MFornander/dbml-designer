@@ -7,7 +7,7 @@ import { usePersistedRef } from '@/utils/persistedRef';
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
 interface UiState {
-  version: 8;
+  version: 9;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -24,6 +24,8 @@ interface UiState {
   layoutSize: number;
   /** The editor pane is hidden behind the split handle's chevron. */
   editorCollapsed: boolean;
+  /** The Diagram Views panel at the right of the diagram is shown. */
+  viewsOpen: boolean;
 }
 
 /** The layout panel's share of the editor pane until the user drags its handle. */
@@ -36,7 +38,7 @@ const EDGE_MODES: readonly EdgeMode[] = ['erd', 'erd+deps', 'deps'];
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 8
+  return s.version === 9
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -47,7 +49,8 @@ function isUiState (v: unknown): v is UiState {
     && typeof s.highlightAll === 'boolean'
     && typeof s.layoutOpen === 'boolean'
     && typeof s.layoutSize === 'number' && s.layoutSize > 0 && s.layoutSize < 100
-    && typeof s.editorCollapsed === 'boolean';
+    && typeof s.editorCollapsed === 'boolean'
+    && typeof s.viewsOpen === 'boolean';
 }
 
 /**
@@ -56,36 +59,47 @@ function isUiState (v: unknown): v is UiState {
  * `edgeMode`; version 4 added the lineage-layout and highlight-all toggles;
  * version 5 added the editor view (DBML text or layout YAML); version 6 added
  * the collapsed-editor flag; version 7 replaced the editor view with the
- * collapsible layout panel's open flag; version 8 adds that panel's height.
+ * collapsible layout panel's open flag; version 8 added that panel's height; version 9 adds
+ * the Diagram Views panel's open flag.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const version = parsed.version as number;
-  if (version >= 8) return parsed as unknown as UiState;
+  if (version >= 9) return parsed as unknown as UiState;
+  if (version === 8) {
+    return {
+      ...(parsed as unknown as UiState),
+      version: 9,
+      viewsOpen: false,
+    };
+  }
   if (version === 7) {
     return {
       ...(parsed as unknown as UiState),
-      version: 8,
+      version: 9,
       layoutSize: DEFAULT_LAYOUT_SIZE,
+      viewsOpen: false,
     };
   }
   if (version === 5 || version === 6) {
     const { editorView, ...rest } = parsed;
     return {
       ...(rest as unknown as UiState),
-      version: 8,
+      version: 9,
       layoutOpen: editorView === 'layout',
       layoutSize: DEFAULT_LAYOUT_SIZE,
       editorCollapsed: version === 6 ? (parsed.editorCollapsed as boolean) : false,
+      viewsOpen: false,
     };
   }
   if (version === 4) {
     return {
       ...(parsed as unknown as UiState),
-      version: 8,
+      version: 9,
       layoutOpen: false,
       layoutSize: DEFAULT_LAYOUT_SIZE,
       editorCollapsed: false,
+      viewsOpen: false,
     };
   }
 
@@ -98,6 +112,7 @@ export function migrateUiState (raw: string): UiState {
     layoutOpen: false,
     layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
+    viewsOpen: false,
   };
   let splitSizes = parsed.splitSizes as [number, number];
   let edgeMode: EdgeMode = 'erd+deps';
@@ -111,7 +126,7 @@ export function migrateUiState (raw: string): UiState {
     edgeMode = parsed.edgeMode as EdgeMode;
   }
   return {
-    version: 8,
+    version: 9,
     ...base,
     splitSizes,
     edgeMode,
@@ -127,7 +142,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 8,
+    version: 9,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -138,6 +153,7 @@ export const useUiStore = defineStore('ui', () => {
     layoutOpen: false,
     layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
+    viewsOpen: false,
   }), {
     validate: isUiState,
     deserialize: migrateUiState,
@@ -155,6 +171,7 @@ export const useUiStore = defineStore('ui', () => {
   const layoutOpen = computed(() => state.value.layoutOpen);
   const layoutSize = computed(() => state.value.layoutSize);
   const editorCollapsed = computed(() => state.value.editorCollapsed);
+  const viewsOpen = computed(() => state.value.viewsOpen);
 
   const splitSizes = computed<number[]>({
     get: () => [...state.value.splitSizes],
@@ -209,6 +226,14 @@ export const useUiStore = defineStore('ui', () => {
     state.value.layoutSize = Math.min(95, Math.max(5, percent));
   }
 
+  function setViewsOpen (open: boolean): void {
+    state.value.viewsOpen = open;
+  }
+
+  function toggleViews (): void {
+    state.value.viewsOpen = !state.value.viewsOpen;
+  }
+
   function setEditorCollapsed (collapsed: boolean): void {
     state.value.editorCollapsed = collapsed;
   }
@@ -245,6 +270,9 @@ export const useUiStore = defineStore('ui', () => {
     toggleHighlightAll,
     setLayoutOpen,
     toggleLayout,
+    viewsOpen,
+    setViewsOpen,
+    toggleViews,
     setLayoutSize,
     setEditorCollapsed,
   };

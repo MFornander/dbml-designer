@@ -1,7 +1,7 @@
 /**
  * Reads layout YAML (from the comment at the end of an imported `.dbml`) and reports what is
  * wrong with it: YAML syntax, the shape of each section, and, given the schema's keys, references
- * to tables, notes, groups, and relationships the DBML does not have. Structural problems are
+ * to tables, notes, groups, relationships, and views the DBML does not have. Structural problems are
  * errors and keep the layout from being applied; unknown references are warnings, since the
  * diagram simply ignores those entries.
  */
@@ -17,7 +17,8 @@ import { isValidRails } from '@/diagram/geometry/routing';
 import { noteKey } from '@/diagram/keys';
 import type { LayoutKeys } from './schemaKeys';
 import {
-  endFromFile, GROUP_PREFIX, qualifiedForFile, refKeyOf, SECTION_ORDER, SIDECAR_VERSION, SidecarError, splitQualified,
+  DEFAULT_VIEW, endFromFile, GROUP_PREFIX, qualifiedForFile, refKeyOf, ROOT_SECTIONS, SECTION_ORDER, SIDECAR_VERSION, SidecarError,
+  splitQualified,
 } from './format';
 import type { LayoutSnapshot } from './format';
 
@@ -222,6 +223,7 @@ function readGroups (r: Report, node: unknown, keys: LayoutKeys | undefined, sna
       r.add('warning', pairSpan(pair), 'layout/unknown-group', `Table group "${qualifiedForFile(qualified)}" is not in the DBML; its collapsed state is ignored`);
     }
     if (collapsed) snap.collapsedGroups.push(key);
+    else (snap.expandedGroups ??= []).push(key);
   };
   for (const pair of node.items) {
     const schemaOrKey = keyOf(pair) ?? '?';
@@ -245,6 +247,8 @@ function readGroups (r: Report, node: unknown, keys: LayoutKeys | undefined, sna
 
 function readRails (node: unknown): number[] | null {
   if (!isSeq(node)) return null;
+  // An empty list undoes a route inherited from an imported layout.
+  if (node.items.length === 0) return [];
   const values = node.items.map(numberOf);
   if (values.some((v) => v === null)) return null;
   const rails = values as number[];
@@ -285,7 +289,7 @@ function readRefs (r: Report, text: string, node: unknown, keys: LayoutKeys | un
     const railsNode = item.get('rails', true);
     const rails = readRails(railsNode);
     if (!rails) {
-      r.add('error', span((railsNode as Node | undefined) ?? item), 'layout/rails', `"${where}.rails" must be an odd-length list of numbers`);
+      r.add('error', span((railsNode as Node | undefined) ?? item), 'layout/rails', `"${where}.rails" must be an odd-length list of numbers, or empty for the automatic route`);
       return;
     }
     for (const pair of item.items) {
@@ -324,6 +328,60 @@ function readRefs (r: Report, text: string, node: unknown, keys: LayoutKeys | un
     }
     snap.edgeRoutes[key] = [...rails];
   });
+}
+
+/** Read one element section into `snap`; false when `k` names no such section. */
+function readSection (r: Report, text: string, k: string | null, value: unknown, keys: LayoutKeys | undefined, snap: LayoutSnapshot): boolean {
+  switch (k) {
+    case 'tables': readTables(r, value, keys, snap); return true;
+    case 'notes': readNotes(r, value, keys, snap); return true;
+    case 'groups': readGroups(r, value, keys, snap); return true;
+    case 'refs': readRefs(r, text, value, keys, snap); return true;
+    default: return false;
+  }
+}
+
+/** One view's entry, `default` or a `DiagramView`'s: a mapping of element sections. */
+function readView (r: Report, text: string, node: YAMLMap, keys: LayoutKeys | undefined, snap: LayoutSnapshot, name: string): void {
+  for (const entry of node.items) {
+    const k = keyOf(entry);
+    if (!readSection(r, text, k, entry.value, keys, snap)) {
+      r.add('warning', pairSpan(entry), 'layout/unknown-section',
+        `Unknown section "${k ?? '?'}" in "views.${name}"; it is ignored. Sections are ${SECTION_ORDER.join(', ')}`);
+    }
+  }
+}
+
+/** `views`: the Default View as `default` and every named `DiagramView`'s own entry. */
+function readViews (r: Report, text: string, node: unknown, keys: LayoutKeys | undefined, snap: LayoutSnapshot): void {
+  if (isBlank(node)) return;
+  if (!isMap(node)) {
+    r.add('error', span(node as Node), 'layout/shape', '"views" must be a mapping of view names');
+    return;
+  }
+  for (const pair of node.items) {
+    const name = keyOf(pair) ?? '?';
+    if (isBlank(pair.value)) continue;
+    if (!isMap(pair.value)) {
+      r.add('warning', pairSpan(pair), 'layout/not-a-view',
+        `"views.${name}" is not a view: a view is a mapping of sections (${SECTION_ORDER.join(', ')}); it is ignored`);
+      continue;
+    }
+    if (name === DEFAULT_VIEW) {
+      readView(r, text, pair.value, keys, snap, name);
+      continue;
+    }
+    if (keys && !keys.views.has(name)) {
+      r.add('warning', pairSpan(pair), 'layout/unknown-view', `DiagramView "${name}" is not in the DBML; its layout is ignored`);
+    }
+    const nested: LayoutSnapshot = {
+      positions: {},
+      collapsedGroups: [],
+      edgeRoutes: {},
+    };
+    readView(r, text, pair.value, keys, nested, name);
+    (snap.views ??= {})[name] = nested;
+  }
 }
 
 /**
@@ -368,17 +426,17 @@ export function validateLayout (text: string, keys?: LayoutKeys): LayoutValidati
     r.add('error', span(versionPair.value as Node), 'layout/version', `Unsupported layout version ${v}; this build reads version ${SIDECAR_VERSION}`);
   }
 
+  // Older footers put the Default View's element sections at the root; they still read as such.
   for (const pair of root.items) {
     const k = keyOf(pair);
-    switch (k) {
-      case 'version': break;
-      case 'tables': readTables(r, pair.value, keys, snapshot); break;
-      case 'notes': readNotes(r, pair.value, keys, snapshot); break;
-      case 'groups': readGroups(r, pair.value, keys, snapshot); break;
-      case 'refs': readRefs(r, text, pair.value, keys, snapshot); break;
-      default:
-        r.add('warning', pairSpan(pair), 'layout/unknown-section',
-          `Unknown section "${k ?? '?'}"; it is ignored. Sections are ${SECTION_ORDER.slice(1).join(', ')}`);
+    if (k === 'version') continue;
+    if (k === 'views') {
+      readViews(r, text, pair.value, keys, snapshot);
+      continue;
+    }
+    if (!readSection(r, text, k, pair.value, keys, snapshot)) {
+      r.add('warning', pairSpan(pair), 'layout/unknown-section',
+        `Unknown section "${k ?? '?'}"; it is ignored. Sections are ${ROOT_SECTIONS.join(' and ')}`);
     }
   }
   return finish();

@@ -40,11 +40,12 @@ describe('file names', () => {
 describe('serializeLayout', () => {
   it('writes a versioned document with tables nested by schema and one-line positions', () => {
     const text = serializeLayout(snap);
-    expect(text.startsWith('version: 1\n')).toBe(true);
-    expect(text).toMatch(/\ntables:\n {2}public:\n {4}posts: \{ ?x: 0, y: 64 ?\}\n {4}users: \{ ?x: 288, y: 0 ?\}\n/);
-    expect(text).toMatch(/\nnotes:\n {2}tips: \{ ?x: 800, y: 0, w: 192, h: 160 ?\}\n/);
-    expect(text).toMatch(/\ngroups:\n {2}public:\n {4}content: \{ ?collapsed: true ?\}\n {2}sales:\n {4}reporting: \{ ?collapsed: true ?\}\n/);
-    expect(text).toContain('\nrefs:\n');
+    // The Default View is `views.default`.
+    expect(text.startsWith('version: 1\nviews:\n  default:\n    tables:\n')).toBe(true);
+    expect(text).toMatch(/\n {4}tables:\n {6}public:\n {8}posts: \{ ?x: 0, y: 64 ?\}\n {8}users: \{ ?x: 288, y: 0 ?\}\n/);
+    expect(text).toMatch(/\n {4}notes:\n {6}tips: \{ ?x: 800, y: 0, w: 192, h: 160 ?\}\n/);
+    expect(text).toMatch(/\n {4}groups:\n {6}public:\n {8}content: \{ ?collapsed: true ?\}\n {6}sales:\n {8}reporting: \{ ?collapsed: true ?\}\n/);
+    expect(text).toContain('\n    refs:\n');
     // Ref ends read like DBML: the default schema is left out, others are kept.
     expect(text).toContain('from: users(id)');
     expect(text).toContain('to: posts(author_id)');
@@ -72,7 +73,74 @@ describe('serializeLayout', () => {
       edgeRoutes: { '#public.a(id)->public.b(a_id)': [-0] },
     });
     expect(text).not.toContain('-0');
-    expect(text).toMatch(/\n {4}a: \{ ?x: 0, y: 0 ?\}/);
+    expect(text).toMatch(/\n {8}a: \{ ?x: 0, y: 0 ?\}/);
+  });
+
+  it('writes undone inherited collapses and routes so they round-trip', () => {
+    const snap: LayoutSnapshot = {
+      positions: {},
+      collapsedGroups: ['group:public.a'],
+      expandedGroups: ['group:public.b'],
+      edgeRoutes: { '#public.a(id)->public.b(a_id)': [] },
+    };
+    const text = serializeLayout(snap);
+    expect(text).toMatch(/a: \{ ?collapsed: true ?\}/);
+    expect(text).toMatch(/b: \{ ?collapsed: false ?\}/);
+    expect(text).toMatch(/rails: \[ ?\]/);
+    expect(parseLayout(text)).toEqual(snap);
+  });
+
+  it('writes every view under views, the Default View first, and skips views that change nothing', () => {
+    const text = serializeLayout({
+      ...snap,
+      views: {
+        overview: {
+          positions: { 'public.users': { x: 900, y: 0 } },
+          collapsedGroups: [],
+          expandedGroups: ['group:public.content'],
+          edgeRoutes: { '#public.users(id)->public.posts(author_id)': [] },
+        },
+        untouched: {
+          positions: {},
+          collapsedGroups: [],
+          edgeRoutes: {},
+        },
+        compact: {
+          positions: {},
+          collapsedGroups: ['group:sales.reporting'],
+          edgeRoutes: {},
+        },
+      },
+    });
+    const at = (s: string) => text.indexOf(s);
+    expect(text.startsWith('version: 1\nviews:\n  default:\n')).toBe(true);
+    expect(at('\n  default:\n')).toBeLessThan(at('\n  compact:\n'));
+    // Named views follow sorted by name, and a view that changes nothing is left out.
+    expect(text).toMatch(/\n {2}compact:\n {4}groups:\n {6}sales:\n {8}reporting: \{ ?collapsed: true ?\}\n {2}overview:\n {4}tables:\n {6}public:\n {8}users: \{ ?x: 900, y: 0 ?\}\n {4}groups:\n {6}public:\n {8}content: \{ ?collapsed: false ?\}\n {4}refs:\n/);
+    expect(text).not.toContain('untouched');
+    expect(text).toMatch(/rails: \[ ?\]/);
+    expect(parseLayout(text).views).toEqual({
+      compact: { positions: {}, collapsedGroups: ['group:sales.reporting'], edgeRoutes: {} },
+      overview: {
+        positions: { 'public.users': { x: 900, y: 0 } },
+        collapsedGroups: [],
+        expandedGroups: ['group:public.content'],
+        edgeRoutes: { '#public.users(id)->public.posts(author_id)': [] },
+      },
+    });
+    expect(serializeLayout({ ...snap, views: {} })).toBe(serializeLayout(snap));
+
+    // A Default View that changes nothing is left out too, and a view named like its entry is not written.
+    const viewOnly = serializeLayout({
+      positions: {},
+      collapsedGroups: [],
+      edgeRoutes: {},
+      views: {
+        overview: { positions: { 'public.a': { x: 1, y: 1 } }, collapsedGroups: [], edgeRoutes: {} },
+        default: { positions: { 'public.a': { x: 2, y: 2 } }, collapsedGroups: [], edgeRoutes: {} },
+      },
+    });
+    expect(viewOnly).toBe('version: 1\nviews:\n  overview:\n    tables:\n      public:\n        a: { x: 1, y: 1 }\n');
   });
 
   it('omits empty sections', () => {
@@ -82,6 +150,7 @@ describe('serializeLayout', () => {
       edgeRoutes: {},
     });
     expect(text).toContain('version: 1');
+    expect(text).not.toContain('views:');
     expect(text).not.toContain('tables:');
     expect(text).not.toContain('refs:');
   });
@@ -92,7 +161,7 @@ describe('parseLayout', () => {
     expect(parseLayout(serializeLayout(snap))).toEqual(snap);
   });
 
-  it('accepts a hand-written file with only some sections, in nested or flat form', () => {
+  it('accepts a hand-written file with only some sections, in nested or flat form, at the root as older footers have them', () => {
     const parsed = parseLayout([
       'version: 1',
       'tables:',
@@ -118,6 +187,8 @@ describe('parseLayout', () => {
         'sales.orders': { x: 40, y: 48 },
       },
       collapsedGroups: ['group:public.legacy', 'group:sales.reporting'],
+      // `collapsed: false` is kept: it undoes a collapse inherited from an imported layout.
+      expandedGroups: ['group:sales.other'],
       edgeRoutes: { [refKeyOf('author', 'public.users(id)', 'sales.orders(user_id)')]: [300] },
     });
   });

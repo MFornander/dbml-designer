@@ -18,7 +18,7 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 ### Diagram
 
-- Tables with fields and key icons (composite keys and partial-injected fields included), header colors, collapsible table groups, and Markdown sticky notes.
+- Tables with fields and key icons (composite keys and partial-injected fields included), header colors, collapsible table groups, and Markdown sticky notes. Notes paint above everything, then tables in no group, then collapsed groups, then open groups with their members, so a large group never hides what lies across it.
 - Relationships drawn with crow's-foot ends. Lines leaving the same field share one anchor, and each line takes the color of the table it points to.
 - Data lineage: `Dep` blocks and inline `dep` settings draw one dashed curve per pair of tables. Hovering it lists the column mappings; hovering a mapped field draws that field-to-field arrow.
 - Three detail levels (all fields, keys only, table names) and light and dark themes.
@@ -29,18 +29,18 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 - Drag tables, notes, or a whole group by its header, snapped to an 8px grid. Resize notes from their corner.
 - Drag on the empty canvas to select; the selected tables and notes move together. Shift-click or Cmd-click adds or removes one.
-- Hold Space, or switch on the Pan tool, to drag the canvas around. Scroll to zoom.
+- Drag with the middle mouse button, or hold Space and drag, to move the canvas around. Scroll to zoom.
 - Lineage Layout shows only the tables that take part in `Dep` lineage, arranged in dependency order with upstream on the left.
 - Click a relationship to reroute it: drag a control point to move a segment, drag the mid-point between two points to add a bend, and reset to return to the automatic route.
 
 ### Colors and views, written back into the DBML
 
 - A gear on a hovered table, group, or note, or on a selected relationship, opens dbdiagram's color picker. The choice becomes a `headercolor` or `color` setting in the text as one undoable edit. An inline `ref:` is moved to a `Ref:` line first, since inline refs cannot carry settings.
-- The Diagram Views panel, modelled on dbdiagram's, toggles tables and notes on and off in a tree grouped by schema or table group, with search, visible/total counts, and an eye per row. Named views are `DiagramView` blocks in the text: the picker lists them with a check on the active one and a "+ New View" entry, the dots next to it rename or delete the active view, and Save or Save as New write the visible set back into the DBML. A view lists what it shows, so it cannot hide every table or every note.
+- The Diagram Views panel, modelled on dbdiagram's, toggles tables and notes on and off in a tree grouped by schema or table group, with search, visible/total counts, and an eye per row. Named views are `DiagramView` blocks in the text: the View menu at the right of the header, titled like the toolbar's pickers, lists them after Default with a check on the active one, plus New View, Rename, and Delete for the active one; the button beside it is the only way to show or hide the panel. New View and Rename open the panel with its name form, and Reset discards the toggles made there since the view was picked; in the panel's title row, Save or Save as New write the visible set back into the DBML. A view lists what it shows, so it cannot hide every table or every note. Each named view has an arrangement of its own: it starts out looking like the Default View, and tables moved, groups folded, or routes drawn while it is active belong to that view alone, while the rest keeps following the Default View.
 
 ### Toolbar and menu
 
-- Bottom toolbar: zoom, fit, and the Pan tool on the left; the Table and Lineage menus, Highlight Relationships, Lineage Layout, and Diagram Views on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
+- Bottom toolbar: zoom and fit on the left; the Table and Lineage menus, Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
 - The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end. Import reads any `.dbml`; if it ends with such a comment, the layout is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
 
 ## Layout comment
@@ -53,27 +53,38 @@ Table posts { id int [pk]  author_id int [ref: > users.id] }
 
 /* === DBML DESIGNER FOOTER ===
 version: 1
-tables:
-  public:
-    posts: { x: 0, y: 64 }
-    users: { x: 288, y: 0 }
-notes:
-  tips: { x: 800, y: 0, w: 192, h: 160 }
-groups:
-  public:
-    content: { collapsed: true }
-refs:
-  - from: users(id)
-    to: posts(author_id)
-    rails: [ 264.5, 72, 320 ]
+views:
+  default:
+    tables:
+      public:
+        posts: { x: 0, y: 64 }
+        users: { x: 288, y: 0 }
+    notes:
+      tips: { x: 800, y: 0, w: 192, h: 160 }
+    groups:
+      public:
+        content: { collapsed: true }
+    refs:
+      - from: users(id)
+        to: posts(author_id)
+        rails: [ 264.5, 72, 320 ]
+  overview:
+    tables:
+      public:
+        posts: { x: 0, y: 200 }
+    groups:
+      public:
+        content: { collapsed: false }
 */
 ```
 
 - The Layout panel under the editor is a read-only preview of this YAML and follows the diagram as you arrange it.
-- Import lifts the comment out of the file, checks it against the schema, applies it to the diagram, and leaves a short placeholder comment where Export will write the layout again. The placeholder is static while you arrange; Export replaces it. Entries for tables, notes, groups, or relationships the DBML does not have are ignored and counted in the status line; a comment that is not valid layout YAML is reported and skipped.
+- Import and Follow lift the footer out of the file, check it against the schema, apply it to the diagram, and show the text without it; Export and Save write it again at the end. Footer blocks are removed wherever they sit, so text that grew past an old footer never carries two. Entries for tables, notes, groups, or relationships the DBML does not have are ignored and counted in the status line; a footer that is not valid layout YAML is reported and skipped.
 - Positions are diagram pixels. Tables and groups are nested under their schema; notes are keyed by name.
 - A ref is identified by its optional `name` and its two ends, written like DBML as `table(fields)` with the schema left out when it is `public` (`sales.orders(id)` otherwise). The referenced table comes first: an inline `ref: > users.id` on `posts.author_id` is `from: users(id)`, `to: posts(author_id)`.
 - `rails` are the alternating x, y, x, ... coordinates of the movable segments of a hand-drawn route.
+- `views` holds one entry per view. `default` is the Default View, the arrangement of the whole diagram; every other entry is named after a `DiagramView` and holds the same `tables`, `notes`, `groups`, and `refs` with only what that view changes against the Default View: tables it moves, groups it folds (`collapsed: true`) or unfolds (`collapsed: false`), routes it draws or resets (`rails: []`). A view that changes nothing is left out, and renaming or deleting a view in the DBML renames or drops its entry. Older footers with the element sections at the root are read as the Default View and rewritten on the next save.
+- A file that imports others inherits their layouts: an imported table sits where the footer of the file that brought it in puts it (the nearest import wins when several say something), and this file's footer records only its own elements and what it changed. The same goes for views: what an imported footer's entry for a view of the same name says sits above this file's Default View, and this file's entry for that view records only what it changes on top. A moved imported table is written with its new position; an inherited collapse that was opened is written as `collapsed: false`, and an inherited hand-drawn route that was reset as `rails: []`. Opening the imported file on its own still shows its own arrangement, and nothing is ever written to it from here.
 - Empty sections are left out. The layout is kept in `localStorage` between sessions, so the exported file is for sharing and versioning.
 
 ## Development
@@ -95,23 +106,23 @@ Other scripts:
 | `npm run build` | Type-check and produce a production build in `dist/` |
 | `npm run preview` | Serve the production build locally |
 
-## Following a file
+## Following files
 
-To work on a `.dbml` together with another program, an agent or an editor, let the app follow the file instead of importing it. Choose Follow file… in the menu, pick a file or type its path, and the editor shows it; every change written to the file appears within a second, and the layout you arranged stays put. ⌘S (Ctrl-S) writes the text and the layout footer back to the file; the status next to the title says whether you have unsaved changes. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
-
-A followed file can `use` others. DBML's [module system](https://dbml.dbdiagram.io/syntax/module-system) resolves `use * from './schema'` relative to the followed file, so a `pipeline.dbml` can import a `schema.dbml` next to it: the imported tables appear in the diagram, refs and `Dep` blocks may cross files, and changes to the imported files are picked up too. Imported elements are shown but not edited from here; problems in them are listed with the file's name. Without a followed file the text has no folder, so imports cannot resolve and the Errors list says so.
-
-Following works through the dev server only. It reaches `.dbml` files in this repo by default; to add folders, put them in `.env.local`, colon-separated, and restart the dev server:
+To work on `.dbml` files together with another program, an agent or an editor, the app follows them from disk instead of importing them. Point the dev server at the folder in `.env.local` (colon-separated for several) and restart it:
 
 ```bash
 DBML_ROOTS=/Users/me/pipeline-wiki:/Users/me/other-repo
 ```
 
-The bridge reads and writes only `.dbml` files under those roots, from the same origin. Remember the dev server listens on the network, so keep the roots to what you mean to share.
+The name next to the title is the current file; click it for every `.dbml` directly under those folders and switch by picking one; files are created outside the app, by you or the agent, and the list refreshes each time it opens. The first file is followed automatically, and the choice is remembered. Every change written to the current file appears within a second while the layout you arranged stays put; the arrow next to the name reads the file and its imports from disk again on demand, and with unsaved edits it offers the disk text instead of dropping them. ⌘S (Ctrl-S) writes the text and the layout footer back; the status after the name says whether you have unsaved changes, and switching files saves them first. Each file keeps its own arrangement: switch away and back, saved or not, and its tables sit and its groups fold the way you left them. A footer someone else wrote to the file meanwhile wins, since that is their layout; a footer that merely disappeared does not. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
+
+A followed file can `use` others. DBML's [module system](https://dbml.dbdiagram.io/syntax/module-system) resolves `use * from './schema'` relative to the followed file, so a `pipeline.dbml` can import a `schema.dbml` next to it: the imported tables appear in the diagram, refs and `Dep` blocks may cross files, and changes to the imported files are picked up too. Imported elements are shown but not edited from here; problems in them are listed with the file's name. Without a followed file the text has no folder, so imports cannot resolve and the Errors list says so.
+
+Following works through the dev server only; without `DBML_ROOTS` it reaches the `.dbml` files in this repo. The bridge reads and writes only `.dbml` files directly under the roots, from the same origin, and reports changes to every followed and imported file over a single event stream, so a file with many imports does not run the browser out of connections. Remember the dev server listens on the network, so keep the roots to what you mean to share.
 
 ## Working with an agent
 
-The follow-file bridge and the command line together let an agent write the DBML while you watch the diagram and arrange it. Using `~/github/pipeline-wiki` as the repo the model lives in:
+Following files and the command line together let an agent write the DBML while you watch the diagram and arrange it. Using `~/github/pipeline-wiki` as the repo the model lives in:
 
 1. Point the dev server at that repo, once, and restart it:
 
@@ -121,7 +132,7 @@ The follow-file bridge and the command line together let an agent write the DBML
 
    Colon-separate several folders if the agent should also reach the repos being modeled.
 
-2. In DBML Designer, choose Follow file… from the menu and type `/Users/me/github/pipeline-wiki/schema.dbml`. A path that does not exist yet is fine: press ⌘S once and the file is created with the layout footer.
+2. Create `schema.dbml` in that folder if it does not exist yet, even empty, then in DBML Designer click the file name next to the title and pick it. The first ⌘S writes the layout footer into it.
 
 3. Start the agent in that repo and give it the instructions as the first prompt, rather than through a `CLAUDE.md`, so they travel with the task:
 

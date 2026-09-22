@@ -10,6 +10,7 @@ const keys: LayoutKeys = {
     refKeyOf(null, 'public.users(id)', 'public.posts(author_id)'),
     refKeyOf('fk', 'public.users(id)', 'sales.orders(user_id)'),
   ]),
+  views: new Set(['overview']),
 };
 
 function withEdits (source: string, edits: readonly { start: number; end: number; newText: string }[]): string {
@@ -75,7 +76,7 @@ describe('validateLayout', () => {
     expect(extra.ok).toBe(true);
     expect(extra.warnings.map((w) => w.message)).toEqual([
       'Unknown key "color" in "tables.public.users"; it is ignored',
-      'Unknown section "extra"; it is ignored. Sections are tables, notes, groups, refs',
+      'Unknown section "extra"; it is ignored. Sections are version and views',
     ]);
   });
 
@@ -130,10 +131,31 @@ describe('validateLayout', () => {
 
     expect(validateLayout('version: 1\nrefs:\n  - from: a(x)\n    rails: [1]').errors[0]!.message).toBe('"refs[0]" needs "from" and "to"');
     const rails = validateLayout('version: 1\nrefs:\n  - from: a(x)\n    to: b(y)\n    rails: [1, 2]');
-    expect(rails.errors[0]!.message).toBe('"refs[0].rails" must be an odd-length list of numbers');
+    expect(rails.errors[0]!.message).toBe('"refs[0].rails" must be an odd-length list of numbers, or empty for the automatic route');
     expect(rails.errors[0]!.location).toEqual({ line: 5, column: 12 });
     expect(validateLayout('version: 1\nrefs:\n  x: 1').errors[0]!.message).toBe('"refs" must be a list');
     expect(validateLayout('version: 1\nrefs:\n  - name: 3\n    from: a(x)\n    to: b(y)\n    rails: [1]').errors[0]!.message).toBe('"refs[0].name" must be a string');
+  });
+
+  it('reads undone inherited collapses and routes as explicit overrides', () => {
+    const v = validateLayout([
+      'version: 1',
+      'groups:',
+      '  public:',
+      '    content: { collapsed: false }',
+      'refs:',
+      '  - from: users(id)',
+      '    to: posts(author_id)',
+      '    rails: []',
+    ].join('\n'), keys);
+    expect(v.ok).toBe(true);
+    expect(v.warnings).toEqual([]);
+    expect(v.snapshot).toEqual({
+      positions: {},
+      collapsedGroups: [],
+      expandedGroups: ['group:public.content'],
+      edgeRoutes: { [refKeyOf(null, 'public.users(id)', 'public.posts(author_id)')]: [] },
+    });
   });
 
   it('reads the older flat forms, empty sections, and named refs', () => {
@@ -158,7 +180,63 @@ describe('validateLayout', () => {
     expect(v.snapshot).toEqual({
       positions: { 'sales.orders': { x: 40, y: 48 } },
       collapsedGroups: ['group:public.content'],
+      expandedGroups: ['group:sales.reporting'],
       edgeRoutes: { [refKeyOf('fk', 'public.users(id)', 'sales.orders(user_id)')]: [300] },
     });
+  });
+
+  it('reads every entry under views, default and the named ones alike, and warns about views the DBML lacks', () => {
+    const text = [
+      'version: 1',
+      'views:',
+      '  default:',
+      '    tables:',
+      '      public:',
+      '        users: { x: 0, y: 0 }',
+      '  overview:',
+      '    tables:',
+      '      public:',
+      '        users: { x: 900, y: 0 }',
+      '        ghost: { x: 1, y: 1 }',
+      '    groups:',
+      '      public:',
+      '        content: { collapsed: false }',
+      '    refs:',
+      '      - from: users(id)',
+      '        to: posts(author_id)',
+      '        rails: []',
+      '    version: 1',
+      '  gone:',
+      '    tables:',
+      '      public:',
+      '        users: { x: 5, y: 5 }',
+      '  broken: 3',
+      '',
+    ].join('\n');
+    const v = validateLayout(text, keys);
+    expect(v.ok).toBe(true);
+    expect(v.warnings.map((w) => [w.code, w.location.line])).toEqual([
+      ['layout/unknown-table', 11],
+      ['layout/unknown-section', 19],
+      ['layout/unknown-view', 20],
+      ['layout/not-a-view', 24],
+    ]);
+    expect(v.warnings[1]!.message).toBe('Unknown section "version" in "views.overview"; it is ignored. Sections are tables, notes, groups, refs');
+    expect(v.warnings[2]!.message).toBe('DiagramView "gone" is not in the DBML; its layout is ignored');
+    expect(v.warnings[3]!.message).toBe('"views.broken" is not a view: a view is a mapping of sections (tables, notes, groups, refs); it is ignored');
+    expect(v.snapshot.positions).toEqual({ 'public.users': { x: 0, y: 0 } });
+    expect(v.snapshot.views!.overview).toEqual({
+      positions: { 'public.users': { x: 900, y: 0 }, 'public.ghost': { x: 1, y: 1 } },
+      collapsedGroups: [],
+      expandedGroups: ['group:public.content'],
+      edgeRoutes: { [refKeyOf(null, 'public.users(id)', 'public.posts(author_id)')]: [] },
+    });
+    expect(Object.keys(v.snapshot.views!)).toEqual(['overview', 'gone']);
+    // A `default` that is not a mapping is ignored the same way, an empty entry says nothing, and `views` itself must be a mapping.
+    const odd = validateLayout('version: 1\nviews:\n  default: []\n  empty:\n');
+    expect(odd.ok).toBe(true);
+    expect(odd.warnings.map((w) => w.code)).toEqual(['layout/not-a-view']);
+    expect(odd.snapshot.views).toBeUndefined();
+    expect(validateLayout('version: 1\nviews: []\n').errors.map((e) => e.message)).toEqual(['"views" must be a mapping of view names']);
   });
 });

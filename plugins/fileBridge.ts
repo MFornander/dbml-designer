@@ -7,7 +7,9 @@
  *   GET  /__dbml/file?path=…     { path, text, mtimeMs }
  *   PUT  /__dbml/file?path=…     body: the text; header If-Match-Mtime: the mtimeMs last seen,
  *                                answered 409 when the file changed since
- *   GET  /__dbml/events?path=…   server-sent events, one `{ mtimeMs, exists }` per change
+ *   GET  /__dbml/events?path=…&path=…
+ *                                server-sent events, one `{ path, mtimeMs, exists }` per change of
+ *                                any listed file; one stream serves every file the app watches
  */
 import {
   existsSync, promises as fs, unwatchFile, watchFile,
@@ -33,9 +35,9 @@ export function isAllowed (roots: readonly string[], file: string): boolean {
 
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'coverage']);
 
-/** The `.dbml` files under the roots, a few levels deep, skipping dependency and build folders. */
+/** The `.dbml` files directly under each root (deeper only when asked), skipping dependency and build folders. */
 export async function listDbmlFiles (roots: readonly string[], limits = {
-  maxDepth: 4,
+  maxDepth: 0,
   max: 200,
 }): Promise<string[]> {
   const out: string[] = [];
@@ -80,7 +82,38 @@ function readBody (req: IncomingMessage): Promise<string> {
   });
 }
 
-async function handle (roots: readonly string[], req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> {
+const FORBIDDEN = 'Only .dbml files under the configured roots can be followed (see DBML_ROOTS)';
+
+/** Watch every listed file and send one event per change until the request closes. */
+function streamChanges (paths: readonly string[], req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.write(': connected\n\n');
+  // Polling survives editors that replace the file instead of rewriting it.
+  const stops = paths.map((p) => {
+    const abs = path.resolve(p);
+    const listener = (curr: { mtimeMs: number; size: number }, prev: { mtimeMs: number; size: number }) => {
+      if (curr.mtimeMs === prev.mtimeMs && curr.size === prev.size) return;
+      res.write(`data: ${JSON.stringify({
+        path: p,
+        mtimeMs: curr.mtimeMs,
+        exists: curr.mtimeMs !== 0,
+      })}\n\n`);
+    };
+    watchFile(abs, { interval: 400 }, listener);
+    return () => unwatchFile(abs, listener);
+  });
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 20000);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    for (const stop of stops) stop();
+  });
+}
+
+export async function handle (roots: readonly string[], req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const json = (status: number, body: unknown) => {
     res.statusCode = status;
@@ -96,9 +129,22 @@ async function handle (roots: readonly string[], req: IncomingMessage, res: Serv
       });
       return;
     }
-    if ((url.pathname === '/file' || url.pathname === '/events') && file !== null) {
+    if (url.pathname === '/events' && req.method === 'GET') {
+      const paths = url.searchParams.getAll('path');
+      if (paths.length === 0) {
+        json(400, { error: 'Give at least one path to watch' });
+        return;
+      }
+      if (!paths.every((p) => isAllowed(roots, p))) {
+        json(403, { error: FORBIDDEN });
+        return;
+      }
+      streamChanges(paths, req, res);
+      return;
+    }
+    if (url.pathname === '/file' && file !== null) {
       if (!isAllowed(roots, file)) {
-        json(403, { error: 'Only .dbml files under the configured roots can be followed (see DBML_ROOTS)' });
+        json(403, { error: FORBIDDEN });
         return;
       }
       const abs = path.resolve(file);
@@ -140,30 +186,6 @@ async function handle (roots: readonly string[], req: IncomingMessage, res: Serv
         json(200, {
           path: abs,
           mtimeMs: st.mtimeMs,
-        });
-        return;
-      }
-
-      if (url.pathname === '/events' && req.method === 'GET') {
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        });
-        res.write(': connected\n\n');
-        // Polling survives editors that replace the file instead of rewriting it.
-        const listener = (curr: { mtimeMs: number; size: number }, prev: { mtimeMs: number; size: number }) => {
-          if (curr.mtimeMs === prev.mtimeMs && curr.size === prev.size) return;
-          res.write(`data: ${JSON.stringify({
-            mtimeMs: curr.mtimeMs,
-            exists: curr.mtimeMs !== 0,
-          })}\n\n`);
-        };
-        watchFile(abs, { interval: 400 }, listener);
-        const heartbeat = setInterval(() => res.write(': ping\n\n'), 20000);
-        req.on('close', () => {
-          clearInterval(heartbeat);
-          unwatchFile(abs, listener);
         });
         return;
       }

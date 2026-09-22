@@ -72,7 +72,18 @@ export const useParserStore = defineStore('parser', () => {
 
   /** Sources of the files the entry imports, by absolute path. */
   const imports = shallowRef<ReadonlyMap<string, string>>(new Map());
-  const importPaths = computed(() => [...imports.value.keys()]);
+  /** Loaded imports in the order the entry reaches them, nearest first. */
+  const importPaths = computed(() => {
+    void parseVersion.value;
+    const reachable = dependencies().map((f) => f.absolute).filter((abs) => imports.value.has(abs));
+    const rest = [...imports.value.keys()].filter((abs) => !reachable.includes(abs));
+    return [...reachable, ...rest];
+  });
+  /** The imported files' texts in that order, for layouts inherited from their footers. */
+  const importSources = computed(() => importPaths.value.map((file) => ({
+    file,
+    text: imports.value.get(file)!,
+  })));
   let loader: SourceLoader | null = null;
   const pendingLoads = new Set<string>();
   /** Imports the loader could not find; asked for again only when `retryImports` says so. */
@@ -188,15 +199,19 @@ export const useParserStore = defineStore('parser', () => {
     missing.clear();
   }
 
-  /** Where the edited text lives. Null returns to the virtual entry; imports are dropped either way. */
-  function setEntryPath (absolutePath: string | null): void {
+  /**
+   * Where the edited text lives. Null returns to the virtual entry; imports are dropped either way.
+   * When the text changes along with the path (another file is opened), pass it so its imports,
+   * not the old text's, are requested from the new folder; later parses read the editor as usual.
+   */
+  function setEntryPath (absolutePath: string | null, text: string = editor.text): void {
     const next = absolutePath ? Filepath.from(absolutePath) : DEFAULT_ENTRY;
     if (next.equals(entry.value)) return;
     layout.deleteSource(entry.value);
     clearImports();
     entry.value = markRaw(next);
     rebuildCompiler();
-    parseNow();
+    parseNow(text);
   }
 
   /** How imported files are read; null when nothing can read them (no followed file). */
@@ -247,6 +262,7 @@ export const useParserStore = defineStore('parser', () => {
     layout,
     entryPath,
     importPaths,
+    importSources,
     isLoading,
     parseVersion,
     lastGoodVersion,

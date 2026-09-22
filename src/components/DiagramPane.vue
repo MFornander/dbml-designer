@@ -12,8 +12,8 @@
       :lineage-layout="ui.lineageLayout"
       :highlight-all="ui.highlightAll"
       :edge-routes="layout.edgeRoutes"
-      :pan-mode="panMode"
       :hidden="views.hidden"
+      :loading="parser.isLoading"
       @position-change="layout.applyPositionChanges"
       @edge-route-change="layout.setEdgeRoute"
       @toggle-group="layout.toggleGroup"
@@ -46,16 +46,16 @@
       </div>
     </div>
 
+    <!-- Shown and hidden from the header's View menu -->
     <DiagramViewsPanel
-      v-if="viewsOpen"
+      v-if="ui.viewsOpen"
       :model="model"
-      @close="viewsOpen = false"
     />
 
-    <!-- Bottom toolbar: zoom cluster on the left with the Errors pill stacked above it, modes and view options on the right; wraps in narrow panes -->
+    <!-- Bottom toolbar: zoom cluster on the left with the Errors pill stacked above it, modes on the right; wraps in narrow panes -->
     <div
       class="absolute bottom-3 left-3 flex flex-wrap items-end gap-2 pointer-events-none"
-      :class="viewsOpen ? 'right-[21rem]' : 'right-3'"
+      :class="ui.viewsOpen ? 'right-[23rem]' : 'right-3'"
     >
       <div class="flex flex-col items-start gap-2">
         <ErrorsPopover />
@@ -93,17 +93,6 @@
           >
             <PhCornersOut class="w-4 h-4" />
           </button>
-          <span :class="DIVIDER" />
-          <!-- Pan toggle, like dbdiagram's hand: off, dragging the canvas selects; on (or Space held), it pans -->
-          <button
-            :class="[BUTTON, panMode ? ACTIVE : '']"
-            :title="panMode ? 'Pan tool on: drag the canvas to move around. Click to go back to selecting' : 'Pan tool: drag the canvas to move around (or hold Space)'"
-            aria-label="Pan tool"
-            :aria-pressed="panMode"
-            @click="panMode = !panMode"
-          >
-            <PhHand class="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -121,24 +110,15 @@
         >
           <PhLineSegments class="w-4 h-4" />
         </button>
+        <!-- Still work in progress; the tooltip says so -->
         <button
           :class="[BUTTON, ui.lineageLayout ? ACTIVE : '']"
-          :title="ui.lineageLayout ? 'Lineage layout: on. Back to your layout' : 'Lineage layout: order tables by dependency'"
-          :aria-label="ui.lineageLayout ? 'Disable lineage layout' : 'Enable lineage layout'"
+          :title="ui.lineageLayout ? 'Lineage layout (WIP): on. Back to your layout' : 'Lineage layout (WIP): order tables by dependency'"
+          :aria-label="ui.lineageLayout ? 'Disable lineage layout (WIP)' : 'Enable lineage layout (WIP)'"
           :aria-pressed="ui.lineageLayout"
           @click="ui.toggleLineageLayout"
         >
           <PhTreeStructure class="w-4 h-4" />
-        </button>
-        <span :class="DIVIDER" />
-        <button
-          :class="[BUTTON, viewsOpen ? ACTIVE : '']"
-          title="Diagram views: choose what the diagram shows"
-          aria-label="Diagram views"
-          :aria-pressed="viewsOpen"
-          @click="viewsOpen = !viewsOpen"
-        >
-          <PhStackSimple class="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -150,7 +130,7 @@ import {
   computed, ref, useTemplateRef, watch,
 } from 'vue';
 import {
-  PhCornersOut, PhHand, PhLineSegments, PhMinus, PhPlus, PhStackSimple, PhTreeStructure,
+  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { DiagramCanvas, buildDiagramModel } from '@/diagram';
 import type { ColorChangePayload, TableLinkPayload } from '@/types/diagram';
@@ -181,10 +161,6 @@ const textEdits = useTextEdits();
 
 const canvas = useTemplateRef<InstanceType<typeof DiagramCanvas>>('canvas');
 const zoom = ref(1);
-/** Pan tool on: dragging the bare canvas pans; off (default): it draws a selection box. Not persisted. */
-const panMode = ref(false);
-/** The Diagram Views panel is open. Not persisted. */
-const viewsOpen = ref(false);
 
 const model = computed(() => buildDiagramModel(parser.rawDatabase));
 // The view store follows every parse so its hidden set matches the current definitions.

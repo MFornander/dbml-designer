@@ -10,7 +10,7 @@
       class="flex shrink-0 flex-wrap items-center gap-2 border-b border-yellow-300 bg-yellow-50 px-3 py-1.5 text-xs text-yellow-900 dark:border-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-100"
       role="status"
     >
-      <span class="min-w-0 flex-1">{{ link.name }} changed on disk while you have unsaved edits.</span>
+      <span class="min-w-0 flex-1">{{ link.name }} on disk differs from your unsaved edits.</span>
       <button
         type="button"
         class="rounded bg-yellow-200 px-2 py-0.5 font-medium hover:bg-yellow-300 cursor-pointer dark:bg-yellow-700 dark:hover:bg-yellow-600"

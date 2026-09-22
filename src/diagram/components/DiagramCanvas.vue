@@ -14,6 +14,8 @@
       class="dg-svg"
       @wheel="onWheel"
       @pointermove="onPointerMove"
+      @pointerdown.capture="onAnyPointerDown"
+      @mousedown.middle.prevent
     >
       <DiagramDefs :viewport="pz.viewport.value" />
       <rect
@@ -35,27 +37,19 @@
         class="dg-viewport"
         :transform="viewportTransform"
       >
+        <!-- Painted bottom to top: open group bodies (largest first), edges, the tables inside open groups,
+             collapsed groups, tables in no group, then sticky notes. A large group never hides what lies across it. -->
         <g class="dg-layer-groups">
           <TableGroupNode
-            v-for="g in geo.groupBoxes.value"
+            v-for="g in expandedGroupsInRenderOrder"
             :key="g.group.key"
             :group="g.group"
             :box="g.box"
             :name-w="g.nameW"
             :dark="dark"
-            :collapsed="g.collapsed"
+            :collapsed="false"
             :member-count="g.memberCount"
             :is-dragging="drag.dragging.value?.key === g.group.key"
-          />
-        </g>
-        <g class="dg-layer-notes">
-          <StickyNoteNode
-            v-for="n in notesInRenderOrder"
-            :key="n.note.key"
-            :note="n.note"
-            :box="n.box"
-            :selected="selection.has(n.note.key)"
-            :is-dragging="isDraggingKey(n.note.key)"
           />
         </g>
         <g class="dg-layer-refs">
@@ -70,8 +64,9 @@
           />
         </g>
         <g class="dg-layer-tables">
+          <!-- Members of open groups belong with their group, just above its body -->
           <TableNode
-            v-for="t in tablesInRenderOrder"
+            v-for="t in groupedTablesInRenderOrder"
             :key="t.table.key"
             :table="t.table"
             :box="t.box"
@@ -81,6 +76,65 @@
             :highlighted-fields="hover.highlight.value.fieldKeys"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
+          />
+          <!-- A collapsed group stands in for its tables -->
+          <TableGroupNode
+            v-for="g in collapsedGroupsInRenderOrder"
+            :key="g.group.key"
+            :group="g.group"
+            :box="g.box"
+            :name-w="g.nameW"
+            :dark="dark"
+            :collapsed="true"
+            :member-count="g.memberCount"
+            :is-dragging="false"
+          />
+          <!-- Tables in no group float above collapsed groups -->
+          <TableNode
+            v-for="t in freeTablesInRenderOrder"
+            :key="t.table.key"
+            :table="t.table"
+            :box="t.box"
+            :rows="t.rows"
+            :size="t.size"
+            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :selected="selection.has(t.table.key)"
+            :is-dragging="isDraggingKey(t.table.key)"
+          />
+          <!-- Whatever is being dragged rides above the rest while it moves -->
+          <TableGroupNode
+            v-for="g in raisedGroupsInRenderOrder"
+            :key="g.group.key"
+            :group="g.group"
+            :box="g.box"
+            :name-w="g.nameW"
+            :dark="dark"
+            :collapsed="true"
+            :member-count="g.memberCount"
+            :is-dragging="true"
+          />
+          <TableNode
+            v-for="t in raisedTablesInRenderOrder"
+            :key="t.table.key"
+            :table="t.table"
+            :box="t.box"
+            :rows="t.rows"
+            :size="t.size"
+            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :selected="selection.has(t.table.key)"
+            :is-dragging="true"
+          />
+        </g>
+        <g class="dg-layer-notes">
+          <StickyNoteNode
+            v-for="n in notesInRenderOrder"
+            :key="n.note.key"
+            :note="n.note"
+            :box="n.box"
+            :selected="selection.has(n.note.key)"
+            :is-dragging="isDraggingKey(n.note.key)"
           />
         </g>
         <rect
@@ -133,6 +187,7 @@ import type { DepLineVM, DiagramModel, RefVM } from '../types';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod } from '../geometry/lod';
 import { placeNewItems, placeNewNotes } from '../geometry/layout';
+import type { GroupBox } from '../state/useDiagramGeometry';
 import {
   GROUP_HEADER_H, NOTE_MIN_H, NOTE_MIN_W, ROW_H,
 } from '../geometry/constants';
@@ -174,17 +229,18 @@ const props = withDefaults(defineProps<{
   /** Hand-drawn relationship routes by ref key (alternating x/y rails, see routing.ts). */
   edgeRoutes?: Readonly<Record<string, readonly number[]>>;
   /** Pan tool: dragging the bare canvas pans instead of drawing a selection box. Space does the same while held. */
-  panMode?: boolean;
   /** Tables and notes hidden by the active diagram view. */
   hidden?: ReadonlySet<string>;
+  /** The model is behind the text (a parse or its imports are on the way); auto-placement waits for it. */
+  loading?: boolean;
 }>(), {
+  loading: false,
   collapsedGroups: () => new Set<string>(),
   showRefs: true,
   showLineage: true,
   lineageLayout: false,
   highlightAll: false,
   edgeRoutes: () => ({}),
-  panMode: false,
   hidden: () => new Set<string>(),
 });
 
@@ -277,7 +333,8 @@ const selection = shallowRef<ReadonlySet<string>>(new Set());
 const marquee = shallowRef<Rect | null>(null);
 /** Space held: pan instead of select until it is released. */
 const spaceHeld = ref(false);
-const panning = computed(() => props.panMode || spaceHeld.value);
+/** Space held: dragging the bare canvas pans instead of selecting. Middle-button drags always pan. */
+const panning = computed(() => spaceHeld.value);
 
 function clearSelection () {
   if (selection.value.size > 0) selection.value = new Set();
@@ -580,7 +637,15 @@ function onWheel (e: WheelEvent) {
   pz.onWheel(e);
 }
 
-// Bare canvas: pan (Pan tool or Space) or draw a selection marquee.
+// A middle-button drag pans wherever it starts, before tables or notes can claim the press.
+function onAnyPointerDown (e: PointerEvent) {
+  if (e.button !== 1) return;
+  e.stopPropagation();
+  stopAutoFit();
+  pz.onBackgroundPointerDown(e);
+}
+
+// Bare canvas: pan (Space held) or draw a selection marquee.
 function onBackgroundDown (e: PointerEvent) {
   if (e.button !== 0) return;
   stopAutoFit();
@@ -741,23 +806,41 @@ const ctx: DiagramContext = {
 provide(DIAGRAM_CTX, ctx);
 
 // Render lists
-const tablesInRenderOrder = computed(() => {
-  const draggingKey = drag.dragging.value?.key;
-  const list = model.value.tables
-    .filter((t) => geo.visibleTableKeys.value.has(t.key))
-    .map((t) => ({
-      table: t,
-      box: geo.boxes.value.get(t.key)!,
-      rows: geo.rowsByTable.value.get(t.key) ?? [],
-      size: geo.sizes.value.get(t.key)!,
-    }));
-  if (!draggingKey) return list;
-  const idx = list.findIndex((t) => t.table.key === draggingKey);
-  if (idx < 0) return list;
-  const [dragged] = list.splice(idx, 1);
-  list.push(dragged!);
-  return list;
-});
+/** Open groups, the largest body first: whatever lies inside another group is painted over it, not under it. */
+const expandedGroupsInRenderOrder = computed(() => geo.groupBoxes.value
+  .filter((g) => !g.collapsed)
+  .map((g, i) => ({
+    g,
+    i,
+  }))
+  .sort((a, b) => (b.g.box.w * b.g.box.h - a.g.box.w * a.g.box.h) || a.i - b.i)
+  .map(({ g }) => g));
+
+const isDraggingGroup = (g: GroupBox) => drag.dragging.value?.key === g.group.key;
+/** Collapsed groups in declaration order; a dragged one is raised instead. */
+const collapsedGroupsInRenderOrder = computed(() => geo.groupBoxes.value.filter((g) => g.collapsed && !isDraggingGroup(g)));
+const raisedGroupsInRenderOrder = computed(() => geo.groupBoxes.value.filter((g) => g.collapsed && isDraggingGroup(g)));
+
+/** Groups drawn open, whose members are painted right above the bodies. */
+const openGroupKeys = computed(() => new Set(geo.groupBoxes.value.filter((g) => !g.collapsed).map((g) => g.group.key)));
+
+const visibleTables = computed(() => model.value.tables
+  .filter((t) => geo.visibleTableKeys.value.has(t.key))
+  .map((t) => ({
+    table: t,
+    box: geo.boxes.value.get(t.key)!,
+    rows: geo.rowsByTable.value.get(t.key) ?? [],
+    size: geo.sizes.value.get(t.key)!,
+  })));
+type RenderTable = (typeof visibleTables.value)[number];
+const inOpenGroup = (t: RenderTable) => !!t.table.groupKey && openGroupKeys.value.has(t.table.groupKey);
+const isRaised = (t: RenderTable) => isDraggingKey(t.table.key);
+/** Tables inside an open group, painted with it. */
+const groupedTablesInRenderOrder = computed(() => visibleTables.value.filter((t) => inOpenGroup(t) && !isRaised(t)));
+/** Tables in no group (or whose group is not drawn), above collapsed groups. */
+const freeTablesInRenderOrder = computed(() => visibleTables.value.filter((t) => !inOpenGroup(t) && !isRaised(t)));
+/** Whatever is being dragged, on top of the other tables and collapsed groups while it moves. */
+const raisedTablesInRenderOrder = computed(() => visibleTables.value.filter(isRaised));
 
 interface RenderEdge {
   edge: RefVM | DepLineVM;
@@ -831,9 +914,11 @@ const notesInRenderOrder = computed(() => model.value.notes
     box: geo.noteBoxes.value.get(n.key)!,
   })));
 
-// Auto-placement of elements without a stored position
-watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes], ([tables, notes]) => {
-  if (tables.length === 0 && notes.length === 0) return;
+// Auto-placement of elements without a stored position. Not while the model lags the text: after
+// opening another file it still shows the previous one until the imports arrive, and placing that
+// against the new layout would write stray positions into it.
+watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading], ([tables, notes, , loading]) => {
+  if (loading || (tables.length === 0 && notes.length === 0)) return;
   const changes: PositionChange[] = [];
   // Group boxes count as occupied so new tables and notes land outside existing groups.
   const occupied: Rect[] = [

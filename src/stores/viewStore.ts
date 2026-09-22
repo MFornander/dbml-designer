@@ -1,4 +1,4 @@
-import { computed, shallowRef } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 import type { DiagramModel, DiagramViewVM } from '@/diagram/types';
 import { hiddenForView, sameHidden } from '@/diagram/adapter/views';
@@ -31,6 +31,10 @@ export const useViewStore = defineStore('views', () => {
 
   const activeView = computed(() => state.value.activeView);
   const views = shallowRef<readonly DiagramViewVM[]>([]);
+  /** The model the views were last read from, for picking a view from a place that has no model at hand. */
+  const model = shallowRef<DiagramModel | null>(null);
+  /** A request from elsewhere to name a new view or rename the active one; the panel opens its name form and clears this. */
+  const pendingRequest = ref<'create' | 'rename' | null>(null);
   const view = computed(() => views.value.find((v) => v.name === activeView.value) ?? null);
   /** Hidden tables and notes as currently shown: the definition plus unsaved toggles. */
   const hidden = shallowRef<ReadonlySet<string>>(new Set());
@@ -57,18 +61,35 @@ export const useViewStore = defineStore('views', () => {
    * is reset only when the active view's definition changed, and a view that disappeared
    * falls back to the Default View.
    */
-  function sync (model: DiagramModel): void {
-    views.value = model.views;
-    const active = model.views.find((v) => v.name === state.value.activeView) ?? null;
+  function sync (m: DiagramModel): void {
+    model.value = m;
+    views.value = m.views;
+    const active = m.views.find((v) => v.name === state.value.activeView) ?? null;
     if (state.value.activeView !== null && !active) setActive(null);
-    const base = hiddenForView(model, active);
+    const base = hiddenForView(m, active);
     if (!sameHidden(base, baseHidden.value)) resetTo(base);
   }
 
-  /** Switch views, discarding unsaved toggles. */
-  function select (name: string | null, model: DiagramModel): void {
+  /** Switch views, discarding unsaved toggles; against the model given, else the one last synced. */
+  function select (name: string | null, m: DiagramModel | null = model.value): void {
     setActive(name);
-    resetTo(hiddenForView(model, model.views.find((v) => v.name === name) ?? null));
+    if (!m) {
+      resetTo(new Set());
+      return;
+    }
+    resetTo(hiddenForView(m, m.views.find((v) => v.name === name) ?? null));
+  }
+
+  function requestCreate (): void {
+    pendingRequest.value = 'create';
+  }
+
+  function requestRename (): void {
+    pendingRequest.value = 'rename';
+  }
+
+  function clearRequest (): void {
+    pendingRequest.value = null;
   }
 
   /** After saving: the working set is now the definition of `name`. */
@@ -102,8 +123,12 @@ export const useViewStore = defineStore('views', () => {
     hidden,
     baseHidden,
     dirty,
+    pendingRequest,
     sync,
     select,
+    requestCreate,
+    requestRename,
+    clearRequest,
     adopt,
     setHidden,
     toggle,

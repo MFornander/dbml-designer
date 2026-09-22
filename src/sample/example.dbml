@@ -149,16 +149,18 @@ Note getting_started {
 
 /* === DBML DESIGNER FOOTER ===
 version: 1
-tables:
-  public:
-    comments: { x: 664, y: 96 }
-    follows: { x: -360, y: -40 }
-    post_stats: { x: 1016, y: 296 }
-    post_tags: { x: 664, y: 408 }
-    posts: { x: 264, y: 296 }
-    profiles: { x: -360, y: -232 }
-    tags: { x: 656, y: 536 }
-    users: { x: 48, y: -184 }
-notes:
-  getting_started: { x: 592, y: -304, w: 376, h: 272 }
+views:
+  default:
+    tables:
+      public:
+        comments: { x: 664, y: 96 }
+        follows: { x: -360, y: -40 }
+        post_stats: { x: 1016, y: 296 }
+        post_tags: { x: 664, y: 408 }
+        posts: { x: 264, y: 296 }
+        profiles: { x: -360, y: -232 }
+        tags: { x: 656, y: 536 }
+        users: { x: 48, y: -184 }
+    notes:
+      getting_started: { x: 592, y: -304, w: 376, h: 272 }
 */

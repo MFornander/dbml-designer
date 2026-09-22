@@ -5,6 +5,8 @@ import { nextTick } from 'vue';
 import { setActivePinia, createPinia } from 'pinia';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
+import { useViewStore } from '@/stores/viewStore';
+import { buildDiagramModel } from '@/diagram/adapter/buildModel';
 
 describe('layoutStore', () => {
   beforeEach(() => {
@@ -137,5 +139,275 @@ describe('layoutStore', () => {
     });
     expect([...layout.collapsedGroups]).toEqual([]);
     expect(layout.edgeRoutes).toEqual({});
+  });
+});
+
+describe('layoutStore inheritance', () => {
+  const SCHEMA = [
+    'Table users {',
+    '  id int [pk]',
+    '}',
+    'Table posts {',
+    '  id int [pk]',
+    '  author_id int [ref: > users.id]',
+    '}',
+    'TableGroup content {',
+    '  posts',
+    '}',
+    '',
+    '/* === DBML DESIGNER FOOTER ===',
+    'version: 1',
+    'tables:',
+    '  public:',
+    '    posts: { x: 0, y: 64 }',
+    '    users: { x: 288, y: 0 }',
+    'groups:',
+    '  public:',
+    '    content: { collapsed: true }',
+    'refs:',
+    '  - from: users(id)',
+    '    to: posts(author_id)',
+    '    rails: [ 264.5, 72, 320 ]',
+    '*/',
+    '',
+  ].join('\n');
+  const PIPELINE = 'use * from \'./schema\'\n\nTable derived {\n  id int [pk]\n  users_id int [ref: > users.id]\n}\n';
+  const AUTHOR = '#public.users(id)->public.posts(author_id)';
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  async function openPipeline () {
+    setActivePinia(createPinia());
+    const layout = useLayoutStore();
+    layout.resetLayout();
+    const { useEditorStore } = await import('@/stores/editorStore');
+    useEditorStore().setText(PIPELINE);
+    const parser = useParserStore();
+    parser.setSourceLoader(async (abs) => (abs === '/proj/schema.dbml' ? SCHEMA : null));
+    parser.setEntryPath('/proj/pipeline.dbml');
+    await flush();
+    await nextTick();
+    expect(parser.errors).toEqual([]);
+    return layout;
+  }
+
+  it('shows the imported file\'s layout and writes only its own elements to the footer', async () => {
+    const layout = await openPipeline();
+    expect(layout.positions['public.users']).toEqual({ x: 288, y: 0 });
+    expect(layout.positions['public.posts']).toEqual({ x: 0, y: 64 });
+    expect([...layout.collapsedGroups]).toEqual(['group:public.content']);
+    expect(layout.edgeRoutes).toEqual({ [AUTHOR]: [264.5, 72, 320] });
+
+    layout.setPosition('public.derived', { x: 600, y: 0 });
+    expect(layout.snapshot()).toEqual({
+      positions: { 'public.derived': { x: 600, y: 0 } },
+      collapsedGroups: [],
+      edgeRoutes: {},
+    });
+  });
+
+  it('records a moved imported table as an override and drops it when moved back', async () => {
+    const layout = await openPipeline();
+    layout.setPosition('public.users', { x: 1000, y: 0 });
+    expect(layout.positions['public.users']).toEqual({ x: 1000, y: 0 });
+    expect(layout.snapshot().positions).toEqual({ 'public.users': { x: 1000, y: 0 } });
+    layout.setPosition('public.users', { x: 288, y: 0 });
+    expect(layout.snapshot().positions).toEqual({});
+  });
+
+  it('undoes an inherited collapse or route explicitly, and redoes it by removing the undoing', async () => {
+    const layout = await openPipeline();
+    layout.toggleGroup('group:public.content');
+    expect(layout.collapsedGroups.has('group:public.content')).toBe(false);
+    expect(layout.snapshot().expandedGroups).toEqual(['group:public.content']);
+    layout.toggleGroup('group:public.content');
+    expect(layout.collapsedGroups.has('group:public.content')).toBe(true);
+    expect(layout.snapshot().expandedGroups).toBeUndefined();
+
+    layout.setEdgeRoute(AUTHOR, null);
+    expect(layout.edgeRoutes).toEqual({});
+    expect(layout.snapshot().edgeRoutes).toEqual({ [AUTHOR]: [] });
+    layout.setEdgeRoute(AUTHOR, [100]);
+    expect(layout.edgeRoutes).toEqual({ [AUTHOR]: [100] });
+    expect(layout.snapshot().edgeRoutes).toEqual({ [AUTHOR]: [100] });
+  });
+
+  it('follows the imported layout when that file changes, keeping overrides', async () => {
+    const layout = await openPipeline();
+    const parser = useParserStore();
+    layout.setPosition('public.posts', { x: 5, y: 5 });
+    parser.updateImport('/proj/schema.dbml', SCHEMA.replace('users: { x: 288, y: 0 }', 'users: { x: 400, y: 40 }'));
+    expect(layout.positions['public.users']).toEqual({ x: 400, y: 40 });
+    expect(layout.positions['public.posts']).toEqual({ x: 5, y: 5 });
+    expect(layout.snapshot().positions).toEqual({ 'public.posts': { x: 5, y: 5 } });
+  });
+
+  it('replaces the layout without pruning it against the previous text while imports are still loading', async () => {
+    setActivePinia(createPinia());
+    const layout = useLayoutStore();
+    layout.resetLayout();
+    const { useEditorStore } = await import('@/stores/editorStore');
+    const editor = useEditorStore();
+    editor.setText('Table lonely {\n  id int\n}\n');
+    const parser = useParserStore();
+    parser.parseNow();
+    parser.setSourceLoader(async (abs) => (abs === '/proj/schema.dbml' ? SCHEMA : null));
+    // Opening the pipeline: its text comes with the path, the import is on its way, the model is still lonely's.
+    parser.setEntryPath('/proj/pipeline.dbml', PIPELINE);
+    editor.setText(PIPELINE);
+    expect(parser.isLoading).toBe(true);
+    layout.replaceLayout({
+      positions: {
+        'public.derived': { x: 600, y: 0 },
+        'public.users': { x: 0, y: 0 },
+      },
+      collapsedGroups: [],
+      edgeRoutes: {},
+    });
+    expect(layout.positions['public.derived']).toEqual({ x: 600, y: 0 });
+    expect(layout.positions['public.users']).toEqual({ x: 0, y: 0 });
+    await flush();
+    await nextTick();
+    expect(parser.errors).toEqual([]);
+    // Settled: the pipeline's own table stays, the moved import stays as an override, the rest is inherited.
+    expect(layout.positions['public.derived']).toEqual({ x: 600, y: 0 });
+    expect(layout.positions['public.users']).toEqual({ x: 0, y: 0 });
+    expect(layout.positions['public.posts']).toEqual({ x: 0, y: 64 });
+    expect(layout.snapshot().positions).toEqual({
+      'public.derived': { x: 600, y: 0 },
+      'public.users': { x: 0, y: 0 },
+    });
+  });
+
+  it('inherits a view\'s arrangement from imported footers and writes only its own changes to it', async () => {
+    setActivePinia(createPinia());
+    const layout = useLayoutStore();
+    layout.resetLayout();
+    const { useEditorStore } = await import('@/stores/editorStore');
+    const pipeline = `${PIPELINE}\nDiagramView overview {\n  Tables {\n    users\n    derived\n  }\n}\n`;
+    useEditorStore().setText(pipeline);
+    const parser = useParserStore();
+    const schema = SCHEMA.replace('refs:\n', 'views:\n  overview:\n    tables:\n      public:\n        users: { x: 900, y: 0 }\nrefs:\n');
+    parser.setSourceLoader(async (abs) => (abs === '/proj/schema.dbml' ? schema : null));
+    parser.setEntryPath('/proj/pipeline.dbml');
+    await flush();
+    await nextTick();
+    expect(parser.errors).toEqual([]);
+    const views = useViewStore();
+    views.adopt('overview');
+    // The import's say about the view sits above this file's Default View.
+    layout.setPosition('public.derived', { x: 600, y: 0 });
+    expect(layout.positions['public.users']).toEqual({ x: 900, y: 0 });
+    expect(layout.snapshot()).toEqual({
+      positions: {},
+      collapsedGroups: [],
+      edgeRoutes: {},
+      views: { overview: { positions: { 'public.derived': { x: 600, y: 0 } }, collapsedGroups: [], edgeRoutes: {} } },
+    });
+    views.select(null, buildDiagramModel(parser.rawDatabase!));
+    expect(layout.positions['public.users']).toEqual({ x: 288, y: 0 });
+    expect(layout.positions['public.derived']).toBeUndefined();
+  });
+});
+
+describe('layoutStore views', () => {
+  const TABLES = 'Table a {\n  id int [pk]\n}\nTable b {\n  id int [pk]\n}\nTableGroup g {\n  a\n}\n';
+  const VIEW = 'DiagramView overview {\n  Tables {\n    a\n    b\n  }\n}\n';
+  const TEXT = TABLES + VIEW;
+  const G = 'group:public.g';
+
+  async function open (text = TEXT) {
+    setActivePinia(createPinia());
+    const { useEditorStore } = await import('@/stores/editorStore');
+    useEditorStore().setText(text);
+    const layout = useLayoutStore();
+    layout.resetLayout();
+    const parser = useParserStore();
+    parser.parseNow(text);
+    await nextTick();
+    expect(parser.errors).toEqual([]);
+    const views = useViewStore();
+    views.select(null, buildDiagramModel(parser.rawDatabase!));
+    return {
+      layout,
+      parser,
+      views,
+    };
+  }
+
+  it('arranges a named view as changes against the Default View, which it otherwise follows', async () => {
+    const { layout, parser, views } = await open();
+    layout.setPosition('public.a', { x: 8, y: 16 });
+    layout.setPosition('public.b', { x: 100, y: 100 });
+    layout.toggleGroup(G);
+
+    views.adopt('overview');
+    // The view starts out looking like the Default View.
+    expect(layout.positions).toEqual({ 'public.a': { x: 8, y: 16 }, 'public.b': { x: 100, y: 100 } });
+    expect([...layout.collapsedGroups]).toEqual([G]);
+    expect(layout.snapshot().views).toBeUndefined();
+
+    layout.setPosition('public.a', { x: 200, y: 200 });
+    layout.toggleGroup(G);
+    expect(layout.positions['public.a']).toEqual({ x: 200, y: 200 });
+    expect([...layout.collapsedGroups]).toEqual([]);
+    expect(layout.snapshot()).toEqual({
+      positions: { 'public.a': { x: 8, y: 16 }, 'public.b': { x: 100, y: 100 } },
+      collapsedGroups: [G],
+      edgeRoutes: {},
+      views: { overview: { positions: { 'public.a': { x: 200, y: 200 } }, collapsedGroups: [], expandedGroups: [G], edgeRoutes: {} } },
+    });
+
+    // The Default View is untouched; a change there shows in the view unless the view overrides it.
+    views.select(null, buildDiagramModel(parser.rawDatabase!));
+    expect(layout.positions['public.a']).toEqual({ x: 8, y: 16 });
+    expect([...layout.collapsedGroups]).toEqual([G]);
+    layout.setPosition('public.b', { x: 300, y: 300 });
+    layout.setPosition('public.a', { x: 9, y: 9 });
+    views.adopt('overview');
+    expect(layout.positions).toEqual({ 'public.a': { x: 200, y: 200 }, 'public.b': { x: 300, y: 300 } });
+
+    // Moving the table back to where the Default View has it drops the override.
+    layout.setPosition('public.a', { x: 9, y: 9 });
+    layout.toggleGroup(G);
+    expect(layout.snapshot().views).toBeUndefined();
+  });
+
+  it('carries a view layer through a rename and a copy, and drops it with the view', async () => {
+    const { layout, parser, views } = await open();
+    views.adopt('overview');
+    layout.setPosition('public.a', { x: 200, y: 200 });
+    layout.setPosition('public.b', { x: 250, y: 250 });
+    layout.renameView('overview', 'summary');
+    expect(Object.keys(layout.snapshot().views!)).toEqual(['summary']);
+    views.adopt('summary');
+    expect(layout.positions['public.a']).toEqual({ x: 200, y: 200 });
+    layout.copyView('summary', 'twin');
+    expect(Object.keys(layout.snapshot().views!).sort()).toEqual(['summary', 'twin']);
+
+    // The parse only knows the renamed view: the copy's layer goes, and so does the entry for a table that is gone.
+    parser.parseNow(TABLES.replace('Table b {\n  id int [pk]\n}\n', '') + VIEW.replace('overview', 'summary').replace('    b\n', ''));
+    await nextTick();
+    expect(parser.errors).toEqual([]);
+    expect(layout.snapshot().views).toEqual({ summary: { positions: { 'public.a': { x: 200, y: 200 } }, collapsedGroups: [], edgeRoutes: {} } });
+    parser.parseNow(TABLES);
+    await nextTick();
+    expect(layout.snapshot().views).toBeUndefined();
+  });
+
+  it('replaces and resets every layer from a footer', async () => {
+    const { layout, views } = await open();
+    layout.replaceLayout({
+      positions: { 'public.a': { x: 1, y: 1 } },
+      collapsedGroups: [],
+      edgeRoutes: {},
+      views: { overview: { positions: { 'public.a': { x: 2, y: 2 } }, collapsedGroups: [G], edgeRoutes: {} } },
+    });
+    expect(layout.positions['public.a']).toEqual({ x: 1, y: 1 });
+    views.adopt('overview');
+    expect(layout.positions['public.a']).toEqual({ x: 2, y: 2 });
+    expect([...layout.collapsedGroups]).toEqual([G]);
+    layout.resetLayout();
+    expect(layout.positions).toEqual({});
+    expect(layout.snapshot().views).toBeUndefined();
   });
 });

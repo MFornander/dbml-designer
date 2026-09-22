@@ -5,8 +5,11 @@
  * and dbdocs read them. Export writes this YAML inside a comment at the end of the `.dbml`
  * (see `layoutComment.ts`); the Layout view shows it read-only.
  *
- * Tables and groups are nested by schema (`tables: { public: { users: {x, y} } }`); ref ends are
- * written like DBML, `table(fields)` with the schema omitted when it is the default one.
+ * The root holds `version` and `views`. Under `views`, `default` is the Default View and every
+ * other entry is a named `DiagramView` with only what that view changes. Each view has `tables`,
+ * `notes`, `groups`, and `refs`. Tables and groups are nested by schema (`tables: { public: {
+ * users: {x, y} } }`); ref ends are written like DBML, `table(fields)` with the schema omitted
+ * when it is the default one.
  *
  * This module holds the format's shared vocabulary and the writer. Reading and checking is
  * `validateLayout.ts`.
@@ -18,17 +21,34 @@ import { DEFAULT_SCHEMA, isNoteKey } from '@/diagram/keys';
 /** Version of the layout format this build writes and reads. */
 export const SIDECAR_VERSION = 1;
 
-/** Top-level sections in the order the canonical writer emits them. */
-export const SECTION_ORDER = ['version', 'tables', 'notes', 'groups', 'refs'] as const;
+/** The root sections. */
+export const ROOT_SECTIONS = ['version', 'views'] as const;
 
-/** The view state that travels in the layout comment, in the layout store's key space. */
+/** The Default View's entry under `views`; every other entry is named after a `DiagramView`. */
+export const DEFAULT_VIEW = 'default';
+
+/** The sections of a view in the order the canonical writer emits them. */
+export const SECTION_ORDER = ['tables', 'notes', 'groups', 'refs'] as const;
+
+/**
+ * The view state that travels in the layout comment, in the layout store's key space. The
+ * fields at the top are the Default View (`views.default` in the file); `views` holds each named
+ * `DiagramView`'s own entry.
+ */
 export interface LayoutSnapshot {
   /** Table keys (`schema.table`) and note keys (`note:name`) to positions; notes carry a size. */
   positions: Record<string, XY>;
   /** Group keys (`group:schema.name`). */
   collapsedGroups: string[];
-  /** Ref keys (`name#from->to`) to rails (see routing.ts). */
+  /** Groups kept open although an imported layout collapses them (`collapsed: false`). */
+  expandedGroups?: string[];
+  /** Ref keys (`name#from->to`) to rails (see routing.ts); an empty list undoes an inherited route. */
   edgeRoutes: Record<string, number[]>;
+  /**
+   * Named `DiagramView`s' own arrangements, by view name: what each changes against the Default
+   * View. The nested snapshots carry no `views` of their own.
+   */
+  views?: Record<string, LayoutSnapshot>;
 }
 
 export class SidecarError extends Error {}
@@ -124,18 +144,18 @@ function sorted<T> (by: BySchema<T>): BySchema<T> {
   return out;
 }
 
-/** Serialize a snapshot as the layout YAML. Keys are sorted so diffs stay small. */
-export function serializeLayout (snap: LayoutSnapshot): string {
+/** The element sections of one layer, empty ones left out. */
+function sectionsOf (snap: LayoutSnapshot): Record<string, unknown> {
   const tables: BySchema<{ x: number; y: number }> = {};
   const notes: Record<string, { x: number; y: number; w?: number; h?: number }> = {};
   for (const [key, p] of Object.entries(snap.positions).sort(([a], [b]) => a.localeCompare(b))) {
     if (isNoteKey(key)) notes[key.slice(NOTE_PREFIX.length)] = positionForFile(p, true);
     else nest(tables, key, positionForFile(p, false));
   }
-  const groups: BySchema<{ collapsed: true }> = {};
-  for (const g of snap.collapsedGroups) {
-    nest(groups, g.startsWith(GROUP_PREFIX) ? g.slice(GROUP_PREFIX.length) : g, { collapsed: true });
-  }
+  const groups: BySchema<{ collapsed: boolean }> = {};
+  const groupName = (g: string) => (g.startsWith(GROUP_PREFIX) ? g.slice(GROUP_PREFIX.length) : g);
+  for (const g of snap.collapsedGroups) nest(groups, groupName(g), { collapsed: true });
+  for (const g of snap.expandedGroups ?? []) nest(groups, groupName(g), { collapsed: false });
   const refs = Object.entries(snap.edgeRoutes)
     .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([key, rails]) => {
@@ -149,12 +169,32 @@ export function serializeLayout (snap: LayoutSnapshot): string {
       }];
     });
 
-  const doc = new Document({
-    version: SIDECAR_VERSION,
+  return {
     ...(Object.keys(tables).length ? { tables: sorted(tables) } : {}),
     ...(Object.keys(notes).length ? { notes } : {}),
     ...(Object.keys(groups).length ? { groups: sorted(groups) } : {}),
     ...(refs.length ? { refs } : {}),
+  };
+}
+
+/**
+ * Serialize a snapshot as the layout YAML: `version`, then under `views` the Default View as
+ * `default` and the named views sorted by name. Views that change nothing are left out; keys are
+ * sorted so diffs stay small.
+ */
+export function serializeLayout (snap: LayoutSnapshot): string {
+  const views: Record<string, Record<string, unknown>> = {};
+  const base = sectionsOf(snap);
+  if (Object.keys(base).length) views[DEFAULT_VIEW] = base;
+  for (const name of Object.keys(snap.views ?? {}).sort()) {
+    // A DiagramView named like the Default View's entry could not be told from it; it is not written.
+    if (name === DEFAULT_VIEW) continue;
+    const sections = sectionsOf(snap.views![name]!);
+    if (Object.keys(sections).length) views[name] = sections;
+  }
+  const doc = new Document({
+    version: SIDECAR_VERSION,
+    ...(Object.keys(views).length ? { views } : {}),
   });
   // Leaf collections (a position, a rails list) read best on one line.
   visit(doc, {

@@ -83,8 +83,9 @@ export function usePanZoom (container: Ref<HTMLElement | null>) {
     window.removeEventListener('pointercancel', stopPan);
   }
 
+  /** Start panning from a primary-button drag on the bare canvas or a middle-button drag anywhere. */
   function onBackgroundPointerDown (e: PointerEvent): void {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== 1) return;
     e.preventDefault();
     panStart = {
       x: e.clientX,

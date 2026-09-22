@@ -47,7 +47,14 @@
         class="dg-table-name"
         :x="PAD_X"
         :y="ROW_H / 2"
-      >{{ table.displayName }}</text>
+      >{{ table.name }}</text>
+      <!-- The schema, faded and right-aligned, for tables outside the default schema -->
+      <text
+        v-if="lod === 'full' && size.schemaW > 0"
+        class="dg-table-schema"
+        :x="w - PAD_X - (showGear ? GEAR_SIZE + ICON_GAP : 0)"
+        :y="ROW_H / 2"
+      >{{ table.schema }}</text>
       <rect
         v-else
         class="dg-placeholder"
@@ -61,7 +68,7 @@
         v-if="showHeaderIcon && lod === 'full'"
         href="#dg-icon-note"
         class="dg-icon dg-icon-header"
-        :x="PAD_X + size.headerW - ICON_W"
+        :x="PAD_X + size.nameW + ICON_GAP"
         :y="(ROW_H - ICON_W) / 2"
         :width="ICON_W"
         :height="ICON_W"

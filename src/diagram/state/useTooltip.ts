@@ -4,6 +4,7 @@ import {
 import type {
   DiagramModel, EdgeEndpointVM, EnumValueVM, FieldVM, IndexVM,
 } from '../types';
+import { DEFAULT_SCHEMA } from '../keys';
 import type { NoteKey, TableKey } from '../keys';
 import type { Point, Rect } from '../geometry/rect';
 import { worldToScreen, type Viewport } from '../geometry/viewport';
@@ -15,6 +16,8 @@ export interface TooltipContent {
   kind: HoverTarget['kind'];
   /** Header name. */
   title: string;
+  /** Faded text before the title: the table's schema with its dot, when it is not the default one. */
+  titlePrefix?: string;
   /** Monospace type after the title (fields). */
   type?: string;
   /** The type names an enum, so it is drawn in the enum color. */
@@ -99,7 +102,8 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
       if (!t.note && !t.alias && t.indexes.length === 0 && t.checks.length === 0 && !metadata) return null;
       return {
         kind: 'table',
-        title: t.displayName,
+        title: t.name,
+        ...(t.schema !== DEFAULT_SCHEMA ? { titlePrefix: `${t.schema}.` } : {}),
         ...(t.alias ? { subtitle: `alias ${t.alias}` } : {}),
         ...(t.indexes.length ? { indexes: t.indexes.map(formatIndex) } : {}),
         ...(t.checks.length ? { checks: t.checks } : {}),

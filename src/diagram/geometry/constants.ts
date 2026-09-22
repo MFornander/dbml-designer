@@ -16,6 +16,8 @@ export const GRID = 8;
 
 export const ICON_W = 12;
 export const ICON_GAP = 4;
+/** Space between a table's name (and its icon) and the faded schema label at the header's right. */
+export const SCHEMA_GAP = 12;
 export const ICON_SPACING = 6;
 
 export const FONT_SIZE = 13;

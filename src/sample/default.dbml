@@ -146,7 +146,3 @@ Note getting_started {
   - Dashed purple arrows are `Dep` lineage edges.
   '''
 }
-
-/* === DBML DESIGNER FOOTER ===
-   Diagram layout in YAML as seen under the Layout tab, used during export and import.
-*/

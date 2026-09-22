@@ -147,3 +147,47 @@ describe('TableNode', () => {
     }]);
   });
 });
+
+describe('TableNode schema label', () => {
+  it('shows the bare name with the schema faded at the right, and nothing for the default schema', () => {
+    const orders = table('sales.orders', [field('sales.orders', 'id', { pk: true })], {
+      schema: 'sales',
+      displayName: 'sales.orders',
+    });
+    const rows = visibleFields(orders, 'all');
+    const size = computeTableSize(orders, rows, measurer);
+    expect(size.schemaW).toBeGreaterThan(0);
+    expect(size.headerW).toBeGreaterThan(size.nameW + size.schemaW);
+    const wrapper = mount(TableNode, {
+      props: {
+        table: orders,
+        box: {
+          x: 0,
+          y: 0,
+          w: size.width,
+          h: size.height,
+        },
+        rows,
+        size,
+        highlighted: false,
+        highlightedFields: new Set<string>(),
+        isDragging: false,
+      },
+      global: {
+        provide: {
+          [DIAGRAM_CTX as symbol]: makeContext(),
+        },
+      },
+    });
+    expect(wrapper.find('.dg-table-name').text()).toBe('orders');
+    const schema = wrapper.find('.dg-table-schema');
+    expect(schema.text()).toBe('sales');
+    // Right-aligned inside the header padding.
+    expect(Number(schema.attributes('x'))).toBe(size.width - 10);
+    wrapper.unmount();
+
+    const { wrapper: plain } = mountTable('all');
+    expect(plain.find('.dg-table-schema').exists()).toBe(false);
+    plain.unmount();
+  });
+});

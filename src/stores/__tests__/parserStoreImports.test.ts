@@ -99,4 +99,22 @@ describe('parserStore imports', () => {
     expect(parser.importPaths).toEqual([]);
     expect(parser.errors.some((e) => /non-existent file/.test(e.message))).toBe(true);
   });
+
+  it('parses the text given with a new entry path, not the editor\'s old text', async () => {
+    const parser = useParserStore();
+    useEditorStore().setText('use * from \'./other\'\n');
+    const requested: string[] = [];
+    parser.setSourceLoader(async (abs) => {
+      requested.push(abs);
+      return abs === '/proj/schema.dbml' ? SCHEMA : null;
+    });
+    parser.setEntryPath('/proj/pipeline.dbml', PIPELINE);
+    expect(parser.isLoading).toBe(true);
+    useEditorStore().setText(PIPELINE);
+    await flush();
+    // Only the new text's import was asked for; the old text's never was.
+    expect(requested).toEqual(['/proj/schema.dbml']);
+    expect(parser.errors).toEqual([]);
+    expect(parser.rawDatabase!.tables.map((t) => t.name).sort()).toEqual(['derived', 'users']);
+  });
 });

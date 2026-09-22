@@ -1,9 +1,13 @@
 <template>
   <aside
-    class="absolute inset-y-0 right-0 z-20 flex w-72 flex-col border-l border-gray-200 bg-white text-gray-800 shadow-xl dark:border-gray-700 dark:bg-[#2b2d33] dark:text-gray-100"
+    class="absolute inset-y-0 right-0 z-20 flex w-80 flex-col border-l border-gray-200 bg-white text-gray-800 shadow-xl dark:border-gray-700 dark:bg-[#2b2d33] dark:text-gray-100"
     aria-label="Diagram views"
   >
-    <div class="flex items-center gap-1.5 px-4 pt-3 pb-2">
+    <!-- The title row also saves what is shown; the view itself is picked, renamed, reset, and deleted from the header's View menu. -->
+    <div
+      ref="menuRoot"
+      class="flex items-center gap-1.5 px-4 pt-3 pb-2"
+    >
       <h2 class="text-[15px] font-semibold">
         Diagram Views
       </h2>
@@ -16,180 +20,51 @@
           weight="fill"
         />
       </span>
-      <button
-        :class="[ICON_BUTTON, 'ml-auto']"
-        aria-label="Close"
-        @click="emit('close')"
-      >
-        <PhX class="w-4 h-4" />
-      </button>
-    </div>
-
-    <div
-      ref="menuRoot"
-      class="px-3"
-    >
-      <!-- dbdiagram's view picker: a bordered blue box with the current view and a chevron, and a
-           separate segment for the view's actions. Each opens a list right below the box. -->
-      <div class="relative">
-        <div class="flex h-9 items-stretch rounded-lg border border-[#4285f4] bg-[#eef5fe] text-[#4285f4] dark:border-[#6ba2fa] dark:bg-[#293547] dark:text-[#6ba2fa]">
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-1.5 rounded-l-lg pl-2.5 pr-2 text-[13px] font-medium hover:bg-[#deebfc] dark:hover:bg-[#293b56]"
-            aria-label="Diagram view"
-            aria-haspopup="listbox"
-            :aria-expanded="openMenu === 'picker'"
-            @click="toggleMenu('picker')"
-          >
-            <PhGraph class="w-4 h-4 shrink-0" />
-            <span class="min-w-0 flex-1 truncate text-left">{{ views.activeView ?? 'Default View' }}</span>
-            <PhCaretDown
-              class="w-4 h-4 shrink-0 transition-transform"
-              :class="{ 'rotate-180': openMenu === 'picker' }"
-            />
-          </button>
-          <button
-            type="button"
-            class="flex w-8 shrink-0 items-center justify-center rounded-r-lg border-l border-[#4285f4]/40 hover:bg-[#deebfc] dark:border-[#6ba2fa]/40 dark:hover:bg-[#293b56]"
-            aria-label="View actions"
-            aria-haspopup="menu"
-            :aria-expanded="openMenu === 'actions'"
-            title="Rename or delete this view"
-            @click="toggleMenu('actions')"
-          >
-            <PhDotsThreeVertical
-              class="w-5 h-5"
-              weight="bold"
-            />
-          </button>
-        </div>
-
-        <div
-          v-if="openMenu === 'picker'"
-          :class="[POPUP, 'left-0 right-0']"
-          role="listbox"
-          aria-label="Diagram views"
+      <div class="relative ml-auto flex items-stretch rounded-md bg-blue-600 text-[13px] font-medium text-white">
+        <button
+          type="button"
+          class="h-8 rounded-l-md px-3.5 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!canSave"
+          :title="saveTitle"
+          @click="save"
         >
-          <button
-            v-for="opt in pickerOptions"
-            :key="opt.key"
-            type="button"
-            :class="[LIST_ITEM, opt.active ? MENU_ACTIVE : '']"
-            role="option"
-            :aria-selected="opt.active"
-            @click="pick(opt.name)"
-          >
-            <span :class="MENU_SLOT">
-              <PhCheck
-                v-if="opt.active"
-                class="w-4 h-4"
-                weight="bold"
-              />
-            </span>
-            <span class="truncate">{{ opt.label }}</span>
-          </button>
-          <div :class="MENU_DIVIDER" />
+          Save
+        </button>
+        <button
+          type="button"
+          class="flex h-8 w-7 items-center justify-center rounded-r-md border-l border-white/30 hover:bg-blue-500"
+          aria-label="Save options"
+          aria-haspopup="menu"
+          :aria-expanded="openMenu === 'save'"
+          title="Save options"
+          @click="toggleMenu('save')"
+        >
+          <PhCaretDown
+            class="w-3.5 h-3.5 transition-transform"
+            :class="{ 'rotate-180': openMenu === 'save' }"
+          />
+        </button>
+        <div
+          v-if="openMenu === 'save'"
+          :class="[POPUP, 'right-0 w-36 font-normal']"
+          role="menu"
+          aria-label="Save options"
+        >
           <button
             type="button"
             :class="LIST_ITEM"
-            role="option"
-            aria-selected="false"
+            role="menuitem"
             :disabled="parser.isStale"
             title="Save what is shown now as a new view"
             @click="startCreate"
           >
-            <span :class="MENU_SLOT">
-              <PhPlus class="w-4 h-4" />
-            </span>
-            <span>New View</span>
-          </button>
-        </div>
-
-        <div
-          v-if="openMenu === 'actions'"
-          :class="[POPUP, 'right-0 w-40']"
-          role="menu"
-          aria-label="View actions"
-        >
-          <button
-            type="button"
-            :class="LIST_ITEM"
-            role="menuitem"
-            :disabled="!views.view"
-            :title="views.view ? `Rename ${views.view.name}` : 'The Default View cannot be renamed'"
-            @click="startRename"
-          >
-            <PhPencilSimple class="w-4 h-4 shrink-0" />
-            <span>Rename</span>
-          </button>
-          <button
-            type="button"
-            :class="LIST_ITEM"
-            role="menuitem"
-            :disabled="!views.view || parser.isStale"
-            :title="views.view ? `Remove DiagramView ${views.view.name} from the DBML` : 'The Default View cannot be deleted'"
-            @click="deleteView"
-          >
-            <PhTrash class="w-4 h-4 shrink-0" />
-            <span>Delete</span>
+            Save as New
           </button>
         </div>
       </div>
+    </div>
 
-      <div class="mt-2 flex items-center justify-end gap-3 pb-3">
-        <button
-          type="button"
-          class="text-[13px] text-gray-500 hover:text-gray-800 disabled:opacity-40 disabled:hover:text-gray-500 dark:text-gray-300 dark:hover:text-white dark:disabled:hover:text-gray-300"
-          :disabled="!views.dirty"
-          title="Discard the unsaved toggles"
-          @click="views.revert"
-        >
-          Reset
-        </button>
-        <div class="relative flex items-stretch rounded-md bg-blue-600 text-[13px] font-medium text-white">
-          <button
-            type="button"
-            class="h-8 rounded-l-md px-3.5 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!canSave"
-            :title="saveTitle"
-            @click="save"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            class="flex h-8 w-7 items-center justify-center rounded-r-md border-l border-white/30 hover:bg-blue-500"
-            aria-label="Save options"
-            aria-haspopup="menu"
-            :aria-expanded="openMenu === 'save'"
-            title="Save options"
-            @click="toggleMenu('save')"
-          >
-            <PhCaretDown
-              class="w-3.5 h-3.5 transition-transform"
-              :class="{ 'rotate-180': openMenu === 'save' }"
-            />
-          </button>
-          <div
-            v-if="openMenu === 'save'"
-            :class="[POPUP, 'right-0 w-36 font-normal']"
-            role="menu"
-            aria-label="Save options"
-          >
-            <button
-              type="button"
-              :class="LIST_ITEM"
-              role="menuitem"
-              :disabled="parser.isStale"
-              title="Save what is shown now as a new view"
-              @click="startCreate"
-            >
-              Save as New
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div class="px-3">
       <form
         v-if="nameForm"
         class="flex gap-2 pb-3"
@@ -388,34 +263,30 @@
 
 <script setup lang="ts">
 import {
-  computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, type Component,
+  computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch, type Component,
 } from 'vue';
 import {
-  PhCaretDown, PhCheck, PhDotsThreeVertical, PhEye, PhEyeSlash, PhGraph, PhInfo, PhNote, PhPencilSimple, PhPlus,
-  PhSquaresFour, PhStack, PhTable, PhTrash, PhTreeStructure, PhX,
+  PhCaretDown, PhEye, PhEyeSlash, PhInfo, PhNote, PhSquaresFour, PhStack, PhTable, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import type { DiagramModel, TableVM } from '@/diagram/types';
 import { visibleEntities } from '@/diagram/adapter/views';
-import { offsetAt } from '@/editor/colorEdit';
-import {
-  deleteDiagramView, diagramViewText, renameDiagramView, upsertDiagramView,
-} from '@/editor/viewText';
+import { diagramViewText, renameDiagramView, upsertDiagramView } from '@/editor/viewText';
 import { useTextEdits } from '@/editor/useTextEdits';
-import {
-  MENU_ACTIVE, MENU_DIVIDER, MENU_ITEM, MENU_PANEL, MENU_SLOT,
-} from '@/components/common/menuStyles';
+import { MENU_ITEM, MENU_PANEL } from '@/components/common/menuStyles';
 import { useParserStore } from '@/stores/parserStore';
+import { useLayoutStore } from '@/stores/layoutStore';
 import { useViewStore } from '@/stores/viewStore';
+import { useViewActions } from '@/components/useViewActions';
 
 /**
- * dbdiagram's Diagram Views panel: pick a view, toggle what it shows, and save the result back
- * into the DBML as a `DiagramView` block.
+ * dbdiagram's Diagram Views panel: toggle what the active view shows and save the result back
+ * into the DBML as a `DiagramView` block. The view itself is picked, renamed, and deleted from
+ * the header's View menu, which hands naming and renaming over to the form here.
  */
 const props = defineProps<{ model: DiagramModel }>();
-const emit = defineEmits<{ close: [] }>();
 
 const ICON_BUTTON = 'h-7 w-7 flex items-center justify-center rounded text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 cursor-pointer dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white';
-/** The lists that drop from the picker, the actions segment, and the Save arrow share the app's one menu style. */
+/** The list that drops from the Save arrow shares the app's one menu style. */
 const POPUP = [MENU_PANEL, 'absolute top-full z-10 mt-2 overflow-hidden'];
 const LIST_ITEM = MENU_ITEM;
 const DEFAULT_HEADER = '#316896';
@@ -423,11 +294,13 @@ const DEFAULT_NOTE = '#FFE28B';
 const MAX_CHIPS = 6;
 
 const views = useViewStore();
+const layout = useLayoutStore();
 const parser = useParserStore();
 const textEdits = useTextEdits();
+const { rangeOf, editable } = useViewActions();
 
-// One list open at a time: the view picker, the view's actions, or the Save arrow.
-type Menu = 'picker' | 'actions' | 'save';
+// The Save arrow's list; the type stays open for more.
+type Menu = 'save';
 const openMenu = ref<Menu | null>(null);
 const menuRoot = useTemplateRef<HTMLElement>('menuRoot');
 
@@ -450,21 +323,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKeyDown);
 });
 
-const pickerOptions = computed(() => [
-  {
-    key: '',
-    name: null as string | null,
-    label: 'Default View',
-    active: views.activeView === null,
-  },
-  ...views.views.map((v) => ({
-    key: v.key,
-    name: v.name as string | null,
-    label: v.name,
-    active: v.name === views.activeView,
-  })),
-]);
-
 /** Naming a new view or renaming the current one, in a small form under the buttons. */
 interface NameForm {
   mode: 'create' | 'rename';
@@ -482,13 +340,6 @@ function toggleCollapsed (key: string) {
   if (next.has(key)) next.delete(key);
   else next.add(key);
   collapsed.value = next;
-}
-
-function pick (name: string | null) {
-  openMenu.value = null;
-  nameForm.value = null;
-  nameError.value = null;
-  views.select(name, props.model);
 }
 
 interface Item {
@@ -656,19 +507,6 @@ function blockFor (name: string): string {
   });
 }
 
-function rangeOf (token: NonNullable<DiagramModel['views'][number]['token']>) {
-  const text = textEdits.text();
-  return {
-    start: offsetAt(text, token.start.line, token.start.column),
-    end: offsetAt(text, token.end.line, token.end.column),
-  };
-}
-
-/** A view declared in an imported file is shown but cannot be rewritten from this text. */
-function editable (v: { token?: { file?: string } } | null): boolean {
-  return !!v && (v.token?.file === undefined || v.token.file === parser.entryPath);
-}
-
 function save () {
   const v = views.view;
   if (!v || !canSave.value || !editable(v)) return;
@@ -705,6 +543,16 @@ function startCreate () {
   });
 }
 
+// "New View" and "Rename" in the header's menu open the panel and hand the naming over to it.
+watch(() => views.pendingRequest, (request) => {
+  if (!request) return;
+  views.clearRequest();
+  if (request === 'create') startCreate();
+  else startRename();
+}, {
+  immediate: true,
+});
+
 function startRename () {
   const v = views.view;
   if (!v) return;
@@ -734,9 +582,12 @@ function submitName () {
       return;
     }
     textEdits.apply(upsertDiagramView(textEdits.text(), null, blockFor(name)));
+    // A view saved from another named view starts out arranged like it.
+    if (current) layout.copyView(current.name, name);
   } else {
     if (!current?.token || !editable(current)) return;
     textEdits.apply(renameDiagramView(textEdits.text(), rangeOf(current.token), name));
+    layout.renameView(current.name, name);
   }
   // The header shows the active name right away; the next parse brings the block itself.
   views.adopt(name);
@@ -744,11 +595,4 @@ function submitName () {
   nameForm.value = null;
 }
 
-function deleteView () {
-  const v = views.view;
-  openMenu.value = null;
-  if (!v?.token || parser.isStale || !editable(v)) return;
-  textEdits.apply(deleteDiagramView(textEdits.text(), rangeOf(v.token)));
-  views.select(null, props.model);
-}
 </script>

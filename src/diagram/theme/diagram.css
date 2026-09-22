@@ -88,6 +88,16 @@
   pointer-events: none;
 }
 
+/* The table's schema, right-aligned in the header and faded so the name stays the headline */
+.dg-table-schema {
+  fill: var(--dg-header-text);
+  opacity: 0.6;
+  font: 13px "Open Sans", system-ui, sans-serif;
+  text-anchor: end;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
 .dg-field-bg {
   fill: var(--dg-field-bg);
   transition: fill 120ms ease;
@@ -526,6 +536,12 @@
   font-size: 14px;
   font-weight: 600;
   word-break: break-all;
+}
+
+/* The schema part of a table's title, faded like the header's schema label */
+.dg-tooltip-title-schema {
+  opacity: 0.6;
+  font-weight: 400;
 }
 
 .dg-tooltip-type {

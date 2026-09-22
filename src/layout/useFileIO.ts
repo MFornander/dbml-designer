@@ -6,7 +6,6 @@ import { useEditorInstance } from '@/editor/editorInstance';
 import { downloadTextFile } from '@/utils/download';
 import {
   baseFileName, dbmlFileName, serializeLayout, splitLayoutComment, validateLayout, withLayoutComment,
-  withLayoutPlaceholder,
 } from '@/layout';
 import { layoutKeysOf } from '@/layout/schemaKeys';
 import EXAMPLE_DBML from '@/sample/example.dbml?raw';
@@ -16,8 +15,8 @@ const MESSAGE_MS = 5000;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * Export and import of one `.dbml` file that carries the layout as YAML in a comment at its end.
- * The editor text itself only ever holds the placeholder for that comment.
+ * Export and import of one `.dbml` file that carries the layout as YAML in a footer comment. The
+ * editor never shows the footer: it is removed on the way in and written on the way out.
  */
 export function useFileIO () {
   const editor = useEditorStore();
@@ -67,15 +66,17 @@ export function useFileIO () {
   }
 
   /**
-   * Take in one file's text. A layout comment at the end is lifted out: the layout is checked
-   * against the schema and applied to the diagram, and the comment becomes the placeholder that
-   * Export overwrites. Returns the line for the status message, or the failure.
+   * Take in one file's text. Its footer is lifted out: the layout is checked against the schema
+   * and applied to the diagram, and the editor gets the text without it. Returns the line for the
+   * status message, or the failure.
    */
   function importText (name: string, text: string): { done: string } | { failed: string } {
-    const { dbml, layout: yaml, hadComment } = splitLayoutComment(text);
-    replaceText(hadComment ? withLayoutPlaceholder(dbml) : dbml);
+    const { dbml, layout: yaml } = splitLayoutComment(text);
+    replaceText(dbml);
     if (yaml === null) return { done: name };
-    const v = validateLayout(yaml, parser.rawDatabase ? layoutKeysOf(parser.rawDatabase) : undefined);
+    // While imports are still loading the model is the previous text's; checking against it would drop what this text declares.
+    const keys = parser.rawDatabase && !parser.isLoading ? layoutKeysOf(parser.rawDatabase) : undefined;
+    const v = validateLayout(yaml, keys);
     if (!v.ok) return { failed: `${name}: layout comment not applied, ${v.errors[0]!.message}` };
     layout.replaceLayout(v.snapshot);
     return {

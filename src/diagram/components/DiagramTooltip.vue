@@ -13,7 +13,10 @@
       />
       <div class="dg-tooltip-heading">
         <div class="dg-tooltip-title-row">
-          <span class="dg-tooltip-title">{{ content.title }}</span>
+          <span class="dg-tooltip-title"><span
+            v-if="content.titlePrefix"
+            class="dg-tooltip-title-schema"
+          >{{ content.titlePrefix }}</span>{{ content.title }}</span>
           <span
             v-if="content.type"
             class="dg-tooltip-type"

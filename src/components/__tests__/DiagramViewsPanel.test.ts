@@ -8,6 +8,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DiagramViewsPanel from '@/components/DiagramViewsPanel.vue';
 import { buildDiagramModel } from '@/diagram';
 import { useEditorStore } from '@/stores/editorStore';
+import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useViewStore } from '@/stores/viewStore';
 
@@ -52,27 +53,25 @@ describe('DiagramViewsPanel menus', () => {
     document.body.innerHTML = '';
   });
 
-  it('lists the views with the active one checked and a New View entry', async () => {
-    const { wrapper, views } = setup('first');
-    expect(wrapper.find('button[aria-label="Diagram view"]').text()).toBe('first');
-    await wrapper.find('button[aria-label="Diagram view"]').trigger('click');
-    const list = wrapper.find('[role="listbox"]');
-    expect(texts(wrapper, '[role="listbox"] [role="option"]')).toEqual(['Default View', 'first', 'New View']);
-    expect(list.find('[role="option"][aria-selected="true"]').text()).toBe('first');
-
-    await list.findAll('[role="option"]')[0]!.trigger('click');
-    expect(views.activeView).toBeNull();
-    expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
-    expect(wrapper.find('button[aria-label="Diagram view"]').text()).toBe('Default View');
+  it('has no view picker of its own, only the saving row and the tree', async () => {
+    const { wrapper } = setup('first');
+    expect(wrapper.find('button[aria-label="Diagram view"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="View actions"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="Save options"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it('opens Rename and Delete from the dots, and renames the block in the DBML', async () => {
+  it('renames the block in the DBML along with its layout when the header asks for a rename', async () => {
     const { wrapper, editor, views } = setup('first');
-    await wrapper.find('button[aria-label="View actions"]').trigger('click');
-    expect(texts(wrapper, '[role="menu"] [role="menuitem"]')).toEqual(['Rename', 'Delete']);
+    // Arranged while the view is active: this belongs to the view.
+    const layout = useLayoutStore();
+    layout.setPosition('public.users', { x: 5, y: 5 });
+    expect(Object.keys(layout.snapshot().views!)).toEqual(['first']);
 
-    await wrapper.find('[role="menuitem"]').trigger('click');
+    views.requestRename();
+    await nextTick();
+    await nextTick();
+    expect(views.pendingRequest).toBeNull();
     const input = wrapper.find<HTMLInputElement>('input[aria-label="New name for the view"]');
     expect(input.exists()).toBe(true);
     expect(input.element.value).toBe('first');
@@ -81,30 +80,12 @@ describe('DiagramViewsPanel menus', () => {
     expect(editor.text).toContain('DiagramView "Core tables" {');
     expect(editor.text).not.toContain('DiagramView first');
     expect(views.activeView).toBe('Core tables');
-    expect(wrapper.find('button[aria-label="Diagram view"]').text()).toBe('Core tables');
+    expect(Object.keys(layout.snapshot().views!)).toEqual(['Core tables']);
+    expect(layout.positions['public.users']).toEqual({ x: 5, y: 5 });
     wrapper.unmount();
   });
 
-  it('deletes the active view from the DBML and falls back to the Default View', async () => {
-    const { wrapper, editor, views } = setup('first');
-    await wrapper.find('button[aria-label="View actions"]').trigger('click');
-    await wrapper.findAll('[role="menuitem"]')[1]!.trigger('click');
-    expect(editor.text).not.toContain('DiagramView');
-    expect(editor.text.trimEnd()).toBe('Table users { id int [pk] }\nTable posts { id int [pk] }');
-    expect(views.activeView).toBeNull();
-    wrapper.unmount();
-  });
-
-  it('keeps Rename and Delete disabled for the Default View', async () => {
-    const { wrapper } = setup(null);
-    await wrapper.find('button[aria-label="View actions"]').trigger('click');
-    const items = wrapper.findAll('[role="menuitem"]');
-    expect(items).toHaveLength(2);
-    expect(items.every((i) => (i.element as HTMLButtonElement).disabled)).toBe(true);
-    wrapper.unmount();
-  });
-
-  it('Save as New and + New View create a view of what is shown, named in a form', async () => {
+  it('Save as New and a New View request from the header create a view of what is shown, named in a form', async () => {
     const { wrapper, editor, views } = setup(null);
     views.toggle('public.posts');
     await nextTick();
@@ -118,26 +99,28 @@ describe('DiagramViewsPanel menus', () => {
     expect(views.activeView).toBe('New View');
     expect(views.dirty).toBe(false);
 
-    // A second one from the picker gets the next free name.
+    // A second one asked for from the header's menu gets the next free name.
     useParserStore().parseNow(editor.text);
     const model = buildDiagramModel(useParserStore().rawDatabase!);
     await wrapper.setProps({ model });
     views.sync(model);
-    await wrapper.find('button[aria-label="Diagram view"]').trigger('click');
-    await wrapper.findAll('[role="option"]').at(-1)!.trigger('click');
+    views.requestCreate();
+    await nextTick();
+    await nextTick();
+    expect(views.pendingRequest).toBeNull();
     expect(wrapper.find<HTMLInputElement>('input[aria-label="New view name"]').element.value).toBe('New View 2');
     wrapper.unmount();
   });
 
   it('closes an open list on Escape and on a click elsewhere', async () => {
     const { wrapper } = setup('first');
-    await wrapper.find('button[aria-label="Diagram view"]').trigger('click');
-    expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
+    await wrapper.find('button[aria-label="Save options"]').trigger('click');
+    expect(wrapper.find('[role="menu"]').exists()).toBe(true);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await nextTick();
-    expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
 
-    await wrapper.find('button[aria-label="View actions"]').trigger('click');
+    await wrapper.find('button[aria-label="Save options"]').trigger('click');
     expect(wrapper.find('[role="menu"]').exists()).toBe(true);
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     await nextTick();

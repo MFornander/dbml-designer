@@ -3,36 +3,88 @@
  * document: when another program writes it, the editor picks the change up; when the user saves,
  * the editor text and the layout footer are written back. Unsaved edits are never thrown away
  * silently: a change that arrives while the editor is dirty waits for the user to reload or
- * overwrite.
+ * overwrite. Each file keeps its own arrangement across switches, saved or not.
  */
 import {
   computed, ref, shallowRef, watch,
 } from 'vue';
 import { defineStore } from 'pinia';
 import { BridgeError, fileBridge } from '@/files/fileBridge';
-import { splitLayoutComment, withLayoutPlaceholder } from '@/layout';
+import { splitLayoutComment } from '@/layout';
+import type { LayoutSnapshot } from '@/layout';
 import { useFileIO } from '@/layout/useFileIO';
 import { usePersistedRef } from '@/utils/persistedRef';
 import { useEditorStore } from './editorStore';
+import { useLayoutStore } from './layoutStore';
 import { useParserStore } from './parserStore';
 
+/** A file's arrangement as it was when switching away from it, with the footer then on disk. */
+interface LeftLayout {
+  footer: string | null;
+  layout: LayoutSnapshot;
+}
+
 interface FileLinkState {
-  version: 1;
+  version: 2;
   /** Absolute path of the followed file, resumed on the next visit. */
   path: string | null;
+  /** Arrangements of the files switched away from, by path, so each file is found as it was left. */
+  left: Record<string, LeftLayout>;
 }
 
 /** The file as last read from or written to disk. */
 export interface SyncedFile {
   dbml: string;
-  /** The layout YAML in its footer, or null for none or the placeholder. */
+  /** The layout YAML in its footer, or null for none. */
   footer: string | null;
   mtimeMs: number;
 }
 
 export type FileLinkStatus = 'idle' | 'following' | 'error';
 
+/** Where the diagram's layout comes from when a file's text is taken in. */
+type LayoutSource =
+  /** The file's footer; an empty layout when it has none. */
+  | 'footer'
+  /** Whatever the diagram shows now. */
+  | 'keep'
+  /** An arrangement left behind earlier. */
+  | LayoutSnapshot;
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const isSnapshot = (v: unknown): v is LayoutSnapshot => typeof v === 'object' && v !== null
+  && typeof (v as LayoutSnapshot).positions === 'object' && (v as LayoutSnapshot).positions !== null
+  && Array.isArray((v as LayoutSnapshot).collapsedGroups)
+  && typeof (v as LayoutSnapshot).edgeRoutes === 'object' && (v as LayoutSnapshot).edgeRoutes !== null;
+
+const isLeftLayout = (v: unknown): v is LeftLayout => typeof v === 'object' && v !== null
+  && ((v as LeftLayout).footer === null || typeof (v as LeftLayout).footer === 'string')
+  && isSnapshot((v as LeftLayout).layout);
+
+function isFileLinkState (v: unknown): v is FileLinkState {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as FileLinkState;
+  return s.version === 2
+    && (s.path === null || typeof s.path === 'string')
+    && typeof s.left === 'object' && s.left !== null && Object.values(s.left).every(isLeftLayout);
+}
+
+/** Version 1 remembered only the path. */
+function deserializeState (raw: string): FileLinkState {
+  const parsed = JSON.parse(raw) as Partial<FileLinkState> & { version?: number };
+  return {
+    version: 2,
+    path: typeof parsed.path === 'string' ? parsed.path : null,
+    left: parsed.version === 2 && parsed.left ? parsed.left : {},
+  };
+}
+
+const FORGOTTEN: FileLinkState = {
+  version: 2,
+  path: null,
+  left: {},
+};
 
 /** Reads a file a `use` statement points at through the bridge; missing or off-limits files count as absent. */
 async function loadImport (absolutePath: string): Promise<string | null> {
@@ -47,15 +99,12 @@ async function loadImport (absolutePath: string): Promise<string | null> {
 export const useFileLinkStore = defineStore('fileLink', () => {
   const editor = useEditorStore();
   const parser = useParserStore();
+  const layout = useLayoutStore();
   const io = useFileIO();
 
-  const state = usePersistedRef<FileLinkState>('fileLink', () => ({
-    version: 1,
-    path: null,
-  }), {
-    validate: (v): v is FileLinkState => typeof v === 'object' && v !== null
-      && (v as FileLinkState).version === 1
-      && ((v as FileLinkState).path === null || typeof (v as FileLinkState).path === 'string'),
+  const state = usePersistedRef<FileLinkState>('fileLink', () => ({ ...FORGOTTEN }), {
+    validate: isFileLinkState,
+    deserialize: deserializeState,
   });
 
   const path = computed(() => state.value.path);
@@ -106,17 +155,33 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       roots.value = r.roots;
       files.value = r.files;
       available.value = true;
+      // Arrangements of files that are gone are not coming back.
+      const left = Object.fromEntries(Object.entries(state.value.left).filter(([p]) => r.files.includes(p)));
+      if (Object.keys(left).length !== Object.keys(state.value.left).length) {
+        state.value = {
+          ...state.value,
+          left,
+        };
+      }
     } catch {
       available.value = false;
     }
     return available.value;
   }
 
-  /** Put a file's text into the editor; with `applyLayout`, its footer becomes the diagram layout too. */
-  function applyFile (text: string, mtimeMs: number, applyLayout: boolean): void {
+  /** A footer on disk other than the one last read or written; one that merely vanished does not count. */
+  const footerChanged = (footer: string | null) => footer !== null && footer !== synced.value?.footer;
+
+  /** Put a file's text, minus its footer, into the editor, and give the diagram the layout asked for. */
+  function applyFile (text: string, mtimeMs: number, take: LayoutSource): void {
     const parts = splitLayoutComment(text);
-    if (applyLayout) io.importText(name.value ?? 'file', text);
-    else io.replaceText(parts.hadComment ? withLayoutPlaceholder(parts.dbml) : parts.dbml);
+    if (take === 'footer' && parts.layout !== null) {
+      io.importText(name.value ?? 'file', text);
+    } else {
+      io.replaceText(parts.dbml);
+      if (take === 'footer') layout.resetLayout();
+      else if (take !== 'keep') layout.replaceLayout(take);
+    }
     synced.value = {
       dbml: parts.dbml,
       footer: parts.layout,
@@ -155,7 +220,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       return;
     }
     // Someone else changed the footer: take their layout. Otherwise keep ours and take the DBML.
-    applyFile(file.text, file.mtimeMs, parts.layout !== synced.value?.footer);
+    applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
     // A new `use` may point at a file that did not exist a moment ago.
     parser.retryImports();
   }
@@ -167,46 +232,74 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     });
   }
 
+  /** Let go of the current file: its watchers and what was known about it on disk. */
+  function detach (): void {
+    stopWatching?.();
+    stopWatching = null;
+    stopImportWatchers();
+    synced.value = null;
+    pending.value = null;
+    lastWritten = null;
+  }
+
+  /** Remember the current file's arrangement so it is found again when coming back. */
+  function leave (): void {
+    const p = path.value;
+    if (!p || !synced.value) return;
+    state.value = {
+      ...state.value,
+      left: {
+        ...state.value.left,
+        [p]: {
+          footer: synced.value.footer,
+          layout: layout.snapshot(),
+        },
+      },
+    };
+  }
+
   /**
-   * Follow a file. Chosen by the user, its footer layout is applied; resumed after a reload,
-   * only its DBML is taken so the layout arranged since the last save survives.
+   * The arrangement a file was left with, forgotten on the way out. A footer rewritten on disk
+   * meanwhile is someone else's layout and wins; a footer that only vanished does not.
+   */
+  function takeLeft (p: string, footer: string | null): LayoutSnapshot | null {
+    const kept = state.value.left[p];
+    if (!kept) return null;
+    const left = { ...state.value.left };
+    delete left[p];
+    state.value = {
+      ...state.value,
+      left,
+    };
+    return footer === null || footer === kept.footer ? kept.layout : null;
+  }
+
+  /**
+   * Follow a file. Opened by the user, its footer layout is applied (an arrangement it was left
+   * with earlier comes first); resumed after a reload, only its DBML is taken so the layout
+   * arranged since the last save survives.
    */
   async function follow (target: string, opts: { applyLayout?: boolean } = {}): Promise<boolean> {
-    stop(false);
+    detach();
     parser.setSourceLoader(loadImport);
     try {
       const file = await fileBridge.read(target);
       state.value = {
-        version: 1,
+        ...state.value,
         path: file.path,
       };
+      const parts = splitLayoutComment(file.text);
+      const kept = opts.applyLayout ?? true ? takeLeft(file.path, parts.layout) : null;
       // Imports in the text resolve relative to this path from now on.
-      parser.setEntryPath(file.path);
-      applyFile(file.text, file.mtimeMs, opts.applyLayout ?? true);
+      parser.setEntryPath(file.path, parts.dbml);
+      applyFile(file.text, file.mtimeMs, kept ?? (opts.applyLayout ?? true ? 'footer' : 'keep'));
       startWatching(file.path);
       status.value = 'following';
       error.value = null;
       return true;
     } catch (e) {
-      if (e instanceof BridgeError && e.status === 404) {
-        // A file that does not exist yet: keep the editor as it is and create the file on save.
-        state.value = {
-          version: 1,
-          path: target,
-        };
-        parser.setEntryPath(target);
-        synced.value = {
-          dbml: '',
-          footer: null,
-          mtimeMs: 0,
-        };
-        startWatching(target);
-        status.value = 'following';
-        error.value = null;
-        return true;
-      }
       state.value = {
-        version: 1,
+        ...state.value,
         path: target,
       };
       status.value = 'error';
@@ -215,11 +308,50 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     }
   }
 
+  /**
+   * Read the followed file and its imports from disk again, as their change events would have.
+   * A changed file is applied with the usual footer rule; with unsaved edits the disk's text is
+   * offered instead of applied, also when those edits are all that differs, so this is the way
+   * back to the saved file. The file list is refreshed along the way.
+   */
+  async function reload (): Promise<void> {
+    const p = path.value;
+    if (!p) return;
+    await refreshFiles();
+    // Imports first, so the file parses against what is on disk now.
+    await Promise.all(parser.importPaths.map((abs) => loadImport(abs)
+      .then((text) => parser.updateImport(abs, text))
+      .catch(() => undefined)));
+    let file;
+    try {
+      file = await fileBridge.read(p);
+    } catch (e) {
+      status.value = 'error';
+      error.value = message(e);
+      return;
+    }
+    const parts = splitLayoutComment(file.text);
+    if (dirty.value) {
+      pending.value = {
+        text: file.text,
+        mtimeMs: file.mtimeMs,
+      };
+      return;
+    }
+    const same = synced.value !== null && parts.dbml.trimEnd() === synced.value.dbml.trimEnd() && parts.layout === synced.value.footer;
+    if (same) synced.value = { ...synced.value!, mtimeMs: file.mtimeMs };
+    else applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
+    status.value = 'following';
+    error.value = null;
+    if (!stopWatching) startWatching(p);
+    parser.retryImports();
+  }
+
   /** Apply the change that waited while the editor was dirty, dropping the local edits. */
   function reloadFromDisk (): void {
     const p = pending.value;
     if (!p) return;
-    applyFile(p.text, p.mtimeMs, splitLayoutComment(p.text).layout !== synced.value?.footer);
+    applyFile(p.text, p.mtimeMs, footerChanged(splitLayoutComment(p.text).layout) ? 'footer' : 'keep');
   }
 
   /** Write the editor text with the layout footer. Refuses when the file changed since it was read, unless forced. */
@@ -229,9 +361,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     const text = io.exportText();
     lastWritten = text;
     try {
-      // A file being created has no mtime to match yet.
-      const expected = synced.value && synced.value.mtimeMs > 0 ? synced.value.mtimeMs : undefined;
-      const r = await fileBridge.write(p, text, force ? undefined : expected);
+      const r = await fileBridge.write(p, text, force ? undefined : synced.value?.mtimeMs);
       const parts = splitLayoutComment(text);
       synced.value = {
         dbml: parts.dbml,
@@ -261,28 +391,38 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   }
 
   function stop (forget = true): void {
-    stopWatching?.();
-    stopWatching = null;
-    stopImportWatchers();
+    detach();
     parser.setEntryPath(null);
     parser.setSourceLoader(null);
-    synced.value = null;
-    pending.value = null;
-    lastWritten = null;
     status.value = 'idle';
     error.value = null;
-    if (forget) {
-      state.value = {
-        version: 1,
-        path: null,
-      };
-    }
+    if (forget) state.value = { ...FORGOTTEN };
   }
 
-  /** On startup: find the bridge and pick up the file followed last time, keeping the current layout. */
+  /**
+   * On startup: find the bridge, pick up the file followed last time if it is still there (keeping
+   * the layout arranged since), or else the first file under the roots, with its footer layout.
+   */
   async function resume (): Promise<void> {
     if (!(await refreshFiles())) return;
-    if (state.value.path) await follow(state.value.path, { applyLayout: false });
+    const remembered = state.value.path;
+    if (remembered && files.value.includes(remembered)) {
+      await follow(remembered, { applyLayout: false });
+      return;
+    }
+    const first = files.value[0];
+    if (first) await follow(first, { applyLayout: true });
+  }
+
+  /**
+   * Change to another file, saving unsaved edits to the current one first (false when that save
+   * is refused) and keeping its arrangement for when it is opened again.
+   */
+  async function switchTo (target: string): Promise<boolean> {
+    if (target === path.value) return true;
+    if (dirty.value && !(await save())) return false;
+    leave();
+    return follow(target, { applyLayout: true });
   }
 
   return {
@@ -300,8 +440,10 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     refreshFiles,
     follow,
     save,
+    reload,
     reloadFromDisk,
     stop,
     resume,
+    switchTo,
   };
 });
