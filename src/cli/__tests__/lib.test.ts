@@ -117,6 +117,38 @@ describe('graphOf', () => {
     expect(text).toContain('VIEWS\n  core  tables: public.users, public.posts\n');
   });
 
+  it('marks the refs a TablePartial brings with the partial, and leaves the others unmarked', () => {
+    const text = [
+      'TablePartial per_config {',
+      '  config_id text [pk, ref: - config.config_id]',
+      '}',
+      'Table config {',
+      '  config_id text [pk]',
+      '}',
+      'Table site {',
+      '  ~per_config',
+      '  owner_id int [ref: > owners.id]',
+      '}',
+      'Table owners {',
+      '  id int [pk]',
+      '}',
+      '',
+    ].join('\n');
+    const g = graphOf(text).graph!;
+    expect(g.refs.map((r) => [r.from.table, r.to.table, r.viaPartial ?? null])).toEqual([
+      ['public.owners', 'public.site', null],
+      ['public.site', 'public.config', 'per_config'],
+    ]);
+    expect(JSON.stringify(g)).toContain('"viaPartial":"per_config"');
+    expect(g.tables.find((t) => t.key === 'public.site')!.fields[0]).toMatchObject({
+      name: 'config_id',
+      injectedFrom: 'per_config',
+    });
+    const listing = formatGraphText(g);
+    expect(listing).toContain('REFS\n  public.owners(id) 1 -- public.site(owner_id) *\n');
+    expect(listing).toContain('  public.site(config_id) 1 -- public.config(config_id) 1  (from partial per_config)\n');
+  });
+
   it('gives no graph for DBML with errors', () => {
     const { graph, check } = graphOf('Table x {');
     expect(graph).toBeNull();

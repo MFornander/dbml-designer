@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDiagramModel } from '@/diagram/adapter/buildModel';
 import { buildTooltipContent } from '@/diagram/state/useTooltip';
 import { compile } from './testUtils';
+import GRAIN from './fixtures/partialGrain.dbml?raw';
 
 const lineage = buildDiagramModel(compile(`
   Table comments { id int [pk] \n post_id int \n created_at timestamp }
@@ -77,5 +78,43 @@ describe('buildTooltipContent for relationships, fields, and groups', () => {
     expect(c.kind).toBe('group');
     expect(c.title).toBe('identity');
     expect(c.subtitle).toBe('2 tables');
+  });
+});
+
+describe('buildTooltipContent for a partial badge', () => {
+  const grain = buildDiagramModel(compile(GRAIN));
+
+  it('lists the refs the partial gives the table with their cardinalities, and its key columns', () => {
+    const c = buildTooltipContent(grain, { kind: 'partial', tableKey: 'count.component_count', partial: 'per_config_component' })!;
+    expect(c).toEqual({
+      kind: 'partial',
+      title: 'per_config_component',
+      titlePrefix: '~',
+      subtitle: 'Table partial',
+      refs: [
+        'config_id (*) → input.config.config_id (1)',
+        'component (*) → input.component.name (1)',
+      ],
+      primaryKey: '(config_id, component)',
+    });
+    const site = buildTooltipContent(grain, { kind: 'partial', tableKey: 'input.site', partial: 'per_config' })!;
+    expect(site.refs).toEqual(['config_id (1) → input.config.config_id (1)']);
+    expect(site.primaryKey).toBe('config_id');
+  });
+
+  it('carries the partial\'s note, and says where a ref drawn as a line comes from', () => {
+    const m = buildDiagramModel(compile(`
+      TablePartial owned {
+        owner_id int [ref: > users.id]
+        Note: 'Rows belong to a user'
+      }
+      Table users { id int [pk] }
+      Table posts { id int [pk] \n ~owned }
+    `));
+    const c = buildTooltipContent(m, { kind: 'partial', tableKey: 'public.posts', partial: 'owned' })!;
+    expect(c.note).toBe('Rows belong to a user');
+    expect(c.primaryKey).toBeUndefined();
+    expect(buildTooltipContent(m, { kind: 'ref', key: m.refs[0]!.key })!.lines).toEqual(['from partial owned']);
+    expect(buildTooltipContent(m, { kind: 'partial', tableKey: 'public.users', partial: 'owned' })).toBeNull();
   });
 });

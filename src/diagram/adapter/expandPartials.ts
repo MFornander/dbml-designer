@@ -6,10 +6,18 @@ import type { ModelDiagnostic } from '../types';
 import { tableKey, type TableKey } from '../keys';
 import { toTokenRange } from './token';
 
+/** A ref promoted from an inline ref on a field that a TablePartial injected into a table. */
+export interface PartialRef {
+  /** Its first endpoint is the injecting table's field. */
+  ref: Ref;
+  /** Name of the partial, as the table injects it. */
+  partial: string;
+}
+
 export interface ExpandedDatabase {
   tables: Table[];
   /** Refs derived from inline refs on fields injected by table partials. */
-  extraRefs: Ref[];
+  extraRefs: PartialRef[];
   /** Which fields came from which partial, keyed by table key then field name. */
   injected: Map<TableKey, Map<string, string>>;
   diagnostics: ModelDiagnostic[];
@@ -23,7 +31,7 @@ export interface ExpandedDatabase {
  */
 export function expandPartials (raw: Database): ExpandedDatabase {
   const partialsByName = new Map((raw.tablePartials ?? []).map((p) => [p.name, p]));
-  const extraRefs: Ref[] = [];
+  const extraRefs: PartialRef[] = [];
   const injected = new Map<TableKey, Map<string, string>>();
   const diagnostics: ModelDiagnostic[] = [];
 
@@ -64,25 +72,28 @@ export function expandPartials (raw: Database): ExpandedDatabase {
         for (const iref of f.inline_refs ?? []) {
           const [here, there] = getMultiplicities(iref.relation) ?? ['*', '*'];
           extraRefs.push({
-            schemaName: t.schemaName,
-            name: null,
-            endpoints: [
-              {
-                schemaName: t.schemaName,
-                tableName: t.name,
-                fieldNames: [f.name],
-                relation: here,
-                token: f.token,
-              },
-              {
-                schemaName: iref.schemaName,
-                tableName: iref.tableName,
-                fieldNames: iref.fieldNames,
-                relation: there,
-                token: iref.token,
-              },
-            ],
-            token: f.token,
+            ref: {
+              schemaName: t.schemaName,
+              name: null,
+              endpoints: [
+                {
+                  schemaName: t.schemaName,
+                  tableName: t.name,
+                  fieldNames: [f.name],
+                  relation: here,
+                  token: f.token,
+                },
+                {
+                  schemaName: iref.schemaName,
+                  tableName: iref.tableName,
+                  fieldNames: iref.fieldNames,
+                  relation: there,
+                  token: iref.token,
+                },
+              ],
+              token: f.token,
+            },
+            partial: partial.name,
           });
         }
       }

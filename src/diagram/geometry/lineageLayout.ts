@@ -31,6 +31,54 @@ const DEFAULTS: LineageLayoutOptions = {
 };
 
 /**
+ * Longest-path layering with Kahn's algorithm: every table sits one layer after its furthest
+ * upstream neighbour among `keys`, sources in layer 0. Neighbours outside `keys` are ignored. A
+ * cycle is broken by settling its earliest declared table as if its remaining upstream
+ * neighbours were not there.
+ */
+export function dependencyLayers (
+  keys: readonly TableKey[],
+  up: ReadonlyMap<TableKey, ReadonlySet<TableKey>>,
+  down: ReadonlyMap<TableKey, ReadonlySet<TableKey>>,
+  byOrder: (a: TableKey, b: TableKey) => number,
+): Map<TableKey, number> {
+  const inKeys = new Set(keys);
+  const sorted = [...keys].sort(byOrder);
+  const layers = new Map<TableKey, number>();
+  const remainingPreds = new Map<TableKey, Set<TableKey>>();
+  for (const k of sorted) remainingPreds.set(k, new Set([...up.get(k) ?? []].filter((p) => inKeys.has(p))));
+  const ready = sorted.filter((k) => remainingPreds.get(k)!.size === 0);
+  const pending = new Set(sorted.filter((k) => remainingPreds.get(k)!.size > 0));
+
+  const settle = (k: TableKey) => {
+    let layer = 0;
+    for (const p of up.get(k) ?? []) if (layers.has(p)) layer = Math.max(layer, layers.get(p)! + 1);
+    layers.set(k, layer);
+    for (const next of down.get(k) ?? []) {
+      const rp = remainingPreds.get(next);
+      if (!rp || layers.has(next)) continue;
+      rp.delete(k);
+      if (rp.size === 0 && pending.has(next)) {
+        pending.delete(next);
+        ready.push(next);
+      }
+    }
+  };
+
+  while (ready.length > 0 || pending.size > 0) {
+    if (ready.length === 0) {
+      // Cycle: force the earliest declared stalled table.
+      const forced = [...pending].sort(byOrder)[0]!;
+      pending.delete(forced);
+      ready.push(forced);
+    }
+    ready.sort(byOrder);
+    settle(ready.shift()!);
+  }
+  return layers;
+}
+
+/**
  * Layer tables by dependency order (upstream left, downstream right) and order
  * each layer by the average position of its upstream neighbours to reduce
  * crossings. Tables with no lineage edges are left out, so the lineage view
@@ -66,40 +114,7 @@ export function lineageLayout (input: LineageLayoutInput, opts: Partial<LineageL
 
   const involved = [...up.keys()].sort(byOrder);
   const unrelated = input.tables.map((t) => t.key).filter((k) => !up.has(k));
-
-  // Longest-path layering with Kahn's algorithm; break cycles by forcing the earliest stalled node.
-  const layers = new Map<TableKey, number>();
-  const remainingPreds = new Map<TableKey, Set<TableKey>>();
-  for (const k of involved) remainingPreds.set(k, new Set(up.get(k)));
-  const ready = involved.filter((k) => remainingPreds.get(k)!.size === 0);
-  const pending = new Set(involved.filter((k) => remainingPreds.get(k)!.size > 0));
-
-  const settle = (k: TableKey) => {
-    const preds = up.get(k)!;
-    let layer = 0;
-    for (const p of preds) if (layers.has(p)) layer = Math.max(layer, layers.get(p)! + 1);
-    layers.set(k, layer);
-    for (const next of down.get(k)!) {
-      const rp = remainingPreds.get(next);
-      if (!rp || layers.has(next)) continue;
-      rp.delete(k);
-      if (rp.size === 0 && pending.has(next)) {
-        pending.delete(next);
-        ready.push(next);
-      }
-    }
-  };
-
-  while (ready.length > 0 || pending.size > 0) {
-    if (ready.length === 0) {
-      // Cycle: force the earliest declared stalled table.
-      const forced = [...pending].sort(byOrder)[0]!;
-      pending.delete(forced);
-      ready.push(forced);
-    }
-    ready.sort(byOrder);
-    settle(ready.shift()!);
-  }
+  const layers = dependencyLayers(involved, up, down, byOrder);
 
   // Group by layer and order each layer by the barycenter of upstream neighbours.
   const layerCount = involved.length ? Math.max(...layers.values()) + 1 : 0;

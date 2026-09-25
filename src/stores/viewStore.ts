@@ -119,6 +119,7 @@ export const useViewStore = defineStore('views', () => {
   return {
     activeView,
     views,
+    model,
     view,
     hidden,
     baseHidden,

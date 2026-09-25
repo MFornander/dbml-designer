@@ -30,8 +30,15 @@ export const FONT_TYPE = `${FONT_SIZE}px ${FONT_FAMILY_MONO}`;
 export const FONT_TYPE_BOLD = `bold ${FONT_SIZE}px ${FONT_FAMILY_MONO}`;
 export const FONT_GROUP_NAME = `600 ${FONT_SIZE}px ${FONT_FAMILY_UI}`;
 export const FONT_NOTE = `${FONT_SIZE}px ${FONT_FAMILY_UI}`;
+export const FONT_PARTIAL_BADGE = `600 11px ${FONT_FAMILY_UI}`;
 /** All fonts the measurer relies on; loaded up front so widths are exact. */
-export const ALL_FONTS = [FONT_TABLE_NAME, FONT_FIELD, FONT_FIELD_BOLD, FONT_TYPE, FONT_TYPE_BOLD, FONT_GROUP_NAME];
+export const ALL_FONTS = [FONT_TABLE_NAME, FONT_FIELD, FONT_FIELD_BOLD, FONT_TYPE, FONT_TYPE_BOLD, FONT_GROUP_NAME, FONT_PARTIAL_BADGE];
+
+// Partial badges: `~name` pills in a table header standing in for the refs a TablePartial brings
+export const PARTIAL_BADGE_H = 18;
+export const PARTIAL_BADGE_PAD_X = 6;
+/** Space before each badge, after the name (or its note icon) or the previous badge. */
+export const PARTIAL_BADGE_GAP = 6;
 
 // Refs
 export const CROW_W = 10;

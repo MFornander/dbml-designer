@@ -7,8 +7,9 @@ import { nextTick } from 'vue';
 import DiagramCanvas from '@/diagram/components/DiagramCanvas.vue';
 import { buildDiagramModel } from '@/diagram/adapter/buildModel';
 import { snap8 } from '@/diagram/geometry/rect';
-import type { PositionChange } from '@/types/diagram';
+import type { PartialRefMode, PositionChange } from '@/types/diagram';
 import { compile } from './testUtils';
+import GRAIN from './fixtures/partialGrain.dbml?raw';
 
 const DBML = `
   Table users { id int [pk] \n name varchar }
@@ -892,6 +893,178 @@ describe('DiagramCanvas while the model is loading', () => {
     await nextTick();
     const events = wrapper.emitted('position-change') as PositionChange[][];
     expect(events.at(-1)![0]!.map((c) => c.key).sort()).toEqual(['note:hint', 'public.posts', 'public.users']);
+    wrapper.unmount();
+  });
+});
+
+describe('DiagramCanvas partial refs', () => {
+  const GRAIN_POSITIONS = {
+    'input.config': { x: 0, y: 0 },
+    'input.component': { x: 0, y: 200 },
+    'input.site': { x: 0, y: 400 },
+    'count.component_count': { x: 400, y: 0 },
+    'power.component_power': { x: 400, y: 200 },
+    'power.dc_power': { x: 400, y: 400 },
+    'money.component_money': { x: 800, y: 0 },
+    'money.dc_opex': { x: 800, y: 200 },
+  };
+  const SITE_REF = '#input.site(config_id)->input.config(config_id)';
+
+  function mountGrain (props: { partialRefMode?: PartialRefMode; highlightAll?: boolean; edgeRoutes?: Record<string, number[]> } = {}) {
+    return mount(DiagramCanvas, {
+      props: {
+        model: buildDiagramModel(compile(GRAIN)),
+        positions: GRAIN_POSITIONS,
+        detailLevel: 'all',
+        dark: false,
+        showLineage: false,
+        ...props,
+      },
+      attachTo: document.body,
+    });
+  }
+
+  const refLines = (w: ReturnType<typeof mountGrain>) => w.findAll('.dg-ref:not(.dg-dep)');
+  const badgesOf = (w: ReturnType<typeof mountGrain>) => w.findAll('.dg-partial-badge')
+    .map((b) => `${b.element.closest('.dg-table')!.getAttribute('data-key')} ${b.text()}`);
+
+  it('draws each table\'s partial refs as one badge per partial instead of lines, and as lines when asked', async () => {
+    const wrapper = mountGrain();
+    await nextTick();
+    expect(refLines(wrapper)).toHaveLength(0);
+    expect(badgesOf(wrapper)).toEqual([
+      'input.site ~per_config',
+      'count.component_count ~per_config_component',
+      'power.component_power ~per_config_component',
+      'power.dc_power ~per_config',
+      'money.component_money ~per_config_component',
+      'money.dc_opex ~per_config',
+    ]);
+
+    await wrapper.setProps({ partialRefMode: 'lines' });
+    expect(refLines(wrapper)).toHaveLength(9);
+    expect(wrapper.findAll('.dg-partial-badge')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('keeps drawing refs declared on a table itself, on the same anchors, in both modes', async () => {
+    const wrapper = mount(DiagramCanvas, {
+      props: {
+        model: buildDiagramModel(compile(`
+          TablePartial per_config { config_id text [pk, ref: - config.config_id] }
+          Table config { config_id text [pk] }
+          Table site { ~per_config \n name text }
+          Table plant { id int [pk] \n site_config text [ref: > site.config_id] }
+        `)),
+        positions: {
+          'public.config': { x: 0, y: 0 },
+          'public.site': { x: 400, y: 0 },
+          'public.plant': { x: 800, y: 0 },
+        },
+        detailLevel: 'all',
+        dark: false,
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+    const own = () => wrapper.find('.dg-ref[data-key="#public.site(config_id)->public.plant(site_config)"] .dg-ref-hit');
+    expect(refLines(wrapper)).toHaveLength(1);
+    const d = own().attributes('d');
+
+    await wrapper.setProps({ partialRefMode: 'lines' });
+    expect(refLines(wrapper)).toHaveLength(2);
+    // The partial ref leaves the same row; lines sharing a row share its anchor, so nothing moves.
+    expect(own().attributes('d')).toBe(d);
+    wrapper.unmount();
+  });
+
+  it('draws a hovered badge\'s refs with the marching ants, lights up their ends, and shows its tooltip', async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = mountGrain();
+      await nextTick();
+      const table = wrapper.find('.dg-table[data-key="count.component_count"]');
+      await table.trigger('pointerenter');
+      await table.find('.dg-partial-badge').trigger('pointerenter');
+
+      const lines = refLines(wrapper);
+      expect(lines.map((l) => l.attributes('data-key')).sort()).toEqual([
+        '#count.component_count(component)->input.component(name)',
+        '#count.component_count(config_id)->input.config(config_id)',
+      ]);
+      expect(lines.every((l) => l.classes('is-highlighted') && l.find('.dg-ref-overlay').exists())).toBe(true);
+      // They stand in for the badge: the pointer passes through them.
+      expect(lines.some((l) => l.find('.dg-ref-hit').exists())).toBe(false);
+      expect(wrapper.findAll('.dg-table.is-highlighted').map((t) => t.attributes('data-key')).sort())
+        .toEqual(['count.component_count', 'input.component', 'input.config']);
+      expect(wrapper.findAll('.dg-field.is-highlighted')).toHaveLength(4);
+      expect(table.find('.dg-partial-badge').classes()).toContain('is-highlighted');
+
+      vi.advanceTimersByTime(300);
+      await nextTick();
+      await nextTick();
+      await nextTick();
+      const tip = wrapper.find('.dg-tooltip');
+      expect(tip.find('.dg-tooltip-title').text()).toBe('~per_config_component');
+      expect(tip.text()).toContain('(config_id, component)');
+      expect(tip.text()).toContain('component (*) → input.component.name (1)');
+
+      await table.find('.dg-partial-badge').trigger('pointerleave');
+      await table.trigger('pointerleave');
+      expect(refLines(wrapper)).toHaveLength(0);
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pins a clicked badge so its refs stay drawn, without the controls for rerouting them', async () => {
+    const wrapper = mountGrain();
+    await nextTick();
+    const table = wrapper.find('.dg-table[data-key="money.dc_opex"]');
+    await table.trigger('pointerenter');
+    const badge = table.find('.dg-partial-badge');
+    await badge.trigger('pointerenter');
+    await badge.trigger('pointerdown', {
+      button: 0,
+      clientX: 900,
+      clientY: 216,
+    });
+    window.dispatchEvent(new MouseEvent('pointerup', {
+      clientX: 900,
+      clientY: 216,
+    }));
+    await nextTick();
+    // The press raised the table above the others, so it is a new element by now.
+    const after = wrapper.find('.dg-table[data-key="money.dc_opex"]');
+    await after.find('.dg-partial-badge').trigger('pointerleave');
+    await after.trigger('pointerleave');
+    expect(refLines(wrapper).map((l) => l.attributes('data-key'))).toEqual(['#money.dc_opex(config_id)->input.config(config_id)']);
+    expect(wrapper.find('.dg-edge-controls').exists()).toBe(false);
+    expect(after.classes()).toContain('is-selected');
+
+    // Escape lets go of it.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    expect(refLines(wrapper)).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('leaves partial refs shown as badges out of highlight-all', async () => {
+    const wrapper = mountGrain({ highlightAll: true });
+    await nextTick();
+    expect(refLines(wrapper)).toHaveLength(0);
+    await wrapper.setProps({ partialRefMode: 'lines' });
+    expect(wrapper.findAll('.dg-ref.is-highlighted')).toHaveLength(9);
+    wrapper.unmount();
+  });
+
+  it('keeps a hand-drawn route for a partial ref while it is a badge and follows it again as a line', async () => {
+    const wrapper = mountGrain({ edgeRoutes: { [SITE_REF]: [-96] } });
+    await nextTick();
+    expect(wrapper.find(`.dg-ref[data-key="${SITE_REF}"]`).exists()).toBe(false);
+    await wrapper.setProps({ partialRefMode: 'lines' });
+    expect(wrapper.find(`.dg-ref[data-key="${SITE_REF}"] .dg-ref-hit`).attributes('d')).toContain('-96');
     wrapper.unmount();
   });
 });

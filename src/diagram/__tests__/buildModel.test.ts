@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Database, Ref } from '@dbml/parse';
 import { buildDiagramModel } from '@/diagram/adapter/buildModel';
 import { compile } from './testUtils';
+import GRAIN from './fixtures/partialGrain.dbml?raw';
 
 describe('buildDiagramModel', () => {
   it('returns an empty model for no database', () => {
@@ -281,5 +282,85 @@ describe('buildDiagramModel', () => {
     expect(e.columns.map((c) => c.label)).toEqual(['first', 'second']);
     // A mapping from an uncolored block borrows the edge color.
     expect(e.columns[1]!.color).toBe('#CA4242');
+  });
+});
+
+describe('buildDiagramModel partial refs', () => {
+  it('marks each ref with the partial that injects it and lists them per table for the header badges', () => {
+    const m = buildDiagramModel(compile(GRAIN));
+    expect(m.diagnostics).toEqual([]);
+    const end = (e: { tableKey: string; fieldNames: string[] }) => `${e.tableKey}.${e.fieldNames.join(',')}`;
+    // All nine refs of the example come from the two partials; each runs from the injecting table to a hub.
+    expect(m.refs.map((r) => `${end(r.endpoints[0])} -> ${end(r.endpoints[1])} via ${r.viaPartial}`).sort()).toEqual([
+      'count.component_count.component -> input.component.name via per_config_component',
+      'count.component_count.config_id -> input.config.config_id via per_config_component',
+      'input.site.config_id -> input.config.config_id via per_config',
+      'money.component_money.component -> input.component.name via per_config_component',
+      'money.component_money.config_id -> input.config.config_id via per_config_component',
+      'money.dc_opex.config_id -> input.config.config_id via per_config',
+      'power.component_power.component -> input.component.name via per_config_component',
+      'power.component_power.config_id -> input.config.config_id via per_config_component',
+      'power.dc_power.config_id -> input.config.config_id via per_config',
+    ]);
+    // Keys are what they were before provenance was recorded, so stored routes still match.
+    expect(m.refs.some((r) => r.key === '#input.site(config_id)->input.config(config_id)')).toBe(true);
+
+    const badges = m.tables.filter((t) => t.partialRefs).map((t) => [t.key, t.partialRefs!.map((p) => `${p.partial} (${p.refKeys.length})`)]);
+    expect(badges).toEqual([
+      ['input.site', ['per_config (1)']],
+      ['count.component_count', ['per_config_component (2)']],
+      ['power.component_power', ['per_config_component (2)']],
+      ['power.dc_power', ['per_config (1)']],
+      ['money.component_money', ['per_config_component (2)']],
+      ['money.dc_opex', ['per_config (1)']],
+    ]);
+    // The key columns come from the pk field, else from the pk index.
+    expect(m.tablesByKey.get('input.site')!.partialRefs).toEqual([{
+      partial: 'per_config',
+      refKeys: ['#input.site(config_id)->input.config(config_id)'],
+      keyColumns: ['config_id'],
+    }]);
+    const count = m.tablesByKey.get('count.component_count')!.partialRefs![0]!;
+    expect(count.keyColumns).toEqual(['config_id', 'component']);
+    expect(count.refKeys.map((k) => m.refs.find((r) => r.key === k)!.endpoints[1].tableKey)).toEqual(['input.config', 'input.component']);
+    // The hubs they point at have no badge.
+    expect(m.tablesByKey.get('input.config')!.partialRefs).toBeUndefined();
+  });
+
+  it('leaves refs declared on a table or in a Ref block unmarked and gives badges in injection order', () => {
+    const m = buildDiagramModel(compile(`
+      TablePartial tagged {
+        tag_id int [ref: > tags.id]
+        Note: 'Tagged rows'
+      }
+      TablePartial stamped { created_at timestamp }
+      TablePartial owned { owner_id int [ref: > users.id] }
+      TablePartial audited { editor_id int [ref: > admins.id] }
+      Table users { id int [pk] }
+      Table admins { id int [pk] }
+      Table tags { id int [pk] }
+      Table posts {
+        id int [pk]
+        editor_id int [ref: > users.id]
+        ~tagged
+        ~stamped
+        ~owned
+        ~audited
+      }
+      Table comments { id int [pk] \n post_id int }
+      Ref: comments.post_id > posts.id
+    `));
+    // The table's own editor_id wins over audited's, so audited brings no ref to admins at all.
+    expect(m.refs.map((r) => `${r.endpoints.map((e) => e.tableKey).join(' - ')}: ${r.viaPartial ?? 'own'}`).sort()).toEqual([
+      'public.comments - public.posts: own',
+      'public.posts - public.tags: tagged',
+      'public.posts - public.users: owned',
+      'public.users - public.posts: own',
+    ]);
+    // Partials without refs (stamped) or whose refs were overridden (audited) get no badge.
+    expect(m.tablesByKey.get('public.posts')!.partialRefs!.map((p) => [p.partial, p.note ?? null, p.keyColumns])).toEqual([
+      ['tagged', 'Tagged rows', []],
+      ['owned', null, []],
+    ]);
   });
 });

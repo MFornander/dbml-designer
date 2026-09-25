@@ -1,6 +1,6 @@
 import {
   isEndpointManySide, isEndpointOneSide,
-  type Check, type Column, type Database, type Index, type Ref, type RefEndpoint,
+  type Check, type Column, type Database, type Index, type Ref, type RefEndpoint, type TablePartial,
 } from '@dbml/parse';
 import {
   DEFAULT_SCHEMA, enumKey, fieldKey, groupDisplayName, groupKey, noteKey, normalizeSchema, tableKey,
@@ -103,6 +103,14 @@ function toFieldVM (
 
 function endpointKeyPart (tk: TableKey, fieldNames: readonly string[]): string {
   return `${tk}(${fieldNames.join(',')})`;
+}
+
+/** A partial's primary key: its `pk` fields, else the columns of its `pk` index. */
+function partialKeyColumns (p: TablePartial): string[] {
+  const fields = (p.fields ?? []).filter((f) => f.pk).map((f) => f.name);
+  if (fields.length > 0) return fields;
+  const index = (p.indexes ?? []).find((i) => i.pk);
+  return (index?.columns ?? []).map((c) => (c.type === 'column' ? c.value : `\`${c.value}\``));
 }
 
 /** Effective header color of a table: its own, else its group's. */
@@ -273,8 +281,10 @@ export function buildDiagramModel (raw: Database | undefined): DiagramModel {
   // Refs (explicit and inline refs are already merged by @dbml/parse; partial-injected ones come from expandPartials)
   const seenPairs = new Set<string>();
   const usedKeys = new Set<RefKey>();
-  const allRefs: Ref[] = [...(raw.refs ?? []), ...expanded.extraRefs];
-  for (const r of allRefs) {
+  /** Keys of the resolved partial refs, by injecting table and then partial. */
+  const partialRefKeys = new Map<TableKey, Map<string, RefKey[]>>();
+  const allRefs: { ref: Ref; partial?: string }[] = [...(raw.refs ?? []).map((ref) => ({ ref })), ...expanded.extraRefs];
+  for (const { ref: r, partial } of allRefs) {
     const [rawA, rawB] = r.endpoints;
     if (!rawA || !rawB) continue;
     const a = resolveEndpoint(rawA);
@@ -330,6 +340,12 @@ export function buildDiagramModel (raw: Database | undefined): DiagramModel {
     };
     if (r.onDelete) vm.onDelete = r.onDelete;
     if (r.onUpdate) vm.onUpdate = r.onUpdate;
+    if (partial) {
+      vm.viaPartial = partial;
+      const byPartial = partialRefKeys.get(a.tableKey) ?? new Map<string, RefKey[]>();
+      partialRefKeys.set(a.tableKey, byPartial);
+      pushIndex(byPartial, partial, key);
+    }
     model.refs.push(vm);
 
     for (const ep of vm.endpoints) {
@@ -341,6 +357,25 @@ export function buildDiagramModel (raw: Database | undefined): DiagramModel {
         pushIndex(model.refsByField, field.key, key);
       }
     }
+  }
+
+  // What each table's header badges stand for: the resolved refs of every partial it injects, in injection order.
+  const partialsByName = new Map((raw.tablePartials ?? []).map((p) => [p.name, p]));
+  for (const t of expanded.tables) {
+    const key = tableKey(t.schemaName, t.name);
+    const byPartial = partialRefKeys.get(key);
+    const table = model.tablesByKey.get(key);
+    if (!byPartial || !table) continue;
+    const injected = [...(t.partials ?? [])].sort((a, b) => a.order - b.order).map((p) => p.name);
+    table.partialRefs = [...new Set(injected)].filter((name) => byPartial.has(name)).map((name) => {
+      const p = partialsByName.get(name);
+      return {
+        partial: name,
+        refKeys: byPartial.get(name)!,
+        keyColumns: p ? partialKeyColumns(p) : [],
+        ...(p?.note?.value ? { note: p.note.value } : {}),
+      };
+    });
   }
 
   // Data lineage. Every Dep edge between the same pair of tables, whether from one Dep block,

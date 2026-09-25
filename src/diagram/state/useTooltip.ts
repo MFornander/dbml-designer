@@ -38,6 +38,10 @@ export interface TooltipContent {
   note?: string;
   /** Column-level lineage mappings of a table-level Dep edge, as `a → b`. */
   columns?: string[];
+  /** A partial's primary key columns, `a` or `(a, b)`. */
+  primaryKey?: string;
+  /** The refs a partial gives a table, as `field (card) → table.field (card)`. */
+  refs?: string[];
 }
 
 export interface UseTooltipInputs {
@@ -85,13 +89,17 @@ function metadataEntries (m: Record<string, string> | undefined): [string, strin
   return entries.length ? entries : undefined;
 }
 
+/** One column as is, several in parentheses. */
+function columnList (names: readonly string[]): string {
+  return names.length === 1 ? names[0]! : `(${names.join(', ')})`;
+}
+
 export function buildTooltipContent (model: DiagramModel, target: HoverTarget): TooltipContent | null {
   const tableName = (ep: EdgeEndpointVM) => model.tablesByKey.get(ep.tableKey)?.displayName ?? ep.tableKey;
   /** `table.field` (or `table.(a, b)`), or the table alone for a table-level endpoint. */
   const describe = (ep: EdgeEndpointVM) => {
     if (ep.fieldNames.length === 0) return tableName(ep);
-    const fields = ep.fieldNames.length === 1 ? ep.fieldNames[0]! : `(${ep.fieldNames.join(', ')})`;
-    return `${tableName(ep)}.${fields}`;
+    return `${tableName(ep)}.${columnList(ep.fieldNames)}`;
   };
 
   switch (target.kind) {
@@ -142,6 +150,26 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
         ...(f.note ? { note: f.note } : {}),
       };
     }
+    case 'partial': {
+      const entry = model.tablesByKey.get(target.tableKey)?.partialRefs?.find((p) => p.partial === target.partial);
+      if (!entry) return null;
+      // Each ref runs from the field the partial gave this table to what that field references.
+      const refs = entry.refKeys.flatMap((k) => {
+        const ref = model.refs.find((r) => r.key === k);
+        if (!ref) return [];
+        const [own, other] = ref.endpoints;
+        return [`${columnList(own.fieldNames)} (${own.cardinality}) → ${describe(other)} (${other.cardinality})`];
+      });
+      return {
+        kind: 'partial',
+        title: entry.partial,
+        titlePrefix: '~',
+        subtitle: 'Table partial',
+        refs,
+        ...(entry.keyColumns.length ? { primaryKey: columnList(entry.keyColumns) } : {}),
+        ...(entry.note ? { note: entry.note } : {}),
+      };
+    }
     case 'ref': {
       const ref = model.refs.find((r) => r.key === target.key);
       if (!ref) return null;
@@ -150,6 +178,7 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
       if (ref.onDelete) lines.push(`on delete: ${ref.onDelete}`);
       if (ref.onUpdate) lines.push(`on update: ${ref.onUpdate}`);
       if (ref.inactive) lines.push('inactive');
+      if (ref.viaPartial) lines.push(`from partial ${ref.viaPartial}`);
       return {
         kind: 'ref',
         title: end(0),
@@ -244,8 +273,10 @@ export function useTooltip (input: UseTooltipInputs) {
 
   function worldAnchor (target: HoverTarget): Rect | null {
     switch (target.kind) {
-      case 'table': {
-        const b = input.boxes.value.get(target.key);
+      // A partial badge opens its tooltip beside the header it sits in, like the table's own.
+      case 'table':
+      case 'partial': {
+        const b = input.boxes.value.get(target.kind === 'table' ? target.key : target.tableKey);
         return b
           ? {
               x: b.x,

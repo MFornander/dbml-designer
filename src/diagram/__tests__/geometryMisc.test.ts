@@ -5,7 +5,7 @@ import {
 } from '@/diagram/geometry/tableSize';
 import { createMeasurer, estimateWidth } from '@/diagram/geometry/measure';
 import {
-  groupBodyFill, hexToHsl, hslToHex, normalizeHexColor, textColorFor,
+  contrastRatio, groupBodyFill, hexToHsl, hslToHex, normalizeHexColor, textColorFor,
 } from '@/diagram/geometry/color';
 import {
   FONT_FIELD, FONT_TYPE, ICON_GAP, ICON_SPACING, ICON_W, ROW_H, WIDTH_EXTRA, PAD_X,
@@ -113,8 +113,18 @@ describe('color', () => {
     expect(dark.l).toBeCloseTo(1 / 3, 1);
   });
 
-  it('picks readable text colors', () => {
-    expect(textColorFor('#FFE28B')).toBe('#171C26');
-    expect(textColorFor('#011B4E')).toBe('#FFFFFF');
+  it('picks readable text colors, dark wherever it contrasts more than white', () => {
+    const DARK = '#171C26';
+    const WHITE = '#FFFFFF';
+    // Light and mid-tone headers: note paper, white, yellow, orange, pink, teal, light green, lavender.
+    for (const bg of ['#FFE28B', '#FFFFFF', '#F1C40F', '#E4A62E', '#DE65C3', '#24BAB1', '#79AD51', '#8F8DD8']) {
+      expect(textColorFor(bg), bg).toBe(DARK);
+    }
+    // Deep ones keep white: navy, the default header blue, blue, red, purple, dark teal, dark green, grey.
+    for (const bg of ['#011B4E', '#316896', '#1E69FD', '#CA4242', '#6724BB', '#126E7A', '#2D6512', '#6B7280']) {
+      expect(textColorFor(bg), bg).toBe(WHITE);
+    }
+    expect(contrastRatio(1, 0)).toBe(21);
+    expect(contrastRatio(0.5, 0.5)).toBe(1);
   });
 });

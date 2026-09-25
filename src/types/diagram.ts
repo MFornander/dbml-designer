@@ -13,6 +13,9 @@ export type PositionsMap = Readonly<Record<string, XY>>;
 
 export type DetailLevel = 'all' | 'keys' | 'names';
 
+/** How refs that come from a TablePartial's fields are drawn: one badge per partial in the table header, or as lines. */
+export type PartialRefMode = 'badges' | 'lines';
+
 export type ThemeMode = 'light' | 'dark';
 
 /** Source range of an element. Positions are 1-indexed, matching Monaco. */

@@ -104,6 +104,19 @@ describe('layoutStore', () => {
     expect(layout.edgeRoutes).toEqual({});
   });
 
+  it('keeps the route of a ref a TablePartial brings, however the diagram draws partial refs', async () => {
+    const layout = useLayoutStore();
+    const parser = useParserStore();
+    const text = 'TablePartial per_config { config_id text [pk, ref: - config.config_id] }\nTable config { config_id text [pk] }\nTable site { ~per_config }';
+    parser.parseNow(text);
+    await nextTick();
+    const key = '#public.site(config_id)->public.config(config_id)';
+    layout.setEdgeRoute(key, [120]);
+    parser.parseNow(`${text}\nTable other { id int }`);
+    await nextTick();
+    expect(layout.edgeRoutes).toEqual({ [key]: [120] });
+  });
+
   it('snapshots the view state and replaces it from an imported layout, pruned against the current parse', async () => {
     const layout = useLayoutStore();
     const parser = useParserStore();

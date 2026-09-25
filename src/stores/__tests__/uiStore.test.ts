@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { migrateUiState } from '@/stores/uiStore';
+// @vitest-environment happy-dom
+import {
+  describe, it, expect, beforeEach,
+} from 'vitest';
+import { nextTick } from 'vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { migrateUiState, useUiStore } from '@/stores/uiStore';
 
 const FLAGS = {
   lineageLayout: false,
@@ -8,6 +13,7 @@ const FLAGS = {
   layoutSize: 40,
   editorCollapsed: false,
   viewsOpen: false,
+  partialRefMode: 'badges',
 };
 
 describe('migrateUiState', () => {
@@ -20,7 +26,7 @@ describe('migrateUiState', () => {
       problemsOpen: true,
     });
     expect(migrateUiState(v1)).toEqual({
-      version: 9,
+      version: 10,
       theme: 'dark',
       detailLevel: 'keys',
       splitSizes: [40, 60],
@@ -42,7 +48,7 @@ describe('migrateUiState', () => {
     expect(migrateUiState(v2(false)).edgeMode).toBe('erd');
     expect(migrateUiState(v2(true)).edgeMode).toBe('erd+deps');
     expect(migrateUiState(v2(true)).splitSizes).toEqual([35, 65]);
-    expect(migrateUiState(v2(true)).version).toBe(9);
+    expect(migrateUiState(v2(true)).version).toBe(10);
   });
 
   it('keeps the version 3 edge mode and adds the new toggles switched off', () => {
@@ -55,7 +61,7 @@ describe('migrateUiState', () => {
       edgeMode: 'deps',
     });
     expect(migrateUiState(v3)).toEqual({
-      version: 9,
+      version: 10,
       theme: 'light',
       detailLevel: 'all',
       splitSizes: [35, 65],
@@ -79,11 +85,12 @@ describe('migrateUiState', () => {
   it('adds the layout panel, collapsed, and views panel flags when upgrading from version 4, keeping the toggles', () => {
     expect(migrateUiState(JSON.stringify(v4))).toEqual({
       ...v4,
-      version: 9,
+      version: 10,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: false,
       viewsOpen: false,
+      partialRefMode: 'badges',
     });
   });
 
@@ -95,11 +102,12 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v5))).toEqual({
       ...v4,
-      version: 9,
+      version: 10,
       layoutOpen: true,
       layoutSize: 40,
       editorCollapsed: false,
       viewsOpen: false,
+      partialRefMode: 'badges',
     });
     const v6 = {
       ...v4,
@@ -109,11 +117,12 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v6))).toEqual({
       ...v4,
-      version: 9,
+      version: 10,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: true,
       viewsOpen: false,
+      partialRefMode: 'badges',
     });
   });
 
@@ -126,30 +135,89 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v7))).toEqual({
       ...v7,
-      version: 9,
+      version: 10,
       layoutSize: 40,
       viewsOpen: false,
+      partialRefMode: 'badges',
     });
   });
 
-  it('adds the views panel flag when upgrading from version 8, and passes version 9 through unchanged', () => {
-    const v8 = {
-      ...v4,
-      version: 8,
-      layoutOpen: true,
-      layoutSize: 55,
-      editorCollapsed: true,
-    };
+  const v8 = {
+    ...v4,
+    version: 8,
+    layoutOpen: true,
+    layoutSize: 55,
+    editorCollapsed: true,
+  };
+
+  it('adds the views panel flag when upgrading from version 8', () => {
     expect(migrateUiState(JSON.stringify(v8))).toEqual({
       ...v8,
-      version: 9,
+      version: 10,
       viewsOpen: false,
+      partialRefMode: 'badges',
     });
+  });
+
+  it('draws partial refs as badges when upgrading from version 9, and passes version 10 through unchanged', () => {
     const v9 = {
       ...v8,
       version: 9,
       viewsOpen: true,
     };
-    expect(migrateUiState(JSON.stringify(v9))).toEqual(v9);
+    expect(migrateUiState(JSON.stringify(v9))).toEqual({
+      ...v9,
+      version: 10,
+      partialRefMode: 'badges',
+    });
+    const v10 = {
+      ...v9,
+      version: 10,
+      partialRefMode: 'lines',
+    };
+    expect(migrateUiState(JSON.stringify(v10))).toEqual(v10);
+  });
+});
+
+describe('useUiStore partial refs', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  it('draws them as badges by default, toggles to lines and back, and remembers the choice', async () => {
+    const ui = useUiStore();
+    expect(ui.partialRefMode).toBe('badges');
+    ui.togglePartialRefMode();
+    expect(ui.partialRefMode).toBe('lines');
+    await nextTick();
+
+    setActivePinia(createPinia());
+    const again = useUiStore();
+    expect(again.partialRefMode).toBe('lines');
+    again.togglePartialRefMode();
+    expect(again.partialRefMode).toBe('badges');
+  });
+
+  it('upgrades a stored version 9 state to badges', () => {
+    localStorage.setItem('dbml-edit:v1:ui', JSON.stringify({
+      version: 9,
+      theme: 'light',
+      detailLevel: 'keys',
+      splitSizes: [30, 70],
+      problemsOpen: false,
+      edgeMode: 'erd',
+      lineageLayout: false,
+      highlightAll: true,
+      layoutOpen: false,
+      layoutSize: 40,
+      editorCollapsed: false,
+      viewsOpen: false,
+    }));
+    const ui = useUiStore();
+    expect(ui.partialRefMode).toBe('badges');
+    // The rest of the stored state survives the upgrade.
+    expect(ui.detailLevel).toBe('keys');
+    expect(ui.highlightAll).toBe(true);
   });
 });

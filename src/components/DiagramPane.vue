@@ -9,6 +9,7 @@
       :collapsed-groups="layout.collapsedGroups"
       :show-refs="ui.showRefs"
       :show-lineage="ui.showLineage"
+      :partial-ref-mode="ui.partialRefMode"
       :lineage-layout="ui.lineageLayout"
       :highlight-all="ui.highlightAll"
       :edge-routes="layout.edgeRoutes"
@@ -21,6 +22,7 @@
       @table-hover="onTableHover"
       @set-color="onSetColor"
       @zoom-change="zoom = $event"
+      @arrange="onArrange"
     />
 
     <div
@@ -43,6 +45,22 @@
       >
         Lineage layout: only tables with lineage edges, ordered by dependency with upstream on the left
         <span v-if="model.deps.length === 0"> (no Dep edges in this schema, so nothing to show)</span>
+      </div>
+      <!-- Arrange from the View menu: what happened, and a way back until the layout changes again -->
+      <div
+        v-if="arrangedTables > 0"
+        class="pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded bg-white text-gray-700 text-xs font-medium shadow dark:bg-[#2d2f35] dark:text-gray-200"
+        role="status"
+      >
+        <span>Arranged {{ arrangedTables }} {{ arrangedTables === 1 ? 'table' : 'tables' }}</span>
+        <button
+          type="button"
+          class="text-blue-600 hover:underline cursor-pointer dark:text-blue-300"
+          title="Put everything back where it was (⌘Z)"
+          @click="undoArrange"
+        >
+          Undo
+        </button>
       </div>
     </div>
 
@@ -101,6 +119,17 @@
         <span :class="DIVIDER" />
         <EdgeModeSelect />
         <span :class="DIVIDER" />
+        <!-- Only while some partial carries refs; pressed while they show as badges, the default -->
+        <button
+          v-if="hasPartialRefs"
+          :class="[BUTTON, ui.partialRefMode === 'badges' ? ACTIVE : '']"
+          :title="ui.partialRefMode === 'badges' ? 'Draw partial refs as lines' : 'Show partial refs as badges'"
+          aria-label="Partial refs as badges"
+          :aria-pressed="ui.partialRefMode === 'badges'"
+          @click="ui.togglePartialRefMode"
+        >
+          <PhPuzzlePiece class="w-4 h-4" />
+        </button>
         <button
           :class="[BUTTON, ui.highlightAll ? ACTIVE : '']"
           :title="ui.highlightAll ? 'Unhighlight relationships' : 'Highlight relationships'"
@@ -130,7 +159,7 @@ import {
   computed, ref, useTemplateRef, watch,
 } from 'vue';
 import {
-  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhTreeStructure,
+  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { DiagramCanvas, buildDiagramModel } from '@/diagram';
 import type { ColorChangePayload, TableLinkPayload } from '@/types/diagram';
@@ -138,6 +167,7 @@ import DetailLevelSelect from '@/components/DetailLevelSelect.vue';
 import DiagramViewsPanel from '@/components/DiagramViewsPanel.vue';
 import EdgeModeSelect from '@/components/EdgeModeSelect.vue';
 import ErrorsPopover from '@/components/problems/ErrorsPopover.vue';
+import { useArrange } from '@/components/useArrange';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { offsetAt, setColorSetting, setRefColor } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
@@ -163,6 +193,8 @@ const canvas = useTemplateRef<InstanceType<typeof DiagramCanvas>>('canvas');
 const zoom = ref(1);
 
 const model = computed(() => buildDiagramModel(parser.rawDatabase));
+/** Some TablePartial brings refs, so the badges-or-lines toggle has something to switch. */
+const hasPartialRefs = computed(() => model.value.refs.some((r) => r.viaPartial));
 // The view store follows every parse so its hidden set matches the current definitions.
 watch(model, (m) => views.sync(m), {
   immediate: true,
@@ -213,4 +245,7 @@ function onTableHover (payload: TableLinkPayload | null) {
       }
     : null);
 }
+
+// Arrange, asked for from the header's View menu, runs here where the canvas measures the tables.
+const { noticeTables: arrangedTables, apply: onArrange, undo: undoArrange } = useArrange(canvas);
 </script>

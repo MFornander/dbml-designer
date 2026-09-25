@@ -4,6 +4,7 @@
     :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging }"
     :data-key="table.key"
     :transform="`translate(${box.x} ${box.y})`"
+    :style="headerTextVars"
     @pointerenter="onEnter"
     @pointerleave="onLeave"
     @pointerdown="onDown"
@@ -56,7 +57,7 @@
         :y="ROW_H / 2"
       >{{ table.schema }}</text>
       <rect
-        v-else
+        v-if="lod === 'minimal'"
         class="dg-placeholder"
         :x="PAD_X"
         :y="(ROW_H - placeholderH) / 2"
@@ -73,6 +74,35 @@
         :width="ICON_W"
         :height="ICON_W"
       />
+      <!-- One badge per partial whose refs are not drawn as lines; hovering it draws them and lights up what they reach -->
+      <template v-if="lod === 'full'">
+        <g
+          v-for="b in size.badges"
+          :key="b.partial"
+          class="dg-partial-badge"
+          :class="{ 'is-highlighted': highlightedPartials.has(b.partial) }"
+          :data-partial="b.partial"
+          :transform="`translate(${b.x} ${(ROW_H - PARTIAL_BADGE_H) / 2})`"
+          :style="{ color: headerTextColor }"
+          @pointerenter="onBadgeEnter(b.partial)"
+          @pointerleave="onBadgeLeave"
+        >
+          <rect
+            class="dg-partial-badge-bg"
+            x="0.5"
+            y="0.5"
+            :width="b.w - 1"
+            :height="PARTIAL_BADGE_H - 1"
+            rx="4"
+          />
+          <text
+            class="dg-partial-badge-text"
+            :x="b.w / 2"
+            :y="PARTIAL_BADGE_H / 2"
+            text-anchor="middle"
+          >{{ partialBadgeLabel(b.partial) }}</text>
+        </g>
+      </template>
       <SettingsGear
         v-if="showGear"
         :x="w - PAD_X - GEAR_SIZE"
@@ -192,15 +222,16 @@ import type { FieldVM, TableVM } from '../types';
 import type { FieldKey } from '../keys';
 import type { Rect } from '../geometry/rect';
 import {
-  BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, type FieldBadge, type TableSize,
+  BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, type FieldBadge, type TableSize,
 } from '../geometry/tableSize';
 import { isKeyField } from '../geometry/lod';
 import {
-  GEAR_SIZE, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
+  GEAR_SIZE, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_H, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
 } from '../geometry/constants';
 import { roundedTopRectPath } from '../geometry/pathBuilder';
 import { textColorFor } from '../geometry/color';
 import { useDiagramContext } from '../state/context';
+import { sameSet } from '../state/share';
 import SettingsGear from './SettingsGear.vue';
 
 const props = defineProps<{
@@ -227,11 +258,32 @@ const headerStyle = computed(() => ({
 const placeholderH = ROW_H * PLACEHOLDER_HEIGHT_RATIO;
 const showHeaderIcon = computed(() => hasTableDetails(props.table));
 
-/** The gear shows while this table (or one of its fields) is the hovered or pinned element. */
+/** The gear shows while this table (or one of its fields or badges) is the hovered or pinned element. */
 const showGear = computed(() => {
   if (lod.value !== 'full' || props.isDragging) return false;
   const s = ctx.highlight.value.source;
-  return !!s && ((s.kind === 'table' && s.key === props.table.key) || (s.kind === 'field' && s.tableKey === props.table.key));
+  if (!s) return false;
+  if (s.kind === 'table') return s.key === props.table.key;
+  return (s.kind === 'field' || s.kind === 'partial') && s.tableKey === props.table.key;
+});
+
+/**
+ * Badges light up with their refs, as the lines they stand in for would: hovering the badge, its
+ * table, or a table it references. The same set comes back while its members stay the same, so a
+ * hover elsewhere does not re-render this table.
+ */
+const highlightedPartials = computed<ReadonlySet<string>>((prev) => {
+  const refKeys = ctx.highlight.value.refKeys;
+  const next = new Set((props.table.partialRefs ?? []).filter((p) => p.refKeys.some((k) => refKeys.has(k))).map((p) => p.partial));
+  return prev && sameSet(prev, next) ? prev : next;
+});
+/**
+ * On a colored header, the name, schema label, and note icon take whichever of dark or white text
+ * reads better on it (they are drawn with `--dg-header-text`); a plain header keeps the palette's.
+ */
+const headerTextVars = computed(() => {
+  const c = props.table.headerColor ?? props.table.groupColor;
+  return c ? { '--dg-header-text': textColorFor(c) } : undefined;
 });
 const headerTextColor = computed(() => {
   const c = props.table.headerColor ?? props.table.groupColor;
@@ -283,6 +335,19 @@ function onFieldLeave () {
     kind: 'table',
     key: props.table.key,
   });
+}
+
+function onBadgeEnter (partial: string) {
+  ctx.setHover({
+    kind: 'partial',
+    tableKey: props.table.key,
+    partial,
+  });
+}
+
+// Leaving a badge puts the pointer back on its header; leaving the table as well clears the hover right after.
+function onBadgeLeave () {
+  onEnter();
 }
 
 function onDown (e: PointerEvent) {

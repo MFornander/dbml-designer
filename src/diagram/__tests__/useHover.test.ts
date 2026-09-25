@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildDiagramModel } from '@/diagram/adapter/buildModel';
-import { deriveHighlight } from '@/diagram/state/useHover';
+import { deriveHighlight, sameTarget } from '@/diagram/state/useHover';
 import { compile } from './testUtils';
+import GRAIN from './fixtures/partialGrain.dbml?raw';
 
 const model = buildDiagramModel(compile(`
   Table users { id int [pk] }
@@ -73,5 +74,34 @@ describe('deriveHighlight', () => {
     const h = deriveHighlight(model, { kind: 'group', key: model.groups[0]!.key });
     expect([...h.tableKeys].sort()).toEqual(['public.posts', 'public.stats']);
     expect(h.refKeys.size).toBe(0);
+  });
+});
+
+describe('deriveHighlight for a partial badge', () => {
+  const grain = buildDiagramModel(compile(GRAIN));
+
+  it('lights up the refs the partial gives its table, the tables they reach, and the fields at both ends', () => {
+    const h = deriveHighlight(grain, { kind: 'partial', tableKey: 'count.component_count', partial: 'per_config_component' });
+    expect([...h.refKeys].sort()).toEqual([
+      '#count.component_count(component)->input.component(name)',
+      '#count.component_count(config_id)->input.config(config_id)',
+    ]);
+    expect([...h.tableKeys].sort()).toEqual(['count.component_count', 'input.component', 'input.config']);
+    expect([...h.fieldKeys].sort()).toEqual([
+      'count.component_count.component',
+      'count.component_count.config_id',
+      'input.component.name',
+      'input.config.config_id',
+    ]);
+    expect(h.depKeys.size).toBe(0);
+  });
+
+  it('tells badges apart by table and partial', () => {
+    const a = { kind: 'partial', tableKey: 'input.site', partial: 'per_config' } as const;
+    expect(sameTarget(a, { ...a })).toBe(true);
+    expect(sameTarget(a, { ...a, tableKey: 'power.dc_power' })).toBe(false);
+    expect(sameTarget(a, { kind: 'table', key: 'input.site' })).toBe(false);
+    // Other kinds still compare by key.
+    expect(sameTarget({ kind: 'table', key: 'input.site' }, { kind: 'table', key: 'input.site' })).toBe(true);
   });
 });

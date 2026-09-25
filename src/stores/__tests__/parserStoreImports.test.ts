@@ -4,6 +4,8 @@ import {
 import { setActivePinia, createPinia } from 'pinia';
 import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
+import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildTooltipContent } from '@/diagram/state/useTooltip';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -98,6 +100,48 @@ describe('parserStore imports', () => {
     expect(parser.entryPath).toBe('/main.dbml');
     expect(parser.importPaths).toEqual([]);
     expect(parser.errors.some((e) => /non-existent file/.test(e.message))).toBe(true);
+  });
+
+  it('keeps the refs of a TablePartial imported with use, so its badge works in the importing file', async () => {
+    const SHARED = [
+      'Table input.config {',
+      '  config_id text [pk]',
+      '}',
+      'TablePartial per_config {',
+      '  config_id text [pk, ref: - input.config.config_id]',
+      '  Note: \'One row per config\'',
+      '}',
+      '',
+    ].join('\n');
+    const MAIN = [
+      'use { tablepartial per_config } from \'./shared\'',
+      'use { table input.config } from \'./shared\'',
+      '',
+      'Table input.site {',
+      '  ~per_config',
+      '  pue double',
+      '}',
+      '',
+    ].join('\n');
+    useEditorStore().setText(MAIN);
+    const parser = useParserStore();
+    parser.setSourceLoader(async (abs) => (abs === '/proj/shared.dbml' ? SHARED : null));
+    parser.setEntryPath('/proj/main.dbml', MAIN);
+    await flush();
+    expect(parser.errors).toEqual([]);
+
+    const m = buildDiagramModel(parser.rawDatabase);
+    expect(m.refs.map((r) => [r.key, r.viaPartial])).toEqual([['#input.site(config_id)->input.config(config_id)', 'per_config']]);
+    // The ref is declared in the imported file, so the diagram does not try to edit it from here.
+    expect(m.refs[0]!.token?.file).toBe('/proj/shared.dbml');
+    expect(m.tablesByKey.get('input.site')!.partialRefs).toEqual([{
+      partial: 'per_config',
+      refKeys: ['#input.site(config_id)->input.config(config_id)'],
+      keyColumns: ['config_id'],
+      note: 'One row per config',
+    }]);
+    expect(buildTooltipContent(m, { kind: 'partial', tableKey: 'input.site', partial: 'per_config' })!.refs)
+      .toEqual(['config_id (1) → input.config.config_id (1)']);
   });
 
   it('parses the text given with a new entry path, not the editor\'s old text', async () => {

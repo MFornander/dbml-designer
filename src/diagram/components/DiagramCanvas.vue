@@ -61,6 +61,7 @@
             :geo="r.geo"
             :highlighted="r.highlighted"
             :animated="r.animated"
+            :passive="r.passive"
           />
         </g>
         <g class="dg-layer-tables">
@@ -73,7 +74,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
           />
@@ -98,7 +99,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
           />
@@ -122,7 +123,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="true"
           />
@@ -181,20 +182,23 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, toRef, useTemplateRef, watch,
 } from 'vue';
 import type {
-  ColorChangePayload, ColorTarget, DetailLevel, PositionChange, PositionsMap, TableLinkPayload,
+  ColorChangePayload, ColorTarget, DetailLevel, PartialRefMode, PositionChange, PositionsMap, TableLinkPayload,
 } from '@/types/diagram';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
+import type { FieldKey, TableKey } from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod } from '../geometry/lod';
-import { placeNewItems, placeNewNotes } from '../geometry/layout';
+import { collapsedGroupSize, placeNewItems, placeNewNotes } from '../geometry/layout';
+import { arrangeByGroup, arrangePending } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
 import {
-  GROUP_HEADER_H, NOTE_MIN_H, NOTE_MIN_W, ROW_H,
+  FONT_GROUP_NAME, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, ROW_H,
 } from '../geometry/constants';
 import {
   intersects, snap8, type Point, type Rect,
 } from '../geometry/rect';
 import { screenToWorld, worldToScreen } from '../geometry/viewport';
+import { isTypingTarget } from '@/utils/typingTarget';
 import { DARK, LIGHT, paletteToCssVars } from '../theme/palette';
 import { DIAGRAM_CTX, type DiagramContext } from '../state/context';
 import {
@@ -202,6 +206,7 @@ import {
 } from '../state/useDiagramGeometry';
 import { useDrag, type DragTarget } from '../state/useDrag';
 import { useHover } from '../state/useHover';
+import { sameSet, shareMap } from '../state/share';
 import { usePanZoom } from '../state/usePanZoom';
 import { useTooltip } from '../state/useTooltip';
 import DiagramDefs from './DiagramDefs.vue';
@@ -222,6 +227,8 @@ const props = withDefaults(defineProps<{
   collapsedGroups?: ReadonlySet<string>;
   showRefs?: boolean;
   showLineage?: boolean;
+  /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
+  partialRefMode?: PartialRefMode;
   /** Lineage layout: positions derived from dependency order; groups and notes hidden. */
   lineageLayout?: boolean;
   /** Highlight every visible edge: walking ants, names, and endpoint cardinalities. */
@@ -238,6 +245,7 @@ const props = withDefaults(defineProps<{
   collapsedGroups: () => new Set<string>(),
   showRefs: true,
   showLineage: true,
+  partialRefMode: 'badges',
   lineageLayout: false,
   highlightAll: false,
   edgeRoutes: () => ({}),
@@ -245,7 +253,8 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
-  'position-change': [changes: PositionChange[]];
+  /** Tables or notes moved; `'auto'` when auto-placement put down elements that had no position. */
+  'position-change': [changes: PositionChange[], origin?: 'auto'];
   'table-click': [payload: TableLinkPayload];
   'table-hover': [payload: TableLinkPayload | null];
   'toggle-group': [key: string];
@@ -254,6 +263,8 @@ const emit = defineEmits<{
   'set-color': [payload: ColorChangePayload];
   /** A relationship's route was hand-drawn (rails) or reset (null). */
   'edge-route-change': [key: string, rails: number[] | null];
+  /** Arrange laid out what the view shows; `resetRoutes` are the relationships whose hand-drawn routes no longer fit. */
+  'arrange': [changes: PositionChange[], resetRoutes: string[]];
 }>();
 
 const root = useTemplateRef<HTMLElement>('root');
@@ -283,6 +294,17 @@ watch(() => pz.viewport.value.k, (k) => emit('zoom-change', k), {
 // Geometry
 const dragOverride = shallowRef<DragOverride | null>(null);
 const routeDragOverride = shallowRef<RouteDragOverride | null>(null);
+/**
+ * The refs of the hovered or pinned partial badge, drawn while it is, like the column line of a
+ * mapped field. Kept as the same set while it holds the same keys, so other hovers do not reroute.
+ */
+const revealedRefs = computed<ReadonlySet<string>>((prev) => {
+  const t = hover.effective.value;
+  const keys = t?.kind === 'partial'
+    ? model.value.tablesByKey.get(t.tableKey)?.partialRefs?.find((p) => p.partial === t.partial)?.refKeys ?? []
+    : [];
+  return prev && prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys);
+});
 const geo = useDiagramGeometry({
   model,
   positions: toRef(props, 'positions'),
@@ -290,6 +312,8 @@ const geo = useDiagramGeometry({
   collapsedGroups: toRef(props, 'collapsedGroups'),
   showRefs: toRef(props, 'showRefs'),
   showLineage: toRef(props, 'showLineage'),
+  partialRefMode: toRef(props, 'partialRefMode'),
+  revealedRefs,
   lineageLayout: toRef(props, 'lineageLayout'),
   dragOverride,
   edgeRoutes: toRef(props, 'edgeRoutes'),
@@ -299,13 +323,16 @@ const geo = useDiagramGeometry({
   measureVersion,
 });
 
+/** A partial ref standing as a badge: drawn only while its badge reveals it, and then not editable. */
+const isBadged = (r: RefVM) => props.partialRefMode === 'badges' && !!r.viaPartial;
+
 // Selected relationship: clicking a line pins it, which shows its control points and tools.
 const selectedRef = computed(() => {
   const p = hover.pinned.value;
   if (!p || p.kind !== 'ref' || !props.showRefs) return null;
   const edge = model.value.refs.find((r) => r.key === p.key);
   const g = geo.routes.value.get(p.key);
-  return edge && g
+  return edge && g && !isBadged(edge)
     ? {
         edge,
         geo: g,
@@ -415,7 +442,10 @@ const drag = useDrag({
   },
 });
 
-/** A click on a table or note selects it alone; with Shift, Cmd, or Ctrl it toggles it in the selection. Tables also pin. */
+/**
+ * A click on a table or note selects it alone; with Shift, Cmd, or Ctrl it toggles it in the selection. Tables also pin,
+ * or the partial badge clicked on, which keeps its refs drawn.
+ */
 function onElementClick (key: string) {
   const next = new Set(dragAdditive ? selection.value : []);
   if (dragAdditive && next.has(key)) next.delete(key);
@@ -424,10 +454,13 @@ function onElementClick (key: string) {
 
   const table = model.value.tablesByKey.get(key);
   if (!table) return;
-  hover.togglePin({
-    kind: 'table',
-    key,
-  });
+  const over = hover.hover.value;
+  hover.togglePin(over?.kind === 'partial' && over.tableKey === key
+    ? over
+    : {
+        kind: 'table',
+        key,
+      });
   if (table.token) {
     emit('table-click', {
       key,
@@ -477,11 +510,34 @@ function changesFor (target: DragTarget, pos: Point): PositionChange[] {
 const suppressed = computed(() => drag.dragging.value !== null || pz.isPanning.value || marquee.value !== null);
 const hover = useHover(model, suppressed);
 
+/** The highlighted fields of every table with none; one shared set, so a hover leaves those tables alone. */
+const NO_FIELDS: ReadonlySet<FieldKey> = new Set();
+
+/**
+ * Highlighted fields by table. Each table gets only its own, and the same set while they stay the
+ * same, so a hover re-renders only the tables whose highlight changed rather than every table.
+ */
+const highlightedFieldsByTable = computed<Map<TableKey, ReadonlySet<FieldKey>>>((prev) => {
+  const keys = hover.highlight.value.fieldKeys;
+  const next = new Map<TableKey, ReadonlySet<FieldKey>>();
+  if (keys.size > 0) {
+    for (const t of model.value.tables) {
+      const own = t.fields.filter((f) => keys.has(f.key)).map((f) => f.key);
+      if (own.length > 0) next.set(t.key, new Set(own));
+    }
+  }
+  return shareMap(prev, next, sameSet);
+});
+
+function highlightedFieldsOf (key: TableKey): ReadonlySet<FieldKey> {
+  return highlightedFieldsByTable.value.get(key) ?? NO_FIELDS;
+}
+
 watch(hover.hover, (target, prev) => {
   const tableOf = (t: typeof target) => {
     if (!t) return null;
     if (t.kind === 'table') return t.key;
-    if (t.kind === 'field') return t.tableKey;
+    if (t.kind === 'field' || t.kind === 'partial') return t.tableKey;
     return null;
   };
   const key = tableOf(target);
@@ -561,7 +617,7 @@ const colorPicker = computed(() => {
   if (t.kind === 'ref') {
     const ref = model.value.refs.find((r) => r.key === t.key);
     const g = geo.routes.value.get(t.key);
-    if (!ref || !g || !props.showRefs) return null;
+    if (!ref || !g || !props.showRefs || isBadged(ref)) return null;
     return {
       title: 'Color',
       current: ref.color ?? ref.lineColor,
@@ -723,20 +779,6 @@ function onBackgroundClick () {
   clearSelection();
 }
 
-/**
- * Text fields and dropdowns own the keys typed into them; Space must not pan while one has focus.
- * Monaco's input is a `div[role=textbox]` driven by the EditContext API, neither a textarea nor
- * contentEditable, so it is recognized by its role and its editor ancestor.
- */
-function isTypingTarget (el: Element | null): boolean {
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-    || (el as HTMLElement).isContentEditable
-    || el.getAttribute('role') === 'textbox'
-    || el.closest('.monaco-editor') !== null;
-}
-
 function onKeyDown (e: KeyboardEvent) {
   if (e.key === 'Escape') {
     hover.clearPin();
@@ -849,6 +891,8 @@ interface RenderEdge {
   highlighted: boolean;
   /** Whether the walking-ants overlay is mounted (capped when everything is highlighted). */
   animated: boolean;
+  /** A partial ref drawn only while its badge reveals it: the pointer passes through it. */
+  passive?: boolean;
 }
 
 /** Above this many highlighted edges, highlight-all mode drops the animated overlay to stay smooth. */
@@ -858,7 +902,8 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   const hl = hover.highlight.value;
   const all = props.highlightAll;
   const list: RenderEdge[] = [];
-  for (const r of props.showRefs ? model.value.refs : []) {
+  // Partial refs standing as badges are left out, from highlight-all too, unless their badge reveals them.
+  for (const r of geo.drawnRefs.value) {
     const g = geo.routes.value.get(r.key);
     if (g) {
       list.push({
@@ -867,6 +912,7 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
         geo: g,
         highlighted: all || hl.refKeys.has(r.key),
         animated: true,
+        passive: isBadged(r),
       });
     }
   }
@@ -964,17 +1010,71 @@ watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading
       });
     }
   }
-  if (changes.length > 0) emit('position-change', changes);
+  if (changes.length > 0) emit('position-change', changes, 'auto');
 }, {
   immediate: true,
   flush: 'post',
 });
+
+/**
+ * Arrange the tables and notes the view shows by group and lineage (see arrange.ts), with the
+ * sizes placement uses, and hand the positions to the host; hidden ones stay where they are.
+ * With `only`, just those tables are placed, around everything else. False when there is nothing
+ * to arrange or the model is behind the text.
+ */
+function arrange (only?: ReadonlySet<string>): boolean {
+  const m = model.value;
+  const tables = m.tables.filter((t) => !props.hidden.has(t.key));
+  const notes = m.notes.filter((n) => !props.hidden.has(n.key)).map((n) => ({
+    key: n.key,
+    w: props.positions[n.key]?.w ?? NOTE_W,
+    h: props.positions[n.key]?.h ?? NOTE_H,
+  }));
+  const pending = only && new Set(tables.filter((t) => only.has(t.key)).map((t) => t.key));
+  if (props.loading || (tables.length === 0 && notes.length === 0) || pending?.size === 0) return false;
+  const input = {
+    tables,
+    groups: m.groups,
+    deps: m.deps,
+    sizes: geo.fullSizes.value,
+    collapsed: new Map(m.groups
+      .filter((g) => props.collapsedGroups.has(g.key))
+      .map((g) => [g.key, collapsedGroupSize(measurer.measure(g.name, FONT_GROUP_NAME))])),
+    notes,
+  };
+  const positions = pending
+    ? arrangePending({
+        ...input,
+        current: new Map(Object.entries(props.positions)),
+        pending,
+      })
+    : arrangeByGroup(input).positions;
+  // Hand-drawn routes were drawn around the old positions; those relationships go back to automatic routing.
+  const shown = new Set(tables.map((t) => t.key));
+  const routes = m.refs
+    .filter((r) => r.endpoints.every((e) => shown.has(e.tableKey)) && (!pending || r.endpoints.some((e) => pending.has(e.tableKey))))
+    .map((r) => r.key);
+  emit('arrange', [...positions].map(([key, p]) => ({
+    key,
+    x: p.x,
+    y: p.y,
+  })), routes);
+  // Placing a few tables leaves the view where it is; a whole new arrangement is fitted.
+  if (!pending) refit();
+  return true;
+}
 
 // Keep the diagram fitted while the pane is still settling (fonts, editor, split sizes) until the
 // user zooms, pans, or drags. After that the viewport is theirs.
 let autoFit = true;
 function stopAutoFit () {
   autoFit = false;
+}
+
+/** Fit the whole diagram once positions just handed to the host are in, never zooming past 100%. */
+function refit () {
+  stopAutoFit();
+  nextTick(() => pz.fitTo(geo.contentBounds.value, 1));
 }
 watch([geo.contentBounds, pz.viewSize], ([bounds, size]) => {
   if (!autoFit || !bounds || size.w === 0 || size.h === 0) return;
@@ -1011,5 +1111,7 @@ defineExpose({
     stopAutoFit();
     pz.zoomOut();
   },
+  arrange,
+  refit,
 });
 </script>

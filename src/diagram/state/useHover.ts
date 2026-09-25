@@ -7,6 +7,8 @@ import type {
 export type HoverTarget =
   | { kind: 'table'; key: TableKey }
   | { kind: 'field'; tableKey: TableKey; fieldKey: FieldKey }
+  /** A partial badge in a table header: the refs that partial gives the table. */
+  | { kind: 'partial'; tableKey: TableKey; partial: string }
   | { kind: 'ref'; key: RefKey }
   | { kind: 'dep'; key: DepKey }
   | { kind: 'group'; key: GroupKey }
@@ -57,6 +59,10 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
       fieldKeys.add(target.fieldKey);
       refList = model.refsByField.get(target.fieldKey) ?? [];
       columnList = model.depsByField.get(target.fieldKey) ?? [];
+      break;
+    case 'partial':
+      tableKeys.add(target.tableKey);
+      refList = model.tablesByKey.get(target.tableKey)?.partialRefs?.find((p) => p.partial === target.partial)?.refKeys ?? [];
       break;
     case 'ref':
       refList = [target.key];
@@ -126,7 +132,8 @@ export function sameTarget (a: HoverTarget | null, b: HoverTarget | null): boole
   if (a === b) return true;
   if (!a || !b || a.kind !== b.kind) return false;
   if (a.kind === 'field' && b.kind === 'field') return a.fieldKey === b.fieldKey;
-  if (a.kind !== 'field' && b.kind !== 'field') return a.key === b.key;
+  if (a.kind === 'partial' && b.kind === 'partial') return a.tableKey === b.tableKey && a.partial === b.partial;
+  if ('key' in a && 'key' in b) return a.key === b.key;
   return false;
 }
 
