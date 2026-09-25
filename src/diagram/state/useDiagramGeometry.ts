@@ -21,6 +21,7 @@ import { collapsedGroupSize, groupBounds, contentBounds as boundsOf } from '../g
 import { lineageLayout } from '../geometry/lineageLayout';
 import { FONT_GROUP_NAME, NOTE_H, NOTE_W } from '../geometry/constants';
 import type { Point, Rect, Size } from '../geometry/rect';
+import { samePlain, sameRect, shareMap } from './share';
 
 export interface RefGeometry {
   a: AnchorPoint;
@@ -134,6 +135,10 @@ function dir (side: Side): 1 | -1 {
  * The reactive spine of the renderer: rows, measured sizes, boxes, anchors,
  * routes, group boxes, and content bounds, all derived from the model, the
  * stored positions, the detail level, collapsed groups, and the live drag override.
+ *
+ * Boxes, group boxes, and routes keep the previous object for everything whose values did not
+ * change (see share.ts), so a drag frame re-renders only the moved tables, their groups, and
+ * their edges, not the whole diagram.
  */
 export function useDiagramGeometry (input: GeometryInputs) {
   const rowsByTable = computed(() => {
@@ -196,7 +201,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     });
   });
 
-  const boxes = computed(() => {
+  const boxes = computed<Map<TableKey, Rect>>((prev) => {
     const map = new Map<TableKey, Rect>();
     const override = input.dragOverride.value;
     const derived = lineage.value?.positions;
@@ -219,16 +224,16 @@ export function useDiagramGeometry (input: GeometryInputs) {
         h: size.height,
       });
     }
-    return map;
+    return shareMap(prev, map, sameRect);
   });
 
   const unplacedTables = computed(() => (input.lineageLayout.value
     ? []
     : input.model.value.tables.filter((t) => !boxes.value.has(t.key) && !input.hidden.value.has(t.key)).map((t) => t.key)));
 
-  const noteBoxes = computed(() => {
+  const noteBoxes = computed<Map<NoteKey, Rect>>((prev) => {
     const map = new Map<NoteKey, Rect>();
-    if (input.lineageLayout.value) return map;
+    if (input.lineageLayout.value) return shareMap(prev, map, sameRect);
     const override = input.dragOverride.value;
     for (const n of input.model.value.notes) {
       if (input.hidden.value.has(n.key)) continue;
@@ -254,7 +259,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
         h: size.h,
       });
     }
-    return map;
+    return shareMap(prev, map, sameRect);
   });
 
   const unplacedNotes = computed(() => (input.lineageLayout.value
@@ -267,40 +272,43 @@ export function useDiagramGeometry (input: GeometryInputs) {
     return map;
   });
 
-  /** Group boxes: expanded groups wrap their members; collapsed ones are a compact box at the same spot. */
-  const groupBoxes = computed<GroupBox[]>(() => {
+  /**
+   * Group boxes: expanded groups wrap their members; collapsed ones are a compact box at the same
+   * spot. A group whose box and state did not change keeps its previous entry, and the list stays
+   * the same list while no group changed.
+   */
+  const groupBoxes = computed<GroupBox[]>((prev) => {
     void input.measureVersion.value;
     const out: GroupBox[] = [];
-    if (input.lineageLayout.value) return out;
+    if (input.lineageLayout.value) return prev?.length === 0 ? prev : out;
+    const before = new Map((prev ?? []).map((g) => [g.group.key, g]));
     for (const group of input.model.value.groups) {
       const members = group.tableKeys.map((k) => boxes.value.get(k)).filter((b): b is Rect => !!b);
       const bounds = groupBounds(members);
       if (!bounds) continue;
       const nameW = input.measurer.measure(group.name, FONT_GROUP_NAME);
       const collapsed = input.collapsedGroups.value.has(group.key);
-      if (!collapsed) {
-        out.push({
-          group,
-          box: bounds,
-          collapsed: false,
-          memberCount: members.length,
-          nameW,
-        });
-        continue;
-      }
-      out.push({
-        group,
-        box: {
-          x: bounds.x,
-          y: bounds.y,
-          ...collapsedGroupSize(nameW),
-        },
-        collapsed: true,
-        memberCount: members.length,
-        nameW,
-      });
+      const box: Rect = collapsed
+        ? {
+            x: bounds.x,
+            y: bounds.y,
+            ...collapsedGroupSize(nameW),
+          }
+        : bounds;
+      const old = before.get(group.key);
+      const same = old && old.group === group && old.collapsed === collapsed && old.memberCount === members.length
+        && old.nameW === nameW && sameRect(old.box, box);
+      out.push(same
+        ? old
+        : {
+            group,
+            box: old && sameRect(old.box, box) ? old.box : box,
+            collapsed,
+            memberCount: members.length,
+            nameW,
+          });
     }
-    return out;
+    return prev && prev.length === out.length && out.every((g, i) => g === prev[i]) ? prev : out;
   });
 
   /** For tables hidden inside a collapsed group: the group box that stands in for them. */
@@ -338,7 +346,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     return list;
   });
 
-  const routes = computed(() => {
+  const routes = computed<Map<string, RefGeometry>>((prev) => {
     const result = new Map<string, RefGeometry>();
     const anchors = new Map<string, [AnchorPoint, AnchorPoint]>();
     const markers = new Map<string, [MarkerGeometry, MarkerGeometry]>();
@@ -443,7 +451,8 @@ export function useDiagramGeometry (input: GeometryInputs) {
         rails,
       });
     }
-    return result;
+    // Every route is recomputed (it is cheap); only the ones whose geometry changed are new objects.
+    return shareMap(prev, result, samePlain);
   });
 
   const contentBounds = computed<Rect | null>(() => boundsOf([

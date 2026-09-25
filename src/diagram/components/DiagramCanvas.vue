@@ -74,7 +74,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
           />
@@ -99,7 +99,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
           />
@@ -123,7 +123,7 @@
             :rows="t.rows"
             :size="t.size"
             :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
-            :highlighted-fields="hover.highlight.value.fieldKeys"
+            :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="true"
           />
@@ -185,6 +185,7 @@ import type {
   ColorChangePayload, ColorTarget, DetailLevel, PartialRefMode, PositionChange, PositionsMap, TableLinkPayload,
 } from '@/types/diagram';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
+import type { FieldKey, TableKey } from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod } from '../geometry/lod';
 import { collapsedGroupSize, placeNewItems, placeNewNotes } from '../geometry/layout';
@@ -205,6 +206,7 @@ import {
 } from '../state/useDiagramGeometry';
 import { useDrag, type DragTarget } from '../state/useDrag';
 import { useHover } from '../state/useHover';
+import { sameSet, shareMap } from '../state/share';
 import { usePanZoom } from '../state/usePanZoom';
 import { useTooltip } from '../state/useTooltip';
 import DiagramDefs from './DiagramDefs.vue';
@@ -507,6 +509,29 @@ function changesFor (target: DragTarget, pos: Point): PositionChange[] {
 // Hover and highlight
 const suppressed = computed(() => drag.dragging.value !== null || pz.isPanning.value || marquee.value !== null);
 const hover = useHover(model, suppressed);
+
+/** The highlighted fields of every table with none; one shared set, so a hover leaves those tables alone. */
+const NO_FIELDS: ReadonlySet<FieldKey> = new Set();
+
+/**
+ * Highlighted fields by table. Each table gets only its own, and the same set while they stay the
+ * same, so a hover re-renders only the tables whose highlight changed rather than every table.
+ */
+const highlightedFieldsByTable = computed<Map<TableKey, ReadonlySet<FieldKey>>>((prev) => {
+  const keys = hover.highlight.value.fieldKeys;
+  const next = new Map<TableKey, ReadonlySet<FieldKey>>();
+  if (keys.size > 0) {
+    for (const t of model.value.tables) {
+      const own = t.fields.filter((f) => keys.has(f.key)).map((f) => f.key);
+      if (own.length > 0) next.set(t.key, new Set(own));
+    }
+  }
+  return shareMap(prev, next, sameSet);
+});
+
+function highlightedFieldsOf (key: TableKey): ReadonlySet<FieldKey> {
+  return highlightedFieldsByTable.value.get(key) ?? NO_FIELDS;
+}
 
 watch(hover.hover, (target, prev) => {
   const tableOf = (t: typeof target) => {

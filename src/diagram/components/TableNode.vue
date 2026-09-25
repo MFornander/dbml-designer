@@ -230,6 +230,7 @@ import {
 import { roundedTopRectPath } from '../geometry/pathBuilder';
 import { textColorFor } from '../geometry/color';
 import { useDiagramContext } from '../state/context';
+import { sameSet } from '../state/share';
 import SettingsGear from './SettingsGear.vue';
 
 const props = defineProps<{
@@ -265,10 +266,15 @@ const showGear = computed(() => {
   return (s.kind === 'field' || s.kind === 'partial') && s.tableKey === props.table.key;
 });
 
-/** Badges light up with their refs, as the lines they stand in for would: hovering the badge, its table, or a table it references. */
-const highlightedPartials = computed(() => {
+/**
+ * Badges light up with their refs, as the lines they stand in for would: hovering the badge, its
+ * table, or a table it references. The same set comes back while its members stay the same, so a
+ * hover elsewhere does not re-render this table.
+ */
+const highlightedPartials = computed<ReadonlySet<string>>((prev) => {
   const refKeys = ctx.highlight.value.refKeys;
-  return new Set((props.table.partialRefs ?? []).filter((p) => p.refKeys.some((k) => refKeys.has(k))).map((p) => p.partial));
+  const next = new Set((props.table.partialRefs ?? []).filter((p) => p.refKeys.some((k) => refKeys.has(k))).map((p) => p.partial));
+  return prev && sameSet(prev, next) ? prev : next;
 });
 const headerTextColor = computed(() => {
   const c = props.table.headerColor ?? props.table.groupColor;
