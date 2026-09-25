@@ -22,6 +22,7 @@
       @table-hover="onTableHover"
       @set-color="onSetColor"
       @zoom-change="zoom = $event"
+      @arrange="onArrange"
     />
 
     <div
@@ -44,6 +45,22 @@
       >
         Lineage layout: only tables with lineage edges, ordered by dependency with upstream on the left
         <span v-if="model.deps.length === 0"> (no Dep edges in this schema, so nothing to show)</span>
+      </div>
+      <!-- Arrange from the View menu: what happened, and a way back until the layout changes again -->
+      <div
+        v-if="arrangedTables > 0"
+        class="pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded bg-white text-gray-700 text-xs font-medium shadow dark:bg-[#2d2f35] dark:text-gray-200"
+        role="status"
+      >
+        <span>Arranged {{ arrangedTables }} {{ arrangedTables === 1 ? 'table' : 'tables' }}</span>
+        <button
+          type="button"
+          class="text-blue-600 hover:underline cursor-pointer dark:text-blue-300"
+          title="Put everything back where it was (⌘Z)"
+          @click="undoArrange"
+        >
+          Undo
+        </button>
       </div>
     </div>
 
@@ -150,6 +167,7 @@ import DetailLevelSelect from '@/components/DetailLevelSelect.vue';
 import DiagramViewsPanel from '@/components/DiagramViewsPanel.vue';
 import EdgeModeSelect from '@/components/EdgeModeSelect.vue';
 import ErrorsPopover from '@/components/problems/ErrorsPopover.vue';
+import { useArrange } from '@/components/useArrange';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { offsetAt, setColorSetting, setRefColor } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
@@ -227,4 +245,7 @@ function onTableHover (payload: TableLinkPayload | null) {
       }
     : null);
 }
+
+// Arrange, asked for from the header's View menu, runs here where the canvas measures the tables.
+const { noticeTables: arrangedTables, apply: onArrange, undo: undoArrange } = useArrange(canvas);
 </script>

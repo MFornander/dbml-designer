@@ -1,9 +1,9 @@
 import {
-  GROUP_HEADER_H, GROUP_PAD, NOTE_GAP, NOTE_H, NOTE_W,
-  PLACE_COL_GAP, PLACE_COL_HEIGHT, PLACE_ROW_GAP,
+  GROUP_COLLAPSED_BODY_H, GROUP_COLLAPSED_MIN_W, GROUP_HEADER_CONTROLS_W, GROUP_HEADER_H, GROUP_NAME_X, GROUP_PAD,
+  NOTE_GAP, NOTE_H, NOTE_W, PLACE_COL_GAP, PLACE_COL_HEIGHT, PLACE_ROW_GAP,
 } from './constants';
 import {
-  bottom, inflate, intersects, right, snap8, union, type Point, type Rect,
+  bottom, inflate, intersects, right, snap8, union, type Point, type Rect, type Size,
 } from './rect';
 
 export interface PlacementItem {
@@ -126,6 +126,14 @@ export function groupBounds (memberBoxes: readonly Rect[]): Rect | null {
     y: padded.y - GROUP_HEADER_H,
     w: padded.w,
     h: padded.h + GROUP_HEADER_H,
+  };
+}
+
+/** Size of the box a collapsed group is drawn as: a header wide enough for its name and controls, over a short body. */
+export function collapsedGroupSize (nameW: number): Size {
+  return {
+    w: Math.max(GROUP_COLLAPSED_MIN_W, Math.ceil(GROUP_NAME_X + nameW + GROUP_HEADER_CONTROLS_W)),
+    h: GROUP_HEADER_H + GROUP_COLLAPSED_BODY_H,
   };
 }
 

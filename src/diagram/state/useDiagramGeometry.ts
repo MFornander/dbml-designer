@@ -17,12 +17,9 @@ import {
 } from '../geometry/routing';
 import { roundedPolylinePath, sCurve } from '../geometry/pathBuilder';
 import { markerGeometry, type MarkerGeometry } from '../geometry/markers';
-import { groupBounds, contentBounds as boundsOf } from '../geometry/layout';
+import { collapsedGroupSize, groupBounds, contentBounds as boundsOf } from '../geometry/layout';
 import { lineageLayout } from '../geometry/lineageLayout';
-import {
-  FONT_GROUP_NAME, GROUP_COLLAPSED_BODY_H, GROUP_COLLAPSED_MIN_W, GROUP_HEADER_CONTROLS_W, GROUP_HEADER_H,
-  GROUP_NAME_X, NOTE_H, NOTE_W,
-} from '../geometry/constants';
+import { FONT_GROUP_NAME, NOTE_H, NOTE_W } from '../geometry/constants';
 import type { Point, Rect, Size } from '../geometry/rect';
 
 export interface RefGeometry {
@@ -296,8 +293,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
         box: {
           x: bounds.x,
           y: bounds.y,
-          w: Math.max(GROUP_COLLAPSED_MIN_W, Math.ceil(GROUP_NAME_X + nameW + GROUP_HEADER_CONTROLS_W)),
-          h: GROUP_HEADER_H + GROUP_COLLAPSED_BODY_H,
+          ...collapsedGroupSize(nameW),
         },
         collapsed: true,
         memberCount: members.length,

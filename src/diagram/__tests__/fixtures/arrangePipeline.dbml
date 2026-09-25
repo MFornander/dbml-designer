@@ -1,0 +1,94 @@
+TablePartial per_config {
+  config_id text [pk, ref: - input.config.config_id]
+}
+
+TablePartial per_config_component {
+  config_id text [not null, ref: > input.config.config_id]
+  component text [not null, ref: > input.component.name]
+  indexes {
+    (config_id, component) [pk]
+  }
+}
+
+Table input.config [headercolor: #6B7280] {
+  config_id text [pk]
+}
+
+Table input.component [headercolor: #6B7280] {
+  name text [pk]
+  kind text [not null]
+}
+
+Table input.site [headercolor: #6B7280] {
+  ~per_config
+  pue double [not null, unit: 'ratio']
+}
+
+Table count.component_count [headercolor: #2563EB] {
+  ~per_config_component
+  quantity double [not null, unit: 'count']
+}
+
+Table power.component_power [headercolor: #2563EB] {
+  ~per_config_component
+  watts double [not null, unit: 'W']
+}
+
+Table power.dc_power [headercolor: #059669] {
+  ~per_config
+  watts double [not null, unit: 'W']
+}
+
+Table money.component_money [headercolor: #2563EB] {
+  ~per_config_component
+  amount double [not null, unit: 'USD']
+}
+
+Table money.dc_opex [headercolor: #059669] {
+  ~per_config
+  amount double [not null, unit: 'USD']
+}
+
+TableGroup input {
+  input.config
+  input.component
+  input.site
+}
+
+TableGroup count {
+  count.component_count
+}
+
+TableGroup power {
+  power.component_power
+  power.dc_power
+}
+
+TableGroup money {
+  money.component_money
+  money.dc_opex
+}
+
+Dep component_count {
+  input.config -> count.component_count
+  input.component -> count.component_count
+}
+
+Dep component_power {
+  count.component_count -> power.component_power
+  input.component -> power.component_power
+}
+
+Dep dc_power {
+  power.component_power -> power.dc_power
+  input.site -> power.dc_power
+}
+
+Dep component_money {
+  count.component_count -> money.component_money
+  input.component -> money.component_money
+}
+
+Dep dc_opex {
+  power.dc_power -> money.dc_opex
+}

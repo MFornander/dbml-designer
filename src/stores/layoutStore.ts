@@ -1,6 +1,9 @@
-import { computed, watch } from 'vue';
+import {
+  computed, ref, shallowRef, toRaw, watch,
+} from 'vue';
 import { defineStore } from 'pinia';
 import type { PositionChange, PositionsMap, XY } from '@/types/diagram';
+import { isNoteKey } from '@/diagram/keys';
 import { usePersistedRef } from '@/utils/persistedRef';
 import type { Database } from '@dbml/parse';
 import {
@@ -118,6 +121,29 @@ const asSnapshot = (layer: LayerState): LayoutSnapshot => ({
 
 const EMPTY_LAYER: LayerState = emptyLayer();
 
+/**
+ * What the View menu asks the diagram for: arranging the active view, placing only the tables
+ * auto-placement put down (`arrange-new`), or taking the last arrangement back.
+ */
+export type ArrangeRequest = 'arrange' | 'arrange-new' | 'undo';
+
+/** Where a position change comes from: a table put down because it had no position, or anything else. */
+export type PositionOrigin = 'auto';
+
+/** The last arrangement, while it can still be taken back. */
+interface ArrangeUndo {
+  /** The view whose layer was arranged; null for the Default View. */
+  view: string | null;
+  /** The layer as it was before. */
+  before: LayerState;
+  /** The tables auto-placed and not yet arranged, as they were before. */
+  newTables: ReadonlySet<string>;
+  /** The objects the layer was left made of; once any is replaced, the layer changed since. */
+  after: readonly unknown[];
+  /** How many tables were placed. */
+  tables: number;
+}
+
 export const useLayoutStore = defineStore('layout', () => {
   const state = usePersistedRef<LayoutState>('layout', emptyState, {
     debounceMs: 250,
@@ -167,10 +193,15 @@ export const useLayoutStore = defineStore('layout', () => {
   const collapsedGroups = computed<ReadonlySet<string>>(() => new Set(effective.value.collapsedGroups));
   const edgeRoutes = computed<Readonly<Record<string, number[]>>>(() => effective.value.edgeRoutes);
 
+  /** A view's own layer: the file's for the Default View (null), else that view's. */
+  function layerIn (name: string | null): LayerState {
+    return name === null ? layerOf(state.value) : state.value.views[name] ?? emptyLayer();
+  }
+
   /** Change the layer being edited: the file's for the Default View, the active view's otherwise. */
   function editLayer (update: (layer: LayerState) => LayerState): void {
     const name = activeView.value;
-    const current = name === null ? layerOf(state.value) : state.value.views[name] ?? emptyLayer();
+    const current = layerIn(name);
     const next = update(current);
     if (next === current) return;
     state.value = name === null
@@ -207,27 +238,130 @@ export const useLayoutStore = defineStore('layout', () => {
     });
   }
 
-  function applyPositionChanges (changes: ReadonlyArray<PositionChange>): void {
-    if (changes.length === 0) return;
-    editLayer((layer) => {
-      const next: Record<string, XY> = { ...layer.positions };
-      for (const c of changes) {
-        const prev = next[c.key] ?? base.value.positions[c.key];
-        const entry: XY = {
-          x: c.x,
-          y: c.y,
-        };
-        const w = c.w ?? prev?.w;
-        const h = c.h ?? prev?.h;
-        if (w !== undefined) entry.w = w;
-        if (h !== undefined) entry.h = h;
-        next[c.key] = entry;
-      }
-      return {
-        ...layer,
-        positions: next,
+  /** A layer's positions with the changes applied; a note keeps its size unless the change has one. */
+  function positionsWith (positions: Readonly<Record<string, XY>>, changes: ReadonlyArray<PositionChange>): Record<string, XY> {
+    const next: Record<string, XY> = { ...positions };
+    for (const c of changes) {
+      const prev = next[c.key] ?? base.value.positions[c.key];
+      const entry: XY = {
+        x: c.x,
+        y: c.y,
       };
-    });
+      const w = c.w ?? prev?.w;
+      const h = c.h ?? prev?.h;
+      if (w !== undefined) entry.w = w;
+      if (h !== undefined) entry.h = h;
+      next[c.key] = entry;
+    }
+    return next;
+  }
+
+  /**
+   * Tables auto-placement put down since this layout was loaded, which nothing has moved since:
+   * what Arrange new tables places. Kept for the session only.
+   */
+  const newTables = shallowRef<ReadonlySet<string>>(new Set());
+
+  function trackNewTables (changes: ReadonlyArray<PositionChange>, origin?: PositionOrigin): void {
+    const next = new Set(newTables.value);
+    for (const c of changes) {
+      if (isNoteKey(c.key)) continue;
+      if (origin === 'auto') next.add(c.key);
+      else next.delete(c.key);
+    }
+    if (next.size !== newTables.value.size || [...next].some((k) => !newTables.value.has(k))) newTables.value = next;
+  }
+
+  function applyPositionChanges (changes: ReadonlyArray<PositionChange>, origin?: PositionOrigin): void {
+    if (changes.length === 0) return;
+    editLayer((layer) => ({
+      ...layer,
+      positions: positionsWith(layer.positions, changes),
+    }));
+    trackNewTables(changes, origin);
+  }
+
+  /** A layer's routes with these relationships back on automatic routing, undoing inherited routes where needed. */
+  function routesWithout (routes: Readonly<Record<string, number[]>>, keys: readonly string[]): Record<string, number[]> {
+    let next = routes as Record<string, number[]>;
+    for (const key of keys) {
+      const inherited = key in base.value.edgeRoutes;
+      // Already automatic: nothing drawn here, nothing inherited, or an inherited one already undone.
+      if (inherited ? next[key]?.length === 0 : !(key in next)) continue;
+      if (next === routes) next = { ...routes };
+      if (inherited) next[key] = [];
+      else delete next[key];
+    }
+    return next;
+  }
+
+  const arrangeRequest = ref<ArrangeRequest | null>(null);
+  const lastArrange = shallowRef<ArrangeUndo | null>(null);
+
+  /** Ask for an arrangement or for taking one back; arranging needs the measured table sizes, so the diagram pane carries it out. */
+  function requestArrange (request: ArrangeRequest): void {
+    arrangeRequest.value = request;
+  }
+
+  function clearArrangeRequest (): void {
+    arrangeRequest.value = null;
+  }
+
+  /** The objects a view's own layer is made of, unwrapped. Every edit replaces at least one of them. */
+  function layerParts (name: string | null): unknown[] {
+    const layer = name === null ? toRaw(state.value) : toRaw(toRaw(state.value).views)[name];
+    return layer ? [layer.positions, layer.collapsedGroups, layer.expandedGroups, layer.edgeRoutes].map((part) => toRaw(part)) : [];
+  }
+
+  /**
+   * The last arrangement can be taken back while its view is active and nothing has changed that
+   * view's layer since: no drag, fold, route, reset, or other file in between.
+   */
+  const canUndoArrange = computed(() => {
+    const last = lastArrange.value;
+    if (!last || last.view !== activeView.value) return false;
+    const parts = layerParts(last.view);
+    return parts.length === last.after.length && parts.every((part, i) => part === last.after[i]);
+  });
+
+  /** Tables placed by the arrangement that can be taken back, or 0 when there is none. */
+  const undoableArrangeTables = computed(() => (canUndoArrange.value ? lastArrange.value!.tables : 0));
+
+  /**
+   * Arrange the layer being edited in one step: the new positions, and automatic routing again
+   * for `resetRoutes`, whose hand-drawn routes were drawn around the old positions. The layer as
+   * it was is kept so `undoArrange` can put it back.
+   */
+  function applyArrangement (changes: ReadonlyArray<PositionChange>, resetRoutes: readonly string[] = []): void {
+    if (changes.length === 0) return;
+    const view = activeView.value;
+    const before = layerIn(view);
+    const newBefore = newTables.value;
+    editLayer((layer) => ({
+      ...layer,
+      positions: positionsWith(layer.positions, changes),
+      edgeRoutes: routesWithout(layer.edgeRoutes, resetRoutes),
+    }));
+    trackNewTables(changes);
+    lastArrange.value = {
+      view,
+      before,
+      newTables: newBefore,
+      after: layerParts(view),
+      tables: changes.filter((c) => !isNoteKey(c.key)).length,
+    };
+  }
+
+  /** Put back the layer the last arrangement replaced; false when that can no longer be done. */
+  function undoArrange (): boolean {
+    const last = lastArrange.value;
+    if (!last || !canUndoArrange.value) return false;
+    lastArrange.value = null;
+    editLayer(() => layerFrom(last.before));
+    newTables.value = last.newTables;
+    // Elements removed from the DBML since have no business coming back.
+    if (parser.rawDatabase && !parser.isLoading) pruneAgainst(parser.rawDatabase);
+    return true;
   }
 
   function setPosition (key: string, xy: XY): void {
@@ -305,6 +439,7 @@ export const useLayoutStore = defineStore('layout', () => {
 
   function resetLayout (): void {
     state.value = emptyState();
+    newTables.value = new Set();
   }
 
   function pruneAgainst (db: Database): void {
@@ -344,6 +479,7 @@ export const useLayoutStore = defineStore('layout', () => {
       ...layerFrom(snap),
       views: Object.fromEntries(Object.entries(snap.views ?? {}).map(([name, layer]) => [name, layerFrom(layer)])),
     };
+    newTables.value = new Set();
     // While a parse or its imports are on the way the model is the previous text's; the watch above prunes once it lands.
     if (parser.rawDatabase && !parser.isLoading) pruneAgainst(parser.rawDatabase);
   }
@@ -379,7 +515,15 @@ export const useLayoutStore = defineStore('layout', () => {
     collapsedGroups,
     edgeRoutes,
     base,
+    newTables,
+    arrangeRequest,
+    canUndoArrange,
+    undoableArrangeTables,
     applyPositionChanges,
+    applyArrangement,
+    undoArrange,
+    requestArrange,
+    clearArrangeRequest,
     setPosition,
     toggleGroup,
     setEdgeRoute,

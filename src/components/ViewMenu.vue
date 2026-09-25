@@ -118,6 +118,55 @@
         </span>
         <span>Delete</span>
       </button>
+      <!-- Layout actions on the active view: its own arrangement changes, the DBML does not -->
+      <div :class="MENU_DIVIDER" />
+      <button
+        type="button"
+        :class="MENU_ITEM"
+        role="option"
+        aria-selected="false"
+        :disabled="!canArrange"
+        :title="canArrange ? 'Lay out the tables this view shows: table groups as columns in Dep order' : 'Nothing to arrange'"
+        @click="arrange"
+      >
+        <span :class="MENU_SLOT">
+          <PhKanban class="w-4 h-4" />
+        </span>
+        <span>Arrange</span>
+      </button>
+      <button
+        type="button"
+        :class="MENU_ITEM"
+        role="option"
+        aria-selected="false"
+        :disabled="newTables === 0"
+        :title="newTables > 0 ? 'Place the tables put down automatically since the file was opened by their group and Dep edges, leaving the rest where it is' : 'No tables were put down automatically since the file was opened'"
+        @click="arrangeNew"
+      >
+        <span :class="MENU_SLOT">
+          <PhColumnsPlusRight class="w-4 h-4" />
+        </span>
+        <span>Arrange new tables</span>
+        <span
+          v-if="newTables > 0"
+          :class="MENU_HINT"
+        >{{ newTables }}</span>
+      </button>
+      <button
+        type="button"
+        :class="MENU_ITEM"
+        role="option"
+        aria-selected="false"
+        :disabled="!layout.canUndoArrange"
+        :title="layout.canUndoArrange ? 'Put everything back where it was before Arrange' : 'Only right after Arrange, before anything else moves'"
+        @click="undoArrange"
+      >
+        <span :class="MENU_SLOT">
+          <PhArrowUUpLeft class="w-4 h-4" />
+        </span>
+        <span>Undo arrange</span>
+        <span :class="MENU_HINT">⌘Z</span>
+      </button>
     </div>
   </div>
 </template>
@@ -127,11 +176,13 @@ import {
   computed, onBeforeUnmount, onMounted, ref, useTemplateRef,
 } from 'vue';
 import {
-  PhArrowCounterClockwise, PhCaretDown, PhCheck, PhPencilSimple, PhPlus, PhSidebarSimple, PhStackSimple, PhTrash,
+  PhArrowCounterClockwise, PhArrowUUpLeft, PhCaretDown, PhCheck, PhColumnsPlusRight, PhKanban, PhPencilSimple, PhPlus, PhSidebarSimple,
+  PhStackSimple, PhTrash,
 } from '@phosphor-icons/vue';
 import {
-  MENU_ACTIVE, MENU_DIVIDER, MENU_ITEM, MENU_PANEL, MENU_SLOT,
+  MENU_ACTIVE, MENU_DIVIDER, MENU_HINT, MENU_ITEM, MENU_PANEL, MENU_SLOT,
 } from '@/components/common/menuStyles';
+import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
 import { useViewStore } from '@/stores/viewStore';
@@ -140,12 +191,14 @@ import { useViewActions } from '@/components/useViewActions';
 /**
  * The header's view switcher, titled like the bottom toolbar's pickers: the active diagram view
  * with a list of the Default View, every `DiagramView` block, "New View", and Rename and Delete
- * for the active one, plus the button that shows or hides the Diagram Views panel where a view
- * is shaped, named, and saved.
+ * for the active one, then Arrange, Arrange new tables, and Undo arrange for the active view's
+ * layout, plus the button that shows or hides the Diagram Views panel where a view is shaped,
+ * named, and saved.
  */
 const views = useViewStore();
 const ui = useUiStore();
 const parser = useParserStore();
+const layout = useLayoutStore();
 const actions = useViewActions();
 
 /** Rename and Delete act on a named view declared in this text; the Default View has neither. */
@@ -205,6 +258,31 @@ function remove () {
 function reset () {
   open.value = false;
   views.revert();
+}
+
+/** Something the view shows can be laid out. */
+const canArrange = computed(() => {
+  const m = views.model;
+  return !!m && [...m.tables, ...m.notes].some((e) => !views.hidden.has(e.key));
+});
+
+/** Tables auto-placement put down that this view shows and nothing has moved since. */
+const newTables = computed(() => (views.model?.tables ?? []).filter((t) => layout.newTables.has(t.key) && !views.hidden.has(t.key)).length);
+
+/** The diagram pane arranges, since it knows the table sizes; the menu only asks. */
+function arrange () {
+  open.value = false;
+  layout.requestArrange('arrange');
+}
+
+function arrangeNew () {
+  open.value = false;
+  layout.requestArrange('arrange-new');
+}
+
+function undoArrange () {
+  open.value = false;
+  layout.requestArrange('undo');
 }
 
 function onDocumentPointerDown (e: PointerEvent) {
