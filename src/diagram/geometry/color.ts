@@ -101,7 +101,22 @@ export function luminance (hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Dark or light text for the given background. */
+const DARK_TEXT = '#171C26';
+const LIGHT_TEXT = '#FFFFFF';
+const DARK_TEXT_LUMINANCE = luminance(DARK_TEXT);
+const LIGHT_TEXT_LUMINANCE = luminance(LIGHT_TEXT);
+
+/** WCAG contrast ratio of two relative luminances, from 1 to 21. */
+export function contrastRatio (a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/**
+ * Dark or light text for the given background: whichever has the higher contrast ratio. That
+ * turns to dark text from a luminance of about 0.2, so mid-tone colors such as orange, pink, and
+ * teal get dark text, as do yellow and white; deep blues, reds, and purples keep white.
+ */
 export function textColorFor (bgHex: string): string {
-  return luminance(bgHex) > 0.45 ? '#171C26' : '#FFFFFF';
+  const bg = luminance(bgHex);
+  return contrastRatio(bg, DARK_TEXT_LUMINANCE) > contrastRatio(bg, LIGHT_TEXT_LUMINANCE) ? DARK_TEXT : LIGHT_TEXT;
 }

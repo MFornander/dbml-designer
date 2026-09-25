@@ -333,3 +333,52 @@ describe('TableNode partial badges', () => {
     wrapper.unmount();
   });
 });
+
+describe('TableNode header text', () => {
+  function mountWith (extra: Partial<TableVM>) {
+    const t = table('public.t', [field('public.t', 'id', { pk: true })], { note: 'has a note icon', ...extra });
+    const rows = visibleFields(t, 'all');
+    const size = computeTableSize(t, rows, measurer);
+    return mount(TableNode, {
+      props: {
+        table: t,
+        box: {
+          x: 0,
+          y: 0,
+          w: size.width,
+          h: size.height,
+        },
+        rows,
+        size,
+        highlighted: false,
+        highlightedFields: new Set<string>(),
+        isDragging: false,
+      },
+      global: {
+        provide: {
+          [DIAGRAM_CTX as symbol]: makeContext(),
+        },
+      },
+    });
+  }
+  const headerText = (w: ReturnType<typeof mountWith>) => (w.element as SVGGElement).style.getPropertyValue('--dg-header-text');
+
+  it('draws the name, schema, and note icon dark on a light header and white on a deep one', () => {
+    for (const color of ['#F1C40F', '#E4A62E', '#DE65C3', '#FFFFFF']) {
+      const w = mountWith({ headerColor: color });
+      expect(headerText(w), color).toBe('#171C26');
+      w.unmount();
+    }
+    const navy = mountWith({ headerColor: '#011B4E' });
+    expect(headerText(navy)).toBe('#FFFFFF');
+    navy.unmount();
+    // A table in a colored group takes its text color from the group's.
+    const teal = mountWith({ headerColor: null, groupColor: '#24BAB1' });
+    expect(headerText(teal)).toBe('#171C26');
+    teal.unmount();
+    // A plain header leaves the palette's header text alone.
+    const plain = mountWith({ headerColor: null });
+    expect(headerText(plain)).toBe('');
+    plain.unmount();
+  });
+});

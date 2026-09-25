@@ -4,6 +4,7 @@
     :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging }"
     :data-key="table.key"
     :transform="`translate(${box.x} ${box.y})`"
+    :style="headerTextVars"
     @pointerenter="onEnter"
     @pointerleave="onLeave"
     @pointerdown="onDown"
@@ -275,6 +276,14 @@ const highlightedPartials = computed<ReadonlySet<string>>((prev) => {
   const refKeys = ctx.highlight.value.refKeys;
   const next = new Set((props.table.partialRefs ?? []).filter((p) => p.refKeys.some((k) => refKeys.has(k))).map((p) => p.partial));
   return prev && sameSet(prev, next) ? prev : next;
+});
+/**
+ * On a colored header, the name, schema label, and note icon take whichever of dark or white text
+ * reads better on it (they are drawn with `--dg-header-text`); a plain header keeps the palette's.
+ */
+const headerTextVars = computed(() => {
+  const c = props.table.headerColor ?? props.table.groupColor;
+  return c ? { '--dg-header-text': textColorFor(c) } : undefined;
 });
 const headerTextColor = computed(() => {
   const c = props.table.headerColor ?? props.table.groupColor;

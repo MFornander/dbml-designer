@@ -121,6 +121,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Drags and hovers re-render only what changed: table, note, and group boxes and edge routes keep the previous object whenever its values are unchanged (`src/diagram/state/share.ts`), and each table receives only its own highlighted fields, so a drag frame re-renders the moved table, its group, and its edges instead of the whole diagram, and a hover re-renders only what it highlights. Counted with the real canvas on 200 tables and 400 refs: five drag frames went from 1,000 table and 2,000 edge updates to 5 and 20, and one hover from 200 table updates to 5; `DiagramCanvasRenders.test.ts` asserts these, and that panning and zooming still re-render no table, edge, group, or note.
 
+- [x] Header text contrast: on a colored table header, the name, schema label, note icon, gear, and partial badges use whichever of dark or white text has the higher WCAG contrast ratio, instead of the name, schema, and icon always being white. Light and mid-tone headers such as yellow, orange, pink, teal, and white now read in dark text; group headers and sticky notes follow the same rule.
+
 ### Remaining
 
 - [ ] Records: an icon on the table header that opens a preview of the sample rows.
