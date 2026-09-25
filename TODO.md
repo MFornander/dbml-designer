@@ -27,7 +27,7 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 | Ref: `delete` / `update` rules | Labels in the ref popup | Lines in the relationship tooltip | Full |
 | Ref: inactive | Dashed line | Dashed line, noted in tooltip | Full |
 | Enum (values, value notes, quoted names) | Values in the field tooltip | Same | Full |
-| TablePartial and `~injection` | Fields spliced in, injected fields marked | Fields spliced in with correct precedence and refs; tilde icon and "from partial" in tooltip | Full |
+| TablePartial and `~injection` | Fields spliced in, injected fields marked | Fields spliced in with correct precedence and refs; tilde icon and "from partial" in tooltip; the refs a partial brings are one `~partial` badge in the table header by default (hover draws them and lists them with the partial's key), or lines by toggle; imported partials included | Full |
 | Records / Data Sample | Records icon on the header opens a preview | Parsed, not shown | Not surfaced |
 
 ### Enrichment and visualization
@@ -114,6 +114,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 - [x] Toolchain: TypeScript 6.0, ESLint 10, Vite 8, Vitest 5, Pinia 4, Monaco 0.56 (EditContext input; Space-to-pan leaves typing in either editor alone), `yaml` for the layout comment; floating-vue dropped in favour of the hand-rolled menus.
 
 - [x] Sticky note Markdown styled after dbdiagram: GitHub-style heading sizes with a hairline under h1 and h2, roomier list spacing, and notes that scroll inside their paper with a thin scrollbar (the wheel zooms the canvas only when the note has nothing to scroll).
+
+- [x] Partial-ref badges (issue #1): the adapter records which `TablePartial` each injected ref comes from (`RefVM.viaPartial`) and, per table, the refs of each injected partial with the partial's key columns and note (`TableVM.partialRefs`). By default those refs are not drawn as lines: each table shows one `~partial` badge per partial after its name, the header widening to fit, in the header's text color and at every detail level, in every edge mode (Deps included, so the grain stays in view). Hovering a badge draws its refs with the marching ants (they take no pointer events), lights up the tables and fields they reach, and opens a tooltip with the refs, their cardinalities, and the partial's primary key; clicking it pins them. Hidden partial refs get no anchor or route, and highlight-all and the relationship controls leave them alone, but they stay in the model, so their hand-drawn routes are kept and come back with the lines. A puzzle toggle in the bottom toolbar, shown while some partial carries refs, switches to lines; the choice persists (UI state version 10). Works for partials imported with `use`. `graph` marks those refs with `viaPartial` and `(from partial …)`. Also fixed: the zoomed-out placeholder bar no longer shows behind the names of tables in the default schema at full zoom.
 
 ### Remaining
 

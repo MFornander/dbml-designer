@@ -80,6 +80,14 @@
       </div>
     </template>
 
+    <template v-if="content.primaryKey">
+      <div class="dg-tooltip-divider" />
+      <div class="dg-tooltip-default">
+        <span class="dg-tooltip-label">Primary key</span>
+        <span class="dg-tooltip-accent">{{ content.primaryKey }}</span>
+      </div>
+    </template>
+
     <template
       v-for="list in lists"
       :key="list.label"
@@ -120,7 +128,7 @@ import {
   computed, nextTick, ref, useTemplateRef, watch, type Component, type CSSProperties,
 } from 'vue';
 import {
-  PhArrowElbowDownRight, PhArrowsLeftRight, PhBookOpen, PhColumns, PhFlowArrow, PhNote, PhSquaresFour, PhTable,
+  PhArrowElbowDownRight, PhArrowsLeftRight, PhBookOpen, PhColumns, PhFlowArrow, PhNote, PhPuzzlePiece, PhSquaresFour, PhTable,
 } from '@phosphor-icons/vue';
 import { renderNoteMarkdown } from '@/utils/markdown';
 import type { Rect, Size } from '../geometry/rect';
@@ -137,6 +145,7 @@ const props = defineProps<{
 const ICONS: Record<TooltipContent['kind'], Component> = {
   table: PhTable,
   field: PhColumns,
+  partial: PhPuzzlePiece,
   ref: PhArrowsLeftRight,
   dep: PhFlowArrow,
   group: PhSquaresFour,
@@ -159,6 +168,7 @@ const lists = computed(() => {
   if (c.indexes?.length) out.push({ label: 'Indexes', items: c.indexes });
   if (c.checks?.length) out.push({ label: 'Check constraints', items: c.checks });
   if (c.columns?.length) out.push({ label: 'Column-level', items: c.columns });
+  if (c.refs?.length) out.push({ label: 'Refs', items: c.refs });
   return out;
 });
 

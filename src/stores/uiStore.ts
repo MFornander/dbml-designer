@@ -1,13 +1,13 @@
 import { computed, watch } from 'vue';
 import { defineStore } from 'pinia';
-import type { DetailLevel, ThemeMode } from '@/types/diagram';
+import type { DetailLevel, PartialRefMode, ThemeMode } from '@/types/diagram';
 import { usePersistedRef } from '@/utils/persistedRef';
 
 /** Which connections the diagram draws: relationships, both, or lineage edges only. */
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
 interface UiState {
-  version: 9;
+  version: 10;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -26,6 +26,8 @@ interface UiState {
   editorCollapsed: boolean;
   /** The Diagram Views panel at the right of the diagram is shown. */
   viewsOpen: boolean;
+  /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
+  partialRefMode: PartialRefMode;
 }
 
 /** The layout panel's share of the editor pane until the user drags its handle. */
@@ -34,11 +36,12 @@ export const DEFAULT_LAYOUT_SIZE = 40;
 const THEMES: readonly ThemeMode[] = ['light', 'dark'];
 const LEVELS: readonly DetailLevel[] = ['all', 'keys', 'names'];
 const EDGE_MODES: readonly EdgeMode[] = ['erd', 'erd+deps', 'deps'];
+const PARTIAL_REF_MODES: readonly PartialRefMode[] = ['badges', 'lines'];
 
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 9
+  return s.version === 10
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -50,7 +53,8 @@ function isUiState (v: unknown): v is UiState {
     && typeof s.layoutOpen === 'boolean'
     && typeof s.layoutSize === 'number' && s.layoutSize > 0 && s.layoutSize < 100
     && typeof s.editorCollapsed === 'boolean'
-    && typeof s.viewsOpen === 'boolean';
+    && typeof s.viewsOpen === 'boolean'
+    && PARTIAL_REF_MODES.includes(s.partialRefMode as PartialRefMode);
 }
 
 /**
@@ -59,47 +63,58 @@ function isUiState (v: unknown): v is UiState {
  * `edgeMode`; version 4 added the lineage-layout and highlight-all toggles;
  * version 5 added the editor view (DBML text or layout YAML); version 6 added
  * the collapsed-editor flag; version 7 replaced the editor view with the
- * collapsible layout panel's open flag; version 8 added that panel's height; version 9 adds
- * the Diagram Views panel's open flag.
+ * collapsible layout panel's open flag; version 8 added that panel's height; version 9 added
+ * the Diagram Views panel's open flag; version 10 adds how partial refs are drawn, badges by default.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const version = parsed.version as number;
-  if (version >= 9) return parsed as unknown as UiState;
+  if (version >= 10) return parsed as unknown as UiState;
+  if (version === 9) {
+    return {
+      ...(parsed as unknown as UiState),
+      version: 10,
+      partialRefMode: 'badges',
+    };
+  }
   if (version === 8) {
     return {
       ...(parsed as unknown as UiState),
-      version: 9,
+      version: 10,
       viewsOpen: false,
+      partialRefMode: 'badges',
     };
   }
   if (version === 7) {
     return {
       ...(parsed as unknown as UiState),
-      version: 9,
+      version: 10,
       layoutSize: DEFAULT_LAYOUT_SIZE,
       viewsOpen: false,
+      partialRefMode: 'badges',
     };
   }
   if (version === 5 || version === 6) {
     const { editorView, ...rest } = parsed;
     return {
       ...(rest as unknown as UiState),
-      version: 9,
+      version: 10,
       layoutOpen: editorView === 'layout',
       layoutSize: DEFAULT_LAYOUT_SIZE,
       editorCollapsed: version === 6 ? (parsed.editorCollapsed as boolean) : false,
       viewsOpen: false,
+      partialRefMode: 'badges',
     };
   }
   if (version === 4) {
     return {
       ...(parsed as unknown as UiState),
-      version: 9,
+      version: 10,
       layoutOpen: false,
       layoutSize: DEFAULT_LAYOUT_SIZE,
       editorCollapsed: false,
       viewsOpen: false,
+      partialRefMode: 'badges',
     };
   }
 
@@ -113,6 +128,7 @@ export function migrateUiState (raw: string): UiState {
     layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
     viewsOpen: false,
+    partialRefMode: 'badges' as const,
   };
   let splitSizes = parsed.splitSizes as [number, number];
   let edgeMode: EdgeMode = 'erd+deps';
@@ -126,7 +142,7 @@ export function migrateUiState (raw: string): UiState {
     edgeMode = parsed.edgeMode as EdgeMode;
   }
   return {
-    version: 9,
+    version: 10,
     ...base,
     splitSizes,
     edgeMode,
@@ -142,7 +158,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 9,
+    version: 10,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -154,6 +170,7 @@ export const useUiStore = defineStore('ui', () => {
     layoutSize: DEFAULT_LAYOUT_SIZE,
     editorCollapsed: false,
     viewsOpen: false,
+    partialRefMode: 'badges',
   }), {
     validate: isUiState,
     deserialize: migrateUiState,
@@ -172,6 +189,7 @@ export const useUiStore = defineStore('ui', () => {
   const layoutSize = computed(() => state.value.layoutSize);
   const editorCollapsed = computed(() => state.value.editorCollapsed);
   const viewsOpen = computed(() => state.value.viewsOpen);
+  const partialRefMode = computed(() => state.value.partialRefMode);
 
   const splitSizes = computed<number[]>({
     get: () => [...state.value.splitSizes],
@@ -238,6 +256,15 @@ export const useUiStore = defineStore('ui', () => {
     state.value.editorCollapsed = collapsed;
   }
 
+  function setPartialRefMode (mode: PartialRefMode): void {
+    state.value.partialRefMode = mode;
+  }
+
+  /** Switch partial refs between badges in their table headers and lines. */
+  function togglePartialRefMode (): void {
+    setPartialRefMode(state.value.partialRefMode === 'badges' ? 'lines' : 'badges');
+  }
+
   watch(theme, (t) => {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', t === 'dark');
@@ -275,5 +302,8 @@ export const useUiStore = defineStore('ui', () => {
     toggleViews,
     setLayoutSize,
     setEditorCollapsed,
+    partialRefMode,
+    setPartialRefMode,
+    togglePartialRefMode,
   };
 });

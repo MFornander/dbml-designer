@@ -1,9 +1,11 @@
 import { computed, type Ref } from 'vue';
 import type { PositionsMap } from '@/types/diagram';
 import type {
-  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupVM, MarkerKind, RefVM,
+  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupVM, MarkerKind, PartialRefMode, RefVM, TableVM,
 } from '../types';
-import type { GroupKey, NoteKey, TableKey } from '../keys';
+import type {
+  GroupKey, NoteKey, RefKey, TableKey,
+} from '../keys';
 import type { Measurer } from '../geometry/measure';
 import { computeTableSize, type TableSize } from '../geometry/tableSize';
 import { rowIndexMap, visibleFields } from '../geometry/lod';
@@ -72,6 +74,10 @@ export interface GeometryInputs {
   collapsedGroups: Ref<ReadonlySet<GroupKey>>;
   showRefs: Ref<boolean>;
   showLineage: Ref<boolean>;
+  /** Refs from TablePartial fields as badges in their table's header (not routed) or as lines like any other ref. */
+  partialRefMode: Ref<PartialRefMode>;
+  /** Partial refs drawn in badge mode all the same: those of the hovered or pinned badge. */
+  revealedRefs: Ref<ReadonlySet<RefKey>>;
   /** Lineage layout: tables with lineage edges laid out by dependency order; everything else hidden. */
   lineageLayout: Ref<boolean>;
   dragOverride: Ref<DragOverride | null>;
@@ -139,21 +145,46 @@ export function useDiagramGeometry (input: GeometryInputs) {
     return map;
   });
 
+  /**
+   * Partial refs show as badges in the header of each table that injects the partial. The badges
+   * stay in every edge mode, so Deps keeps each table's grain in view while it hides the refs.
+   */
+  const partialBadges = computed(() => input.partialRefMode.value === 'badges');
+
+  /**
+   * The refs drawn as lines. In badge mode those from partials are left out, so they take no
+   * anchor or route, except the ones a hovered or pinned badge reveals.
+   */
+  const drawnRefs = computed<RefVM[]>(() => {
+    if (!input.showRefs.value) return [];
+    const refs = input.model.value.refs;
+    if (!partialBadges.value) return refs;
+    const revealed = input.revealedRefs.value;
+    return refs.filter((r) => !r.viaPartial || revealed.has(r.key));
+  });
+
+  /** The partials a table's header has a badge for in badge mode. */
+  const partialsOf = (t: TableVM): string[] => (t.partialRefs ?? []).map((p) => p.partial);
+
   const sizes = computed(() => {
     void input.measureVersion.value;
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
-      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer));
+      const badges = partialBadges.value ? partialsOf(t) : [];
+      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges));
     }
     return map;
   });
 
-  /** Sizes at the "all fields" level, used for placement so layouts survive detail-level changes. */
+  /**
+   * Sizes at the "all fields" level with every partial badge, used for placement so layouts
+   * survive detail-level changes and switching partial refs between badges and lines.
+   */
   const fullSizes = computed(() => {
     void input.measureVersion.value;
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
-      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer));
+      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t)));
     }
     return map;
   });
@@ -300,8 +331,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
   });
 
   const edges = computed<Edge[]>(() => {
-    const list: Edge[] = [];
-    if (input.showRefs.value) list.push(...input.model.value.refs.map(refToEdge));
+    const list: Edge[] = drawnRefs.value.map(refToEdge);
     if (input.showLineage.value) {
       for (const d of input.model.value.deps) {
         list.push(depToEdge(d));
@@ -428,6 +458,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
 
   return {
     rowsByTable,
+    drawnRefs,
     sizes,
     fullSizes,
     boxes,

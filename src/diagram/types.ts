@@ -4,7 +4,7 @@ import type {
   DepKey, EnumKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
 } from './keys';
 
-export type { DetailLevel, TokenRange } from '@/types/diagram';
+export type { DetailLevel, PartialRefMode, TokenRange } from '@/types/diagram';
 
 /**
  * How an edge end is drawn: bar, bar+circle, crow's foot, crow's foot+circle for
@@ -68,9 +68,23 @@ export interface TableVM {
   metadata?: Record<string, string>;
   note?: string;
   groupKey?: GroupKey;
+  /** Refs the table gets from each injected TablePartial that carries any, in injection order; set only when there are some. */
+  partialRefs?: PartialRefsVM[];
   /** Declaration order. */
   order: number;
   token?: TokenRange;
+}
+
+/** The refs one injected TablePartial gives a table: a badge in the table header while partial refs are drawn as badges. */
+export interface PartialRefsVM {
+  /** Name of the TablePartial, as the table injects it. */
+  partial: string;
+  /** The resolved refs its injected fields declare, in field order. */
+  refKeys: RefKey[];
+  /** The partial's primary key: its `pk` fields, else the columns of its `pk` index. */
+  keyColumns: string[];
+  /** The partial's own note. */
+  note?: string;
 }
 
 export interface EdgeEndpointVM {
@@ -101,6 +115,11 @@ export interface RefVM {
   isSelf: boolean;
   onDelete?: string;
   onUpdate?: string;
+  /**
+   * Name of the TablePartial whose injected field declares this ref inline; its first endpoint is
+   * then the injecting table. Unset for refs declared on a table itself or in a `Ref:` block.
+   */
+  viaPartial?: string;
   token?: TokenRange;
 }
 

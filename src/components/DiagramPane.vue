@@ -9,6 +9,7 @@
       :collapsed-groups="layout.collapsedGroups"
       :show-refs="ui.showRefs"
       :show-lineage="ui.showLineage"
+      :partial-ref-mode="ui.partialRefMode"
       :lineage-layout="ui.lineageLayout"
       :highlight-all="ui.highlightAll"
       :edge-routes="layout.edgeRoutes"
@@ -101,6 +102,17 @@
         <span :class="DIVIDER" />
         <EdgeModeSelect />
         <span :class="DIVIDER" />
+        <!-- Only while some partial carries refs; pressed while they show as badges, the default -->
+        <button
+          v-if="hasPartialRefs"
+          :class="[BUTTON, ui.partialRefMode === 'badges' ? ACTIVE : '']"
+          :title="ui.partialRefMode === 'badges' ? 'Draw partial refs as lines' : 'Show partial refs as badges'"
+          aria-label="Partial refs as badges"
+          :aria-pressed="ui.partialRefMode === 'badges'"
+          @click="ui.togglePartialRefMode"
+        >
+          <PhPuzzlePiece class="w-4 h-4" />
+        </button>
         <button
           :class="[BUTTON, ui.highlightAll ? ACTIVE : '']"
           :title="ui.highlightAll ? 'Unhighlight relationships' : 'Highlight relationships'"
@@ -130,7 +142,7 @@ import {
   computed, ref, useTemplateRef, watch,
 } from 'vue';
 import {
-  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhTreeStructure,
+  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { DiagramCanvas, buildDiagramModel } from '@/diagram';
 import type { ColorChangePayload, TableLinkPayload } from '@/types/diagram';
@@ -163,6 +175,8 @@ const canvas = useTemplateRef<InstanceType<typeof DiagramCanvas>>('canvas');
 const zoom = ref(1);
 
 const model = computed(() => buildDiagramModel(parser.rawDatabase));
+/** Some TablePartial brings refs, so the badges-or-lines toggle has something to switch. */
+const hasPartialRefs = computed(() => model.value.refs.some((r) => r.viaPartial));
 // The view store follows every parse so its hidden set matches the current definitions.
 watch(model, (m) => views.sync(m), {
   immediate: true,

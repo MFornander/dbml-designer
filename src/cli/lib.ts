@@ -213,6 +213,8 @@ export interface GraphRef {
   inactive: boolean;
   onDelete?: string;
   onUpdate?: string;
+  /** The TablePartial whose injected field declares the ref; `from` is then the injecting table. */
+  viaPartial?: string;
 }
 
 export interface GraphDep {
@@ -292,6 +294,7 @@ export function graphOfModel (model: DiagramModel, db: Database): Graph {
       inactive: r.inactive,
       onDelete: r.onDelete,
       onUpdate: r.onUpdate,
+      viaPartial: r.viaPartial,
     })),
     deps: model.deps.map((d) => optional({
       names: [...d.names],
@@ -363,7 +366,7 @@ export function formatGraphText (g: Graph): string {
   lines.push('REFS');
   for (const r of g.refs) {
     const end = (e: GraphRefEnd) => `${e.table}${e.fields.length ? `(${e.fields.join(', ')})` : ''} ${e.cardinality}`;
-    lines.push(`  ${end(r.from)} -- ${end(r.to)}${r.name ? `  [${r.name}]` : ''}${r.inactive ? '  (inactive)' : ''}`);
+    lines.push(`  ${end(r.from)} -- ${end(r.to)}${r.name ? `  [${r.name}]` : ''}${r.inactive ? '  (inactive)' : ''}${r.viaPartial ? `  (from partial ${r.viaPartial})` : ''}`);
   }
   lines.push('DEPS');
   for (const d of g.deps) {

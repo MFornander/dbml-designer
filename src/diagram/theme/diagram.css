@@ -171,6 +171,30 @@
   letter-spacing: 0.02em;
 }
 
+/* Partial badges: `~name` pills in a table header standing in for the refs a TablePartial brings.
+   They take the header's text color (set inline), so they read on any header color. */
+
+.dg-partial-badge-bg {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
+}
+
+.dg-partial-badge.is-highlighted .dg-partial-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
+.dg-partial-badge-text {
+  fill: currentColor;
+  font: 600 11px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
 /* Relationship and lineage edges */
 
 /*

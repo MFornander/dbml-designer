@@ -1,6 +1,6 @@
 import {
-  FONT_FIELD, FONT_FIELD_BOLD, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD,
-  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, ROW_H, SCHEMA_GAP, WIDTH_EXTRA,
+  FONT_FIELD, FONT_FIELD_BOLD, FONT_PARTIAL_BADGE, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD,
+  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, WIDTH_EXTRA,
 } from './constants';
 import type { Measurer } from './measure';
 import { isKeyField } from './lod';
@@ -16,15 +16,26 @@ export interface RowMetrics {
   badgesW: number;
 }
 
+/** A partial badge in the table header. */
+export interface HeaderBadge {
+  /** Name of the TablePartial; the badge reads `~name`. */
+  partial: string;
+  /** Left edge, from the table's left edge. */
+  x: number;
+  w: number;
+}
+
 export interface TableSize {
   width: number;
   height: number;
-  /** Everything the header needs: name, icon, and the schema label with its gap. */
+  /** Everything the header needs: name, icon, partial badges, and the schema label with its gap. */
   headerW: number;
   /** The table name alone; the note icon follows it. */
   nameW: number;
   /** The faded schema label at the right, 0 for the default schema. */
   schemaW: number;
+  /** Partial badges after the name and its icon, in order; empty unless partial refs are drawn as badges. */
+  badges: HeaderBadge[];
   rows: RowMetrics[];
 }
 
@@ -93,10 +104,32 @@ export function hasTableDetails (t: TableVM): boolean {
   return !!(t.note || t.indexes.length || t.checks.length || t.metadata);
 }
 
-export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measurer): TableSize {
+/** Text of a partial badge. */
+export function partialBadgeLabel (partial: string): string {
+  return `~${partial}`;
+}
+
+/**
+ * Size of a table and the layout of its header. `badges` names the partials whose refs show as
+ * badges after the name; the header, and so the table, widens to fit them before the schema label.
+ */
+export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measurer, badges: readonly string[] = []): TableSize {
   const nameW = m.measure(t.name, FONT_TABLE_NAME);
   const schemaW = t.schema === DEFAULT_SCHEMA ? 0 : m.measure(t.schema, FONT_FIELD);
-  const headerW = nameW + (hasTableDetails(t) ? ICON_GAP + ICON_W : 0) + (schemaW ? SCHEMA_GAP + schemaW : 0);
+  const iconW = hasTableDetails(t) ? ICON_GAP + ICON_W : 0;
+  let badgesW = 0;
+  const headerBadges = badges.map((partial): HeaderBadge => {
+    const w = Math.ceil(m.measure(partialBadgeLabel(partial), FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
+    badgesW += PARTIAL_BADGE_GAP;
+    const badge = {
+      partial,
+      x: PAD_X + nameW + iconW + badgesW,
+      w,
+    };
+    badgesW += w;
+    return badge;
+  });
+  const headerW = nameW + iconW + badgesW + (schemaW ? SCHEMA_GAP + schemaW : 0);
   const metrics = rows.map((f) => rowMetrics(f, m));
   let rowMax = 0;
   for (const r of metrics) {
@@ -108,6 +141,7 @@ export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measu
     headerW,
     nameW,
     schemaW,
+    badges: headerBadges,
     rows: metrics,
   };
 }

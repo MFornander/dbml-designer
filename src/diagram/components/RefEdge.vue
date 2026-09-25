@@ -6,6 +6,7 @@
     :style="colorVars"
   >
     <path
+      v-if="!passive"
       class="dg-ref-hit"
       :d="geo.dFull"
       @pointerenter="onEnter"
@@ -73,8 +74,11 @@ const props = withDefaults(defineProps<{
   highlighted: boolean;
   /** Mount the walking-ants overlay while highlighted. */
   animated?: boolean;
+  /** Drawn for something else's hover (a partial badge), so it takes no hover or click of its own. */
+  passive?: boolean;
 }>(), {
   animated: true,
+  passive: false,
 });
 
 const ctx = useDiagramContext();

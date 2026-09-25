@@ -20,6 +20,7 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 - Tables with fields and key icons (composite keys and partial-injected fields included), header colors, collapsible table groups, and Markdown sticky notes. Notes paint above everything, then tables in no group, then collapsed groups, then open groups with their members, so a large group never hides what lies across it.
 - Relationships drawn with crow's-foot ends. Lines leaving the same field share one anchor, and each line takes the color of the table it points to.
+- Partial refs as badges: a ref declared on a field that a `TablePartial` injects is shown as a `~partial` badge in the table's header instead of a line, one badge per partial, so tables keyed by a shared partial (for example `~per_config`) no longer fan out to the same hub tables. Hovering a badge draws its refs with the marching ants, lights up the tables and fields they reach, and opens a tooltip with the refs, their cardinalities, and the partial's key columns; clicking it keeps them drawn. Refs declared on the table itself or in `Ref:` blocks are drawn as before. Badges show at every detail level and in Deps mode too, so the grain stays visible, and work for partials imported with `use`. The puzzle button in the bottom toolbar draws partial refs as lines instead; hand-drawn routes of partial refs are kept while they are badges.
 - Data lineage: `Dep` blocks and inline `dep` settings draw one dashed curve per pair of tables. Hovering it lists the column mappings; hovering a mapped field draws that field-to-field arrow.
 - Three detail levels (all fields, keys only, table names) and light and dark themes.
 - Hover a table, field, or line to highlight its connections with a marching-ants effect, the line's name, and its cardinalities. Click to pin, or turn on Highlight Relationships to animate every connection.
@@ -40,7 +41,7 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 ### Toolbar and menu
 
-- Bottom toolbar: zoom and fit on the left; the Table and Lineage menus, Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
+- Bottom toolbar: zoom and fit on the left; the Table and Lineage menus, the partial refs toggle (badges or lines, shown while some partial carries refs), Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
 - The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end. Import reads any `.dbml`; if it ends with such a comment, the layout is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
 
 ## Layout comment
@@ -170,7 +171,7 @@ npm run graph -- path/to/schema.dbml
 npm run graph -- path/to/schema.dbml --text
 ```
 
-`graph` prints the schema as data in declaration order: project, tables with their fields and group, refs with both ends and cardinalities, lineage edges with their column mappings, groups, views, notes, and enums. JSON by default, or a compact listing with `--text`. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
+`graph` prints the schema as data in declaration order: project, tables with their fields and group, refs with both ends and cardinalities, lineage edges with their column mappings, groups, views, notes, and enums. JSON by default, or a compact listing with `--text`. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
 
 ## Layout of the code
 

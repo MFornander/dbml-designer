@@ -61,6 +61,7 @@
             :geo="r.geo"
             :highlighted="r.highlighted"
             :animated="r.animated"
+            :passive="r.passive"
           />
         </g>
         <g class="dg-layer-tables">
@@ -181,7 +182,7 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, toRef, useTemplateRef, watch,
 } from 'vue';
 import type {
-  ColorChangePayload, ColorTarget, DetailLevel, PositionChange, PositionsMap, TableLinkPayload,
+  ColorChangePayload, ColorTarget, DetailLevel, PartialRefMode, PositionChange, PositionsMap, TableLinkPayload,
 } from '@/types/diagram';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
@@ -222,6 +223,8 @@ const props = withDefaults(defineProps<{
   collapsedGroups?: ReadonlySet<string>;
   showRefs?: boolean;
   showLineage?: boolean;
+  /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
+  partialRefMode?: PartialRefMode;
   /** Lineage layout: positions derived from dependency order; groups and notes hidden. */
   lineageLayout?: boolean;
   /** Highlight every visible edge: walking ants, names, and endpoint cardinalities. */
@@ -238,6 +241,7 @@ const props = withDefaults(defineProps<{
   collapsedGroups: () => new Set<string>(),
   showRefs: true,
   showLineage: true,
+  partialRefMode: 'badges',
   lineageLayout: false,
   highlightAll: false,
   edgeRoutes: () => ({}),
@@ -283,6 +287,17 @@ watch(() => pz.viewport.value.k, (k) => emit('zoom-change', k), {
 // Geometry
 const dragOverride = shallowRef<DragOverride | null>(null);
 const routeDragOverride = shallowRef<RouteDragOverride | null>(null);
+/**
+ * The refs of the hovered or pinned partial badge, drawn while it is, like the column line of a
+ * mapped field. Kept as the same set while it holds the same keys, so other hovers do not reroute.
+ */
+const revealedRefs = computed<ReadonlySet<string>>((prev) => {
+  const t = hover.effective.value;
+  const keys = t?.kind === 'partial'
+    ? model.value.tablesByKey.get(t.tableKey)?.partialRefs?.find((p) => p.partial === t.partial)?.refKeys ?? []
+    : [];
+  return prev && prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys);
+});
 const geo = useDiagramGeometry({
   model,
   positions: toRef(props, 'positions'),
@@ -290,6 +305,8 @@ const geo = useDiagramGeometry({
   collapsedGroups: toRef(props, 'collapsedGroups'),
   showRefs: toRef(props, 'showRefs'),
   showLineage: toRef(props, 'showLineage'),
+  partialRefMode: toRef(props, 'partialRefMode'),
+  revealedRefs,
   lineageLayout: toRef(props, 'lineageLayout'),
   dragOverride,
   edgeRoutes: toRef(props, 'edgeRoutes'),
@@ -299,13 +316,16 @@ const geo = useDiagramGeometry({
   measureVersion,
 });
 
+/** A partial ref standing as a badge: drawn only while its badge reveals it, and then not editable. */
+const isBadged = (r: RefVM) => props.partialRefMode === 'badges' && !!r.viaPartial;
+
 // Selected relationship: clicking a line pins it, which shows its control points and tools.
 const selectedRef = computed(() => {
   const p = hover.pinned.value;
   if (!p || p.kind !== 'ref' || !props.showRefs) return null;
   const edge = model.value.refs.find((r) => r.key === p.key);
   const g = geo.routes.value.get(p.key);
-  return edge && g
+  return edge && g && !isBadged(edge)
     ? {
         edge,
         geo: g,
@@ -415,7 +435,10 @@ const drag = useDrag({
   },
 });
 
-/** A click on a table or note selects it alone; with Shift, Cmd, or Ctrl it toggles it in the selection. Tables also pin. */
+/**
+ * A click on a table or note selects it alone; with Shift, Cmd, or Ctrl it toggles it in the selection. Tables also pin,
+ * or the partial badge clicked on, which keeps its refs drawn.
+ */
 function onElementClick (key: string) {
   const next = new Set(dragAdditive ? selection.value : []);
   if (dragAdditive && next.has(key)) next.delete(key);
@@ -424,10 +447,13 @@ function onElementClick (key: string) {
 
   const table = model.value.tablesByKey.get(key);
   if (!table) return;
-  hover.togglePin({
-    kind: 'table',
-    key,
-  });
+  const over = hover.hover.value;
+  hover.togglePin(over?.kind === 'partial' && over.tableKey === key
+    ? over
+    : {
+        kind: 'table',
+        key,
+      });
   if (table.token) {
     emit('table-click', {
       key,
@@ -481,7 +507,7 @@ watch(hover.hover, (target, prev) => {
   const tableOf = (t: typeof target) => {
     if (!t) return null;
     if (t.kind === 'table') return t.key;
-    if (t.kind === 'field') return t.tableKey;
+    if (t.kind === 'field' || t.kind === 'partial') return t.tableKey;
     return null;
   };
   const key = tableOf(target);
@@ -561,7 +587,7 @@ const colorPicker = computed(() => {
   if (t.kind === 'ref') {
     const ref = model.value.refs.find((r) => r.key === t.key);
     const g = geo.routes.value.get(t.key);
-    if (!ref || !g || !props.showRefs) return null;
+    if (!ref || !g || !props.showRefs || isBadged(ref)) return null;
     return {
       title: 'Color',
       current: ref.color ?? ref.lineColor,
@@ -849,6 +875,8 @@ interface RenderEdge {
   highlighted: boolean;
   /** Whether the walking-ants overlay is mounted (capped when everything is highlighted). */
   animated: boolean;
+  /** A partial ref drawn only while its badge reveals it: the pointer passes through it. */
+  passive?: boolean;
 }
 
 /** Above this many highlighted edges, highlight-all mode drops the animated overlay to stay smooth. */
@@ -858,7 +886,8 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   const hl = hover.highlight.value;
   const all = props.highlightAll;
   const list: RenderEdge[] = [];
-  for (const r of props.showRefs ? model.value.refs : []) {
+  // Partial refs standing as badges are left out, from highlight-all too, unless their badge reveals them.
+  for (const r of geo.drawnRefs.value) {
     const g = geo.routes.value.get(r.key);
     if (g) {
       list.push({
@@ -867,6 +896,7 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
         geo: g,
         highlighted: all || hl.refKeys.has(r.key),
         animated: true,
+        passive: isBadged(r),
       });
     }
   }
