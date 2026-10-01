@@ -1,0 +1,202 @@
+import {
+  FONT_FIELD, FONT_FIELD_BOLD, FONT_PARTIAL_BADGE, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD, FONT_VALUE,
+  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, VALUE_GAP, VALUE_MAX_W, WIDTH_EXTRA,
+} from './constants';
+import type { Measurer } from './measure';
+import { fitText, formatValue, type ValueKind } from './values';
+import { isKeyField } from './lod';
+import { DEFAULT_SCHEMA } from '../keys';
+import type { FieldVM, TableVM } from '../types';
+
+export interface RowMetrics {
+  nameW: number;
+  typeW: number;
+  iconCount: number;
+  iconsW: number;
+  /** Width of the NN / E badges drawn after the type, including gaps. */
+  badgesW: number;
+  /** The field's record value as drawn, clipped to the value column, when it has one and values show. */
+  value?: {
+    text: string;
+    kind: ValueKind;
+  };
+}
+
+/** A partial badge in the table header. */
+export interface HeaderBadge {
+  /** Name of the TablePartial; the badge reads `~name`. */
+  partial: string;
+  /** Left edge, from the table's left edge. */
+  x: number;
+  w: number;
+}
+
+export interface TableSize {
+  width: number;
+  height: number;
+  /** Everything the header needs: name, icon, partial badges, and the schema label with its gap. */
+  headerW: number;
+  /** The table name alone; the note icon follows it. */
+  nameW: number;
+  /** The faded schema label at the right, 0 for the default schema. */
+  schemaW: number;
+  /** Partial badges after the name and its icon, in order; empty unless partial refs are drawn as badges. */
+  badges: HeaderBadge[];
+  /** The count of a table's records, after the partial badges, when it has several and values show; it opens them. */
+  recordsBadge?: {
+    label: string;
+    x: number;
+    w: number;
+  };
+  /** Width of the value column at the right of the field rows; 0 without values. */
+  valueW: number;
+  rows: RowMetrics[];
+}
+
+/** Icons drawn after the field name, in display order (matches dbdiagram). */
+export type FieldIcon = 'key' | 'fk' | 'unique' | 'note';
+
+export type FieldBadge = 'nn' | 'enum';
+
+export const BADGE_H = 16;
+export const BADGE_W: Record<FieldBadge, number> = {
+  nn: 24,
+  enum: 14,
+};
+export const BADGE_GAP = 4;
+
+/** True when hovering the field would show a tooltip with more than its type. */
+export function hasFieldDetails (f: FieldVM): boolean {
+  return !!(f.note || f.dbdefault || f.checks?.length || f.metadata || f.injectedFrom);
+}
+
+export function fieldIcons (f: FieldVM): FieldIcon[] {
+  const icons: FieldIcon[] = [];
+  if (isKeyField(f)) icons.push('key');
+  if (f.hasRef) icons.push('fk');
+  if (f.unique) icons.push('unique');
+  if (hasFieldDetails(f)) icons.push('note');
+  return icons;
+}
+
+/** Badges drawn right of the type, listed from the right edge inwards. */
+export function fieldBadges (f: FieldVM): FieldBadge[] {
+  const badges: FieldBadge[] = [];
+  if (f.notNull) badges.push('nn');
+  if (f.enumKey) badges.push('enum');
+  return badges;
+}
+
+export function iconCount (f: FieldVM): number {
+  return fieldIcons(f).length;
+}
+
+export function iconsWidth (n: number): number {
+  return n === 0 ? 0 : n * (ICON_W + ICON_GAP) + (n - 1) * ICON_SPACING;
+}
+
+export function badgesWidth (badges: readonly FieldBadge[]): number {
+  return badges.reduce((w, b) => w + BADGE_W[b] + BADGE_GAP, 0);
+}
+
+export function rowMetrics (f: FieldVM, m: Measurer): RowMetrics {
+  const bold = isKeyField(f);
+  const nameW = m.measure(f.name, bold ? FONT_FIELD_BOLD : FONT_FIELD);
+  const typeW = m.measure(f.typeText, bold ? FONT_TYPE_BOLD : FONT_TYPE);
+  const n = iconCount(f);
+  return {
+    nameW,
+    typeW,
+    iconCount: n,
+    iconsW: iconsWidth(n),
+    badgesW: badgesWidth(fieldBadges(f)),
+  };
+}
+
+/** True when hovering the header would show a tooltip. */
+export function hasTableDetails (t: TableVM): boolean {
+  return !!(t.note || t.indexes.length || t.checks.length || t.metadata);
+}
+
+/** Text of a partial badge. */
+export function partialBadgeLabel (partial: string): string {
+  return `~${partial}`;
+}
+
+/** Text of the records badge. */
+export function recordsBadgeLabel (count: number): string {
+  return `${count} rows`;
+}
+
+/** Where the value column starts, counted from the row's right padding: the type and its badges sit left of it. */
+export function valueShift (size: Pick<TableSize, 'valueW'>): number {
+  return size.valueW > 0 ? VALUE_GAP + size.valueW : 0;
+}
+
+/**
+ * Size of a table and the layout of its header. `badges` names the partials whose refs show as
+ * badges after the name; the header, and so the table, widens to fit them before the schema label.
+ * With `values`, a table with one record gets a value column, capped at `VALUE_MAX_W`, and one
+ * with several gets a badge with their count.
+ */
+export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measurer, badges: readonly string[] = [], values = false): TableSize {
+  const nameW = m.measure(t.name, FONT_TABLE_NAME);
+  const schemaW = t.schema === DEFAULT_SCHEMA ? 0 : m.measure(t.schema, FONT_FIELD);
+  const iconW = hasTableDetails(t) ? ICON_GAP + ICON_W : 0;
+  let badgesW = 0;
+  const headerBadges = badges.map((partial): HeaderBadge => {
+    const w = Math.ceil(m.measure(partialBadgeLabel(partial), FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
+    badgesW += PARTIAL_BADGE_GAP;
+    const badge = {
+      partial,
+      x: PAD_X + nameW + iconW + badgesW,
+      w,
+    };
+    badgesW += w;
+    return badge;
+  });
+  const recordCount = values ? t.records?.length ?? 0 : 0;
+  let recordsBadge: TableSize['recordsBadge'];
+  if (recordCount > 1) {
+    const label = recordsBadgeLabel(recordCount);
+    const w = Math.ceil(m.measure(label, FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
+    badgesW += PARTIAL_BADGE_GAP;
+    recordsBadge = {
+      label,
+      x: PAD_X + nameW + iconW + badgesW,
+      w,
+    };
+    badgesW += w;
+  }
+  const headerW = nameW + iconW + badgesW + (schemaW ? SCHEMA_GAP + schemaW : 0);
+  const metrics = rows.map((f) => rowMetrics(f, m));
+  let valueW = 0;
+  if (recordCount === 1) {
+    rows.forEach((f, i) => {
+      if (f.value === undefined) return;
+      const v = formatValue(f.value);
+      const text = fitText(v.text, VALUE_MAX_W, m, FONT_VALUE);
+      metrics[i]!.value = {
+        text,
+        kind: v.kind,
+      };
+      valueW = Math.max(valueW, Math.ceil(m.measure(text, FONT_VALUE)));
+    });
+  }
+  const valueColumn = valueW > 0 ? VALUE_GAP + valueW : 0;
+  let rowMax = 0;
+  for (const r of metrics) {
+    rowMax = Math.max(rowMax, r.nameW + r.iconsW + r.typeW + r.badgesW + 2 * PAD_X + valueColumn);
+  }
+  return {
+    width: Math.ceil(Math.max(rowMax, headerW) + WIDTH_EXTRA),
+    height: ROW_H * (rows.length + 1),
+    headerW,
+    nameW,
+    schemaW,
+    badges: headerBadges,
+    ...(recordsBadge ? { recordsBadge } : {}),
+    valueW,
+    rows: metrics,
+  };
+}

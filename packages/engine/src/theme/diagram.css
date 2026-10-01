@@ -1,0 +1,1075 @@
+/* Diagram renderer styles. Colors come from the --dg-* variables set by DiagramCanvas. */
+
+.dg-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  background: var(--dg-bg);
+  font-family: "Open Sans", system-ui, sans-serif;
+}
+
+.dg-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: default;
+}
+
+.dg-root.is-panning .dg-svg {
+  cursor: grabbing;
+}
+
+.dg-bg-fill {
+  fill: var(--dg-bg);
+}
+
+.dg-grid-dot {
+  fill: var(--dg-grid-dot);
+  fill-opacity: var(--dg-grid-dot-opacity);
+}
+
+/* Tables */
+
+.dg-table {
+  cursor: grab;
+}
+
+.dg-table.is-dragging {
+  cursor: grabbing;
+}
+
+
+.dg-table-shadow {
+  fill: var(--dg-shadow);
+}
+
+.dg-table-body {
+  fill: var(--dg-field-bg);
+}
+
+.dg-table-border {
+  fill: none;
+  stroke: var(--dg-table-border);
+  stroke-width: 1;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.dg-table.is-highlighted .dg-table-border,
+.dg-table.is-selected .dg-table-border {
+  stroke: var(--dg-table-highlight);
+  stroke-width: 2;
+}
+
+/* Select tool: marquee on the bare canvas; Pan tool or Space: grab cursor */
+
+.dg-root.is-pan:not(.is-panning) .dg-svg {
+  cursor: grab;
+}
+
+.dg-root.is-marquee .dg-svg {
+  cursor: crosshair;
+}
+
+.dg-marquee {
+  fill: rgba(71, 90, 255, 0.08);
+  stroke: var(--dg-table-highlight);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.dg-table-name {
+  fill: var(--dg-header-text);
+  font: 700 13px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* The table's schema, right-aligned in the header and faded so the name stays the headline */
+.dg-table-schema {
+  fill: var(--dg-header-text);
+  opacity: 0.6;
+  font: 13px "Open Sans", system-ui, sans-serif;
+  text-anchor: end;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-field-bg {
+  fill: var(--dg-field-bg);
+  transition: fill 120ms ease;
+}
+
+.dg-field.is-highlighted .dg-field-bg {
+  fill: var(--dg-highlight-field-bg);
+}
+
+.dg-row-sep {
+  stroke: var(--dg-row-separator);
+  stroke-width: 1;
+}
+
+.dg-field-name {
+  fill: var(--dg-field-name);
+  font: 400 13px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-field.is-pk .dg-field-name {
+  fill: var(--dg-pk-field);
+  font-weight: 700;
+}
+
+.dg-field-type {
+  fill: var(--dg-field-type);
+  font: 400 13px Inconsolata, ui-monospace, monospace;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-field.is-pk .dg-field-type {
+  font-weight: 700;
+}
+
+.dg-icon {
+  fill: none;
+  stroke: var(--dg-icon-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dg-icon-header {
+  stroke: var(--dg-header-text);
+  opacity: 0.85;
+}
+
+.dg-placeholder {
+  fill: var(--dg-placeholder);
+  pointer-events: none;
+}
+
+/* NN / E badges right of the type */
+
+.dg-badge {
+  pointer-events: none;
+}
+
+.dg-badge-bg {
+  fill: var(--dg-badge-bg);
+}
+
+.dg-badge-text {
+  fill: var(--dg-badge-text);
+  font: 700 10px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  letter-spacing: 0.02em;
+}
+
+/* Partial badges: `~name` pills in a table header standing in for the refs a TablePartial brings.
+   They take the header's text color (set inline), so they read on any header color. */
+
+.dg-partial-badge-bg {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
+}
+
+.dg-partial-badge.is-highlighted .dg-partial-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
+.dg-partial-badge-text {
+  fill: currentColor;
+  font: 600 11px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Record values: one record's values right of the types, and the count of several, which opens them */
+.dg-field-value {
+  fill: var(--dg-field-name);
+  font: 400 13px Inconsolata, ui-monospace, monospace;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-field-value.is-null {
+  fill: var(--dg-field-type);
+  fill-opacity: 0.55;
+  font-style: italic;
+}
+
+.dg-records-badge {
+  cursor: pointer;
+}
+
+.dg-records-badge-bg {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
+}
+
+.dg-records-badge:hover .dg-records-badge-bg,
+.dg-records-badge.is-open .dg-records-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
+.dg-records-badge-text {
+  fill: currentColor;
+  font: 600 11px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-records {
+  position: absolute;
+  z-index: 30;
+  max-width: 560px;
+  border-radius: 10px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 400 13px/1.4 "Open Sans", system-ui, sans-serif;
+  box-shadow: var(--dg-tooltip-shadow);
+  overflow: hidden;
+}
+
+.dg-records-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 8px;
+  font-weight: 700;
+}
+
+.dg-records-count {
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.dg-records-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid var(--dg-tooltip-border);
+}
+
+.dg-records-table {
+  border-collapse: collapse;
+  font: 400 12px/1.5 Inconsolata, ui-monospace, monospace;
+}
+
+.dg-records-table th {
+  position: sticky;
+  top: 0;
+  padding: 4px 10px;
+  text-align: left;
+  font: 600 12px/1.5 "Open Sans", system-ui, sans-serif;
+  background: var(--dg-tooltip-bg);
+  border-bottom: 1px solid var(--dg-tooltip-border);
+  white-space: nowrap;
+}
+
+.dg-records-table td {
+  max-width: 220px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dg-records-table td.is-number {
+  text-align: right;
+}
+
+.dg-records-table td.is-null {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.dg-records-table tr + tr td {
+  border-top: 1px solid var(--dg-tooltip-border);
+}
+
+/* Legend of the lineage kinds, while mappings are drawn by column */
+
+.dg-legend {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 400 12px/1.4 "Open Sans", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.dg-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Drawn like the mappings: see .dg-dep.is-kind-* below. */
+.dg-legend-line {
+  fill: none;
+  stroke: var(--dg-dep-color);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+.dg-legend-line.is-kind-row {
+  stroke-dasharray: 2 4;
+}
+
+/* Relationship and lineage edges */
+
+/*
+ * --dg-edge-color / --dg-edge-hl are set inline on an edge that carries its own
+ * color (explicit or inherited from a table header). Default-colored edges fall
+ * back to the palette and switch to the highlight color when highlighted.
+ */
+
+.dg-ref-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.dg-ref-line,
+.dg-ref-marker {
+  fill: none;
+  stroke: var(--dg-edge-color, var(--dg-ref-color));
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.dg-dep .dg-ref-line,
+.dg-dep .dg-ref-marker {
+  stroke: var(--dg-edge-color, var(--dg-dep-color));
+  stroke-width: 1.25;
+}
+
+.dg-dep .dg-ref-line {
+  stroke-dasharray: 6 4;
+}
+
+/* Column mappings by kind: an operand solid, a row selector in short dashes. */
+.dg-dep.is-kind-value .dg-ref-line {
+  stroke-dasharray: none;
+}
+
+.dg-dep.is-kind-row .dg-ref-line {
+  stroke-dasharray: 2 4;
+}
+
+.dg-ref.is-inactive .dg-ref-line {
+  stroke-dasharray: 8 4 2 4;
+}
+
+.dg-ref.is-highlighted .dg-ref-line,
+.dg-ref.is-highlighted .dg-ref-marker {
+  stroke: var(--dg-edge-hl, var(--dg-ref-highlight));
+  stroke-width: 2;
+}
+
+.dg-ref-overlay {
+  fill: none;
+  stroke: var(--dg-edge-hl, var(--dg-ref-highlight));
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 3 40;
+  stroke-dashoffset: 0;
+  animation: dg-march 1.2s linear infinite;
+  filter: drop-shadow(0 0 var(--dg-glow-blur) var(--dg-edge-hl, var(--dg-ref-highlight)));
+  pointer-events: none;
+}
+
+@keyframes dg-march {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -43px;
+  }
+}
+
+.dg-edge-label {
+  fill: var(--dg-edge-hl, var(--dg-ref-highlight));
+  font: 600 13px "Open Sans", system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: var(--dg-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dg-edge-cardinality {
+  fill: var(--dg-edge-hl, var(--dg-ref-highlight));
+  font: 600 11px Inconsolata, ui-monospace, monospace;
+  paint-order: stroke;
+  stroke: var(--dg-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* Table groups */
+
+.dg-group-body {
+  fill: var(--dg-group-bg);
+  stroke: var(--dg-group-stroke);
+  stroke-width: 1;
+}
+
+.dg-group-header {
+  cursor: grab;
+}
+
+.dg-group.is-dragging .dg-group-header {
+  cursor: grabbing;
+}
+
+.dg-group-header-bg {
+  fill: var(--dg-group-bg);
+}
+
+.dg-group-name {
+  fill: var(--dg-group-name);
+  font: 600 13px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-group-icon {
+  stroke: var(--dg-group-name);
+}
+
+.dg-group-toggle {
+  cursor: pointer;
+}
+
+.dg-group-toggle-hit {
+  fill: transparent;
+  transition: fill 120ms ease;
+}
+
+.dg-group-toggle:hover .dg-group-toggle-hit {
+  fill: rgba(0, 0, 0, 0.12);
+}
+
+.dg-group-chevron {
+  fill: var(--dg-group-name);
+  pointer-events: none;
+}
+
+.dg-group-collapsed-text {
+  fill: var(--dg-group-name);
+  font: 400 13px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* Sticky notes */
+
+.dg-note {
+  cursor: grab;
+}
+
+.dg-note.is-dragging {
+  cursor: grabbing;
+}
+
+.dg-note-paper {
+  fill: var(--dg-note-paper);
+  filter: drop-shadow(0 2px 4px var(--dg-shadow));
+}
+
+.dg-note.is-selected .dg-note-paper {
+  stroke: var(--dg-table-highlight);
+  stroke-width: 2;
+}
+
+.dg-note-body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 14px 18px 16px;
+  font: 400 13px/1.55 "Open Sans", system-ui, sans-serif;
+  color: var(--dg-note-text);
+  /* Long notes scroll inside their paper, like dbdiagram's; the wheel is kept from zooming the canvas. */
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, currentColor 30%, transparent) transparent;
+  word-break: break-word;
+}
+
+.dg-note-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dg-note-body::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.dg-note-body > :first-child {
+  margin-top: 0;
+}
+
+.dg-note-body > :last-child {
+  margin-bottom: 0;
+}
+
+.dg-note-body p,
+.dg-note-body ul,
+.dg-note-body ol,
+.dg-note-body blockquote,
+.dg-note-body pre,
+.dg-note-body table {
+  margin: 0 0 0.7em;
+}
+
+.dg-note-body h1,
+.dg-note-body h2,
+.dg-note-body h3,
+.dg-note-body h4 {
+  margin: 0.9em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* GitHub-style headings, as dbdiagram renders them: a hairline under the two largest. */
+.dg-note-body h1,
+.dg-note-body h2 {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.dg-note-body h1 {
+  font-size: 24px;
+}
+
+.dg-note-body h2 {
+  font-size: 20px;
+}
+
+.dg-note-body h3 {
+  font-size: 16px;
+}
+
+.dg-note-body h4 {
+  font-size: 14px;
+}
+
+.dg-note-body ul,
+.dg-note-body ol {
+  padding-left: 20px;
+}
+
+.dg-note-body li {
+  margin: 0.15em 0;
+}
+
+.dg-note-body ul {
+  list-style: disc;
+}
+
+.dg-note-body ol {
+  list-style: decimal;
+}
+
+.dg-note-body hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.dg-note-body code {
+  font: 400 12px Inconsolata, ui-monospace, monospace;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.dg-note-body pre {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+
+.dg-note-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.dg-note-body blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.2);
+  padding-left: 8px;
+  opacity: 0.85;
+}
+
+.dg-note-body a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.dg-note-body hr {
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+  margin: 0.6em 0;
+}
+
+.dg-note-resize {
+  cursor: nwse-resize;
+}
+
+.dg-note-resize-hit {
+  fill: transparent;
+}
+
+.dg-note-resize-grip {
+  fill: none;
+  stroke: var(--dg-note-text);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Tooltip: dbdiagram's canvas popover, a rounded card with a tinted header and hairline dividers */
+
+.dg-tooltip {
+  position: absolute;
+  z-index: 20;
+  min-width: 260px;
+  max-width: 360px;
+  border-radius: 8px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 600 13px/1.5 "Open Sans", system-ui, sans-serif;
+  box-shadow: var(--dg-tooltip-shadow);
+  overflow: hidden;
+  pointer-events: none;
+  word-break: break-word;
+}
+
+.dg-tooltip-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--dg-tooltip-header-bg);
+}
+
+.dg-tooltip-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  color: var(--dg-tooltip-text);
+}
+
+.dg-tooltip-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.dg-tooltip-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dg-tooltip-title {
+  font-size: 14px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* The schema part of a table's title, faded like the header's schema label */
+.dg-tooltip-title-schema {
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+.dg-tooltip-type {
+  min-width: 0;
+  font: 400 14px Inconsolata, ui-monospace, monospace;
+  color: var(--dg-tooltip-accent);
+  word-break: break-all;
+}
+
+.dg-tooltip-type.is-enum {
+  color: var(--dg-tooltip-enum);
+}
+
+.dg-tooltip-target {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dg-tooltip-corner {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--dg-tooltip-muted);
+}
+
+.dg-tooltip-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dg-tooltip-muted);
+}
+
+.dg-tooltip-note-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.dg-tooltip-book {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--dg-tooltip-muted);
+}
+
+.dg-tooltip-divider {
+  height: 1px;
+  background: var(--dg-tooltip-border);
+}
+
+.dg-tooltip-label {
+  padding: 4px 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dg-tooltip-label);
+}
+
+.dg-tooltip-enum {
+  color: var(--dg-tooltip-enum);
+}
+
+.dg-tooltip-list {
+  margin: 0;
+  padding: 0 12px 6px 28px;
+  list-style: disc;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.625;
+  color: var(--dg-tooltip-accent);
+}
+
+.dg-tooltip-list.is-enum {
+  color: var(--dg-tooltip-enum);
+}
+
+.dg-tooltip-list.is-plain {
+  color: var(--dg-tooltip-text);
+}
+
+.dg-tooltip-item-note,
+.dg-tooltip-meta-key {
+  color: var(--dg-tooltip-muted);
+}
+
+.dg-tooltip-meta-value,
+.dg-tooltip-accent {
+  color: var(--dg-tooltip-accent);
+}
+
+.dg-tooltip-default {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dg-tooltip-default .dg-tooltip-label {
+  padding: 0;
+}
+
+/* Note body: the sticky-note Markdown styles at tooltip size */
+.dg-tooltip-note {
+  max-height: 260px;
+  padding: 0 12px 10px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.dg-tooltip-note > :first-child {
+  margin-top: 0;
+}
+
+.dg-tooltip-note > :last-child {
+  margin-bottom: 0;
+}
+
+.dg-tooltip-note p,
+.dg-tooltip-note ul,
+.dg-tooltip-note ol,
+.dg-tooltip-note blockquote,
+.dg-tooltip-note pre {
+  margin: 0 0 0.5em;
+}
+
+.dg-tooltip-note h1,
+.dg-tooltip-note h2,
+.dg-tooltip-note h3,
+.dg-tooltip-note h4 {
+  margin: 0 0 0.3em;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dg-tooltip-note ul,
+.dg-tooltip-note ol {
+  padding-left: 18px;
+}
+
+.dg-tooltip-note ul {
+  list-style: disc;
+}
+
+.dg-tooltip-note ol {
+  list-style: decimal;
+}
+
+.dg-tooltip-note code {
+  font-family: Inconsolata, ui-monospace, monospace;
+}
+
+.dg-tooltip-note a {
+  color: var(--dg-tooltip-enum);
+  text-decoration: underline;
+}
+
+/* Color-settings gear on hovered tables, groups, and notes */
+
+.dg-gear {
+  cursor: pointer;
+}
+
+.dg-gear-hit {
+  fill: rgba(0, 0, 0, 0.18);
+  transition: fill 120ms ease;
+}
+
+.dg-gear:hover .dg-gear-hit {
+  fill: rgba(0, 0, 0, 0.32);
+}
+
+.dg-gear-icon {
+  pointer-events: none;
+}
+
+.dg-table-border {
+  pointer-events: none;
+}
+
+/* Color picker popover */
+
+.dg-color-popover {
+  position: absolute;
+  z-index: 30;
+  width: 260px;
+  padding: 14px 16px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 400 13px/1.4 "Open Sans", system-ui, sans-serif;
+  box-shadow: var(--dg-tooltip-shadow);
+  user-select: none;
+}
+
+.dg-color-title {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dg-color-label {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dg-tooltip-label);
+}
+
+.dg-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 24px);
+  gap: 12px 15px;
+}
+
+.dg-color-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 100ms ease;
+}
+
+.dg-color-swatch:hover {
+  transform: scale(1.12);
+}
+
+.dg-color-swatch.is-active {
+  outline: 2px solid var(--dg-tooltip-text);
+  outline-offset: 2px;
+}
+
+.dg-color-swatch:focus-visible {
+  outline: 2px solid var(--dg-tooltip-enum);
+  outline-offset: 2px;
+}
+
+.dg-color-custom {
+  display: flex;
+  gap: 8px;
+}
+
+.dg-color-hex {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--dg-tooltip-input-bg);
+  font: 600 13px "Open Sans", system-ui, sans-serif;
+  color: var(--dg-tooltip-text);
+}
+
+.dg-color-hex span {
+  color: var(--dg-tooltip-muted);
+}
+
+.dg-color-hex input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: uppercase;
+}
+
+.dg-color-native {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--dg-tooltip-input-bg);
+  color: var(--dg-tooltip-text);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.dg-color-native input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Selected relationship: control points and tools */
+
+.dg-edge-anchor {
+  fill: #ffffff;
+  stroke: var(--dg-ctl-color);
+  pointer-events: none;
+}
+
+.dg-edge-handle {
+  fill: #ffffff;
+  stroke: var(--dg-ctl-color);
+}
+
+.dg-edge-handle.is-stub {
+  fill: var(--dg-bg);
+}
+
+.dg-edge-handle:hover {
+  fill: var(--dg-ctl-color);
+}
+
+.dg-edge-half {
+  fill: none;
+  stroke: transparent;
+  pointer-events: stroke;
+}
+
+.dg-edge-split {
+  fill: var(--dg-bg);
+  stroke: var(--dg-ctl-color);
+}
+
+.dg-edge-split:hover {
+  fill: var(--dg-ctl-color);
+}
+
+.dg-edge-tool {
+  cursor: pointer;
+}
+
+.dg-edge-tool-bg {
+  fill: var(--dg-tooltip-header-bg);
+  stroke: var(--dg-tooltip-border);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+.dg-edge-tool:hover .dg-edge-tool-bg {
+  fill: var(--dg-tooltip-input-bg);
+}

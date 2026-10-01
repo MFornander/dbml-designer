@@ -1,0 +1,55 @@
+// The value trace from issue #4: how the price of order line L1 came about.
+// money.line_price.price is quantity × unit_cost × (1 + rate), so 4 × 12.5 × 1.2 = 60.
+
+Table input.item [headercolor: #6B7280] {
+  item_id text [pk]
+  unit_cost double [unit: 'USD']
+}
+
+Table input.markup [headercolor: #6B7280] {
+  rate_id text [pk]
+  rate double [unit: 'fraction']
+}
+
+Table spec.order_line {
+  line_id text [pk]
+  item_id text
+  rate_id text
+  quantity double [unit: 'count']
+}
+
+Table money.line_price {
+  line_id text [pk]
+  price double [unit: 'USD', note: 'quantity × unit_cost × (1 + rate)']
+}
+
+records input.item(item_id, unit_cost) {
+  'widget', 12.5
+}
+
+records input.markup(rate_id, rate) {
+  'standard', 0.2
+}
+
+records spec.order_line(line_id, item_id, rate_id, quantity) {
+  'L1', 'widget', 'standard', 4
+}
+
+records money.line_price(line_id, price) {
+  'L1', 60
+}
+
+Dep: spec.order_line.quantity -> money.line_price.price [kind: 'value']
+Dep: input.item.unit_cost -> money.line_price.price [kind: 'value']
+Dep: input.markup.rate -> money.line_price.price [kind: 'value']
+Dep: spec.order_line.item_id -> money.line_price.price [kind: 'row']
+Dep: spec.order_line.rate_id -> money.line_price.price [kind: 'row']
+
+DiagramView trace_L1_price {
+  Tables {
+    input.item
+    input.markup
+    spec.order_line
+    money.line_price
+  }
+}
