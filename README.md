@@ -4,6 +4,8 @@ A single-page DBML editor and diagram in the spirit of [dbdiagram.io](https://db
 
 Everything runs in the browser: no accounts, no server. Your text and layout are kept in `localStorage`, and export as one `.dbml` file that carries the layout in a comment at its end.
 
+The repository holds two npm workspace packages: the diagram engine (`packages/engine`, [its README](packages/engine/README.md)), which draws a diagram from a plain JSON model and knows nothing of DBML, and this editor (`packages/editor`), which converts DBML to the engine's model and runs on the engine. Other programs, such as a run or provenance inspector, can use the engine directly.
+
 ![DBML Designer showing the example blog schema: the DBML editor and the collapsible Layout panel on the left, the diagram with tables, a table group, relationships, a lineage edge, and a sticky note on the right](docs/screenshot.png)
 
 ## Features
@@ -44,7 +46,7 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 ### Toolbar and menu
 
-- Bottom toolbar: zoom and fit on the left; the Table and Lineage menus, the partial refs toggle (badges or lines, shown while some partial carries refs), Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
+- Bottom toolbar: zoom and fit on the left; the Table menu, the partial refs toggle (badges or lines), the Lineage menu, Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
 - The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end. Import reads any `.dbml`; if it ends with such a comment, the layout is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
 
 ## Layout comment
@@ -98,16 +100,16 @@ npm install
 npm run dev
 ```
 
-The dev server listens on all interfaces on port 5173, so it is reachable locally at `http://localhost:5173` and by teammates on the same network at `http://<your-machine-ip>:5173` (Vite prints the Network URL on start). Vite's host check allows IP addresses, `localhost`, and `.local` Bonjour names; add other hostnames to `server.allowedHosts` in `vite.config.ts`. macOS may ask once to allow incoming connections for `node`.
+Run everything from the repository root; `npm install` links the two workspace packages. The dev server listens on all interfaces on port 5173, so it is reachable locally at `http://localhost:5173` and by teammates on the same network at `http://<your-machine-ip>:5173` (Vite prints the Network URL on start). Vite's host check allows IP addresses, `localhost`, and `.local` Bonjour names; add other hostnames to `server.allowedHosts` in `packages/editor/vite.config.ts`. macOS may ask once to allow incoming connections for `node`. The editor reads the engine's source, so a change to the engine reloads like any other.
 
 Other scripts:
 
 | Command | What it does |
 |---|---|
-| `npm test` | Unit and component tests with Vitest |
-| `npm run type-check` | `vue-tsc` for the app and `tsc` for the command line |
-| `npm run lint` | ESLint over the whole project |
-| `npm run build` | Type-check and produce a production build in `dist/` |
+| `npm test` | Unit and component tests with Vitest, for both packages |
+| `npm run type-check` | `vue-tsc` for the engine and the app, `tsc` for the command line |
+| `npm run lint` | ESLint over both packages, including the rules that keep the engine free of DBML and each package to the dependencies it declares |
+| `npm run build` | Type-check and produce a production build of the editor in `packages/editor/dist/` |
 | `npm run preview` | Serve the production build locally |
 
 ## Following files
@@ -174,19 +176,29 @@ npm run graph -- path/to/schema.dbml
 npm run graph -- path/to/schema.dbml --text
 ```
 
-`graph` prints the diagram engine's model of the file (`src/engine/model.ts`): the JSON a program would hand the engine to draw the same diagram, with names resolved to keys and `TablePartial`s spliced into the tables that inject them. In declaration order it holds the project, tables with their fields, indexes, and partials, refs with both ends and cardinalities, `Dep` edges with their column mappings (one per edge, carrying its block's name, color, note, and metadata), groups, sticky notes, views, and enums. JSON by default, or with `--text` a compact listing of the model as the engine resolves it, with each table's group and the `Dep` edges between two tables folded into one. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
+`graph` prints the diagram engine's model of the file (`packages/engine/src/model.ts`): the JSON a program would hand the engine to draw the same diagram, with names resolved to keys and `TablePartial`s spliced into the tables that inject them. In declaration order it holds the project, tables with their fields, indexes, and partials, refs with both ends and cardinalities, `Dep` edges with their column mappings (one per edge, carrying its block's name, color, note, and metadata), groups, sticky notes, views, and enums. JSON by default, or with `--text` a compact listing of the model as the engine resolves it, with each table's group and the `Dep` edges between two tables folded into one. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
 
 ## Layout of the code
 
+Two npm workspace packages under `packages/`, with the shared tooling (ESLint, the Vitest workspace) at the root. Each package imports only what its `package.json` declares, which a lint rule enforces since npm hoists every dependency to the root.
+
+`packages/engine` (`@dbml-designer/engine`) is the diagram engine (issue #8). It knows no DBML, editor, or file; everything else reaches it through `src/index.ts`, or `src/core.ts` (no components, so it loads in Node too). See [its README](packages/engine/README.md) for the model and the API.
+
+- `src/model.ts` is its input, a diagram's content as plain JSON, and `src/fromModel.ts` indexes that into the view model it draws.
+- `src/engine/` holds one engine's state, created per instance: `createEngine()` (`engine.ts`) ties a model, its views, its layout, and display options together; `layout.ts` and `layers.ts` are the layout layers with their inheritance, arranging, and taking it back; `views.ts` is the active view.
+- `src/components/EngineDiagram.vue` draws one engine; the other components are the SVG nodes. `src/geometry/` holds framework-free layout, routing, and marker math, `src/state/` the Vue composables for pan, zoom, drag, hover, and tooltips.
+- Tests that describe their diagram in DBML get it through `#dbml-testing`, which only the engine's test configuration maps, to the editor's adapter.
+
+`packages/editor` (`@dbml-designer/editor`) is this app, its command line, and the dev-server plugin.
+
+- `src/dbml/` converts DBML to the engine's model: `toModel.ts` resolves names and aliases, splices in `TablePartial`s, and keeps each element's place in the text as its `source`, and `buildModel.ts` hands the result to the engine.
 - `src/editor/` wraps Monaco and registers the DBML language services.
-- `src/layout/` is the layout: its YAML format and writer, the validator that turns imported YAML into diagnostics and a snapshot, the comment handling that puts it into and lifts it out of a `.dbml`, and the import/export composable.
+- `src/layout/` is the layout in a `.dbml`: its YAML format and writer, the validator that turns imported YAML into diagnostics and a snapshot, the comment handling that puts it into and lifts it out of a file, and the import/export composable.
 - `src/cli/` is the pure logic behind the `check` and `graph` commands; `cli/` is their Node entry point.
 - `plugins/fileBridge.ts` is the dev-server side of following a file; `src/files/` is its browser client and `src/stores/fileLinkStore.ts` the state around it.
-- `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, and UI preferences. `engineStore.ts` holds the editor's one engine, fed the converted DBML, the footers of imported files, and the UI preferences, with its layout and active view persisted; the layout and view stores wrap its state.
+- `src/stores/` holds Pinia stores for the editor text, the compiler state, and UI preferences. `engineStore.ts` holds the editor's one engine, fed the converted DBML, the footers of imported files, and the UI preferences, with its layout and active view persisted; the layout and view stores wrap its state.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
 - `src/sample/` holds the starter schema and the Load Example schema, plus two models to try things on: `grain.dbml` (8 tables keyed by shared `TablePartial`s, the example from the partial-badge and arrange issues) and `synthetic.dbml` (150 tables in 8 groups joined by 400 `Dep` edges, for checking speed).
-- `src/engine/` is the diagram engine (issue #8): it knows no DBML, editor, or file, and everything else reaches it through `index.ts`, or `core.ts` (no components, so it loads in Node too), which a lint rule enforces in both directions. `model.ts` is its input, a diagram's content as plain JSON, and `fromModel.ts` indexes that into the view model it draws. `engine/` holds one engine's state, created per instance: `createEngine()` (`engine.ts`) ties a model, its views, its layout, and display options together; `layout.ts` and `layers.ts` are the layout layers with their inheritance, arranging, and taking it back; `views.ts` is the active view. `components/EngineDiagram.vue` draws one engine. `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.
-- `src/dbml/` converts DBML to the engine's model: `toModel.ts` resolves names and aliases, splices in `TablePartial`s, and keeps each element's place in the text as its `source`, and `buildModel.ts` hands the result to the engine.
 
 ## Licensing
 
