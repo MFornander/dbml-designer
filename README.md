@@ -184,6 +184,7 @@ npm run graph -- path/to/schema.dbml --text
 - `plugins/fileBridge.ts` is the dev-server side of following a file; `src/files/` is its browser client and `src/stores/fileLinkStore.ts` the state around it.
 - `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, and UI preferences.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
+- `src/sample/` holds the starter schema and the Load Example schema, plus two models to try things on: `grain.dbml` (8 tables keyed by shared `TablePartial`s, the example from the partial-badge and arrange issues) and `synthetic.dbml` (150 tables in 8 groups joined by 400 `Dep` edges, for checking speed).
 - `src/diagram/` is the renderer. `adapter/` turns the raw parser output into a view model, `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.
 
 ## Licensing
