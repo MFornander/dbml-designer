@@ -94,4 +94,15 @@ describe('value categories', () => {
     expect(element.querySelector('.dg-tooltip')?.textContent).toContain('category: overlay');
     done();
   });
+
+  it('sit in the legend, in the corner asked for', async () => {
+    const { element, engine, done } = await setup();
+    engine.setCategories({ 'spec.bom.qty[1]': 'overlay' });
+    await nextTick();
+    expect(element.querySelector('.dg-legend')!.classList.contains('is-top-left')).toBe(true);
+    engine.setDisplay({ legendCorner: 'bottom-right' });
+    await nextTick();
+    expect(element.querySelector('.dg-legend')!.classList.contains('is-bottom-right')).toBe(true);
+    done();
+  });
 });

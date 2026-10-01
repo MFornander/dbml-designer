@@ -89,6 +89,9 @@ export interface TableChip {
   note?: string;
 }
 
+/** The corner of the diagram the legend sits in. */
+export type LegendCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 /** How a category of values is drawn and named in the legend (see `DisplayOptions.categories`). */
 export interface CategoryStyle {
   label: string;

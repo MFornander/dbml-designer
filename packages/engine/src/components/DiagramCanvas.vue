@@ -188,6 +188,7 @@
     <div
       v-if="legendKinds.length || legendCategories.length"
       class="dg-legend"
+      :class="`is-${legendCorner}`"
       aria-label="Legend"
     >
       <span
@@ -238,7 +239,7 @@ import {
 } from 'vue';
 import type {
   ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
-  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail, CategoryStyle,
+  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail, CategoryStyle, LegendCorner,
 } from '../types';
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
@@ -333,7 +334,10 @@ const props = withDefaults(defineProps<{
   cellCategories?: Readonly<Record<string, string>> | null;
   /** The palette for value categories, by name. */
   categories?: Readonly<Record<string, CategoryStyle>>;
+  /** The corner the legend sits in. */
+  legendCorner?: LegendCorner;
 }>(), {
+  legendCorner: 'top-left',
   cellCategories: null,
   categories: () => ({}),
   unfolded: () => new Set<string>(),

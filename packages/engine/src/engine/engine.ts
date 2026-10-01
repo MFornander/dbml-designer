@@ -11,7 +11,7 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  AutoLod, CategoryStyle, DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
+  AutoLod, CategoryStyle, DetailLevel, LegendCorner, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
 } from '../types';
 import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import type { Rect } from '../geometry/rect';
@@ -85,6 +85,8 @@ export interface DisplayOptions {
    * gets a grey dot and its name in the legend.
    */
   categories: Readonly<Record<string, CategoryStyle>>;
+  /** The corner the legend of lineage kinds and value categories sits in. */
+  legendCorner: LegendCorner;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -104,6 +106,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   gridRows: GRID_ROWS,
   zoomDetail: { ...DEFAULT_ZOOM_DETAIL },
   categories: {},
+  legendCorner: 'top-left',
 };
 
 /** A value given once, or a getter to follow. */

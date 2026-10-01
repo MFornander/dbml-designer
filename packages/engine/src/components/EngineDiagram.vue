@@ -24,6 +24,7 @@
     :unfolded="engine.layout.unfoldedCompanions.value"
     :cell-categories="engine.cellCategories.value"
     :categories="display.categories"
+    :legend-corner="display.legendCorner"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

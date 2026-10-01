@@ -413,8 +413,6 @@
 
 .dg-legend {
   position: absolute;
-  top: 8px;
-  left: 8px;
   z-index: 10;
   display: flex;
   gap: 12px;
@@ -425,6 +423,27 @@
   color: var(--dg-tooltip-text);
   font: 400 12px/1.4 "Open Sans", system-ui, sans-serif;
   pointer-events: none;
+}
+
+/* The legend's corner (see DisplayOptions.legendCorner). */
+.dg-legend.is-top-left {
+  top: 8px;
+  left: 8px;
+}
+
+.dg-legend.is-top-right {
+  top: 8px;
+  right: 8px;
+}
+
+.dg-legend.is-bottom-left {
+  bottom: 8px;
+  left: 8px;
+}
+
+.dg-legend.is-bottom-right {
+  bottom: 8px;
+  right: 8px;
 }
 
 .dg-legend-item {

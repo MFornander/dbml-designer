@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.7.1. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.7.2. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.7.1.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.7.2.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -242,6 +242,7 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `showLineage` | `true` | Draw lineage edges. |
 | `lineageColumns` | `false` | Draw every column mapping field to field, styled by kind, with a legend, in place of one edge per pair of tables. |
 | `categories` | `{}` | The palette for value categories, by name: `CategoryStyle` `{ label, color }`, the label for the legend and the color of the dot before a value of that category (see `setCategories`). A category it does not name gets a grey dot and its name in the legend. |
+| `legendCorner` | `'top-left'` | `LegendCorner`: the corner the legend of lineage kinds and value categories sits in, `'top-left'`, `'top-right'`, `'bottom-left'`, or `'bottom-right'`. |
 | `chipWidth` | `72` | How wide every chip `setChips` puts in a table header is drawn, whatever its label. |
 | `lineageKinds` | `null` | The lineage kinds drawn, such as `['value']`, or null for every kind. A dep without a kind always shows; a column pair shows while one of its mappings does, styled by the strongest of those; a table pair while one of its deps does; the legend lists only the kinds drawn. `engine.diagram` is the model drawn, so placement and Arrange follow the lineage drawn too. |
 | `partialRefMode` | `'badges'` | `PartialRefMode`: refs from a table partial as a badge in the table header, or `'lines'`. |
@@ -372,7 +373,7 @@ Every entry has all of `core`; `index` and `standalone` add the components and `
 - **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
 - **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.
 - **Placing and arranging:** `placeByLineage`, `placeNewItems`, `LineageLink`, `PlacementItem`, `PlacementOptions`, `arrangeByGroup`, `arrangePending`, `ArrangeInput`, `ArrangeOptions`, `ArrangeResult`, `PendingInput`, `createMeasurer`, `Measurer`, `computeTableSize`, `TableSize`, `visibleFields`, `Point`, `Size`, `Rect`.
-- **Events and the viewport:** `ElementEvent`, `ElementClickEvent`, `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`, `DiagramViewport`, `RevealAdded`, `Highlight`, `TableChip`, `ZoomDetail`, `CategoryStyle`.
+- **Events and the viewport:** `ElementEvent`, `ElementClickEvent`, `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`, `DiagramViewport`, `RevealAdded`, `Highlight`, `TableChip`, `ZoomDetail`, `CategoryStyle`, `LegendCorner`.
 - **Look:** `LIGHT`, `DARK`, `Palette`, `paletteToCssVars`, `normalizeHexColor`, `normalizeHex`, `isValidRails`, `isTypingTarget`.
 - **Components and mounting** (`index`, `standalone`): `EngineDiagram`, `DiagramCanvas`, `renderNoteMarkdown`, `mount`, `MountOptions`, `MountedDiagram`.
 

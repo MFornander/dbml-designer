@@ -4,6 +4,12 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.7.2 - 2026-10-01
+
+### Added
+
+- Display option `legendCorner` (`LegendCorner`): the corner the legend sits in, `'top-left'` (the default, as before), `'top-right'`, `'bottom-left'`, or `'bottom-right'`, so it need not cover a table placed in the top-left corner. `DiagramCanvas` prop `legendCorner`; the legend carries `is-<corner>`.
+
 ## 0.7.1 - 2026-10-01
 
 Value categories, with the host's palette and a legend.
