@@ -1,6 +1,6 @@
 import {
   type DiagramModel, type RefEndpointVM, type RefVM, DEFAULT_SCHEMA,
-} from '@dbml-designer/engine';
+} from '@dbml-designer/engine/core';
 
 /** Bare identifiers stay as they are; anything else is double-quoted. */
 export function quoteIdentifier (name: string): string {

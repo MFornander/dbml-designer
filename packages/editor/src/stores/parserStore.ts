@@ -10,6 +10,8 @@ import {
   Compiler, DBMLDiagnosticsProvider, DEFAULT_ENTRY, Filepath, MemoryProjectLayout,
 } from '@dbml/parse';
 import type { Database, Diagnostic } from '@dbml/parse';
+import type { Model } from '@dbml-designer/engine/core';
+import { readModelDocument } from '@/model/modelFile';
 import type { ParserDiagnostic } from '@/types/diagnostics';
 import logger from '@/utils/logger';
 import { useEditorStore } from './editorStore';
@@ -62,13 +64,16 @@ export const useParserStore = defineStore('parser', () => {
 
   /** Raw @dbml/parse database from the last error-free parse. */
   const rawDatabase = shallowRef<Database>();
+  /** The model from the last error-free read of a model file, for while the editor holds JSON. */
+  const jsonModel = shallowRef<Model>();
   const errors = shallowRef<readonly ParserDiagnostic[]>([]);
   const warnings = shallowRef<readonly ParserDiagnostic[]>([]);
   const infos = shallowRef<readonly ParserDiagnostic[]>([]);
 
   const hasErrors = computed(() => errors.value.length > 0);
   /** True when the diagram shows an older, valid model because the current text has errors. */
-  const isStale = computed(() => hasErrors.value && rawDatabase.value !== undefined);
+  const isStale = computed(() => hasErrors.value
+    && (editor.language === 'json' ? jsonModel.value !== undefined : rawDatabase.value !== undefined));
 
   /** Sources of the files the entry imports, by absolute path. */
   const imports = shallowRef<ReadonlyMap<string, string>>(new Map());
@@ -149,7 +154,25 @@ export const useParserStore = defineStore('parser', () => {
     }
   }
 
+  /** Read a model file: JSON with no imports, checked against the model's shape. */
+  function readModelFile (text: string): void {
+    const doc = readModelDocument(text);
+    errors.value = doc.errors;
+    warnings.value = doc.warnings;
+    infos.value = [];
+    if (doc.model) {
+      jsonModel.value = doc.model;
+      lastGoodVersion.value += 1;
+    }
+    parseVersion.value += 1;
+    isLoading.value = false;
+  }
+
   function parseNow (text: string = editor.text): void {
+    if (editor.language === 'json') {
+      readModelFile(text);
+      return;
+    }
     isLoading.value = true;
     layout.setSource(entry.value, text);
     requestImports();
@@ -253,6 +276,8 @@ export const useParserStore = defineStore('parser', () => {
     isLoading.value = true;
     scheduleParse();
   });
+  // A switch between DBML and a model file reads the text the other way at once.
+  watch(() => editor.language, () => parseNow());
 
   // Synchronous first parse so the diagram exists on first paint.
   parseNow();
@@ -267,6 +292,7 @@ export const useParserStore = defineStore('parser', () => {
     parseVersion,
     lastGoodVersion,
     rawDatabase,
+    jsonModel,
     errors,
     warnings,
     infos,

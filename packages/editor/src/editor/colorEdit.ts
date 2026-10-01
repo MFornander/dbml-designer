@@ -3,7 +3,7 @@
  * (table groups, sticky notes, relationships) setting in DBML source. The rest of the text is
  * untouched, so each change is a small, undoable edit in the editor.
  */
-import { normalizeHex } from '@dbml-designer/engine';
+import { normalizeHex } from '@dbml-designer/engine/core';
 
 export type ColorSetting = 'headercolor' | 'color';
 

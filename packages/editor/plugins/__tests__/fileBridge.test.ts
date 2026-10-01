@@ -19,6 +19,7 @@ beforeAll(async () => {
   await mkdir(path.join(root, '.git'), { recursive: true });
   await writeFile(path.join(root, 'b.dbml'), '');
   await writeFile(path.join(root, 'a.DBML'), '');
+  await writeFile(path.join(root, 'trace.json'), '');
   await writeFile(path.join(root, 'notes.md'), '');
   await writeFile(path.join(root, 'models', 'pipeline.dbml'), '');
   await writeFile(path.join(root, 'models', 'deep', 'x.dbml'), '');
@@ -31,8 +32,9 @@ afterAll(async () => {
 });
 
 describe('isAllowed', () => {
-  it('accepts .dbml files at or under a root and nothing else', () => {
+  it('accepts .dbml and model .json files at or under a root and nothing else', () => {
     expect(isAllowed([root], path.join(root, 'b.dbml'))).toBe(true);
+    expect(isAllowed([root], path.join(root, 'trace.json'))).toBe(true);
     expect(isAllowed([root], path.join(root, 'models', 'pipeline.dbml'))).toBe(true);
     expect(isAllowed([root], path.join(root, 'notes.md'))).toBe(false);
     expect(isAllowed([root], path.join(root, '..', 'outside.dbml'))).toBe(false);
@@ -46,9 +48,9 @@ describe('isAllowed', () => {
 });
 
 describe('listDbmlFiles', () => {
-  it('lists the .dbml files directly under a root by default', async () => {
+  it('lists the diagram files directly under a root by default', async () => {
     const files = await listDbmlFiles([root]);
-    expect(files.map((f) => path.relative(root, f))).toEqual(['a.DBML', 'b.dbml']);
+    expect(files.map((f) => path.relative(root, f))).toEqual(['a.DBML', 'b.dbml', 'trace.json']);
   });
 
   it('can go deeper in a stable order, skipping dependency, build, and dot folders', async () => {
@@ -61,6 +63,7 @@ describe('listDbmlFiles', () => {
       'b.dbml',
       path.join('models', 'deep', 'x.dbml'),
       path.join('models', 'pipeline.dbml'),
+      'trace.json',
     ]);
   });
 

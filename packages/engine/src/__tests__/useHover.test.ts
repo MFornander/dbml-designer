@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { buildDiagramModel, compile, GRAIN } from '#dbml-testing';
-import { deriveHighlight, sameTarget } from '../state/useHover';
+import { nextTick, ref, shallowRef } from 'vue';
+import { fromModel } from '../fromModel';
+import {
+  deriveHighlight, sameTarget, targetExists, useHover,
+} from '../state/useHover';
 
 const model = buildDiagramModel(compile(`
   Table users { id int [pk] }
@@ -101,5 +105,32 @@ describe('deriveHighlight for a partial badge', () => {
     expect(sameTarget(a, { kind: 'table', key: 'input.site' })).toBe(false);
     // Other kinds still compare by key.
     expect(sameTarget({ kind: 'table', key: 'input.site' }, { kind: 'table', key: 'input.site' })).toBe(true);
+  });
+});
+
+describe('useHover', () => {
+  it('lets go of a hover or pin whose element a new model no longer has', async () => {
+    const model = shallowRef(fromModel({
+      tables: ['a', 'b'].map((name) => ({
+        name,
+        fields: [{
+          name: 'id',
+          type: 'int',
+        }],
+      })),
+    }));
+    const hover = useHover(model, ref(false));
+    hover.setHover({ kind: 'table', key: 'public.a' });
+    hover.togglePin({ kind: 'field', tableKey: 'public.b', fieldKey: 'public.b.id' });
+    model.value = fromModel({
+      tables: [{
+        name: 'b',
+        fields: [],
+      }],
+    });
+    await nextTick();
+    expect(hover.hover.value).toBeNull();
+    expect(hover.pinned.value).toBeNull();
+    expect(targetExists(model.value, { kind: 'table', key: 'public.b' })).toBe(true);
   });
 });

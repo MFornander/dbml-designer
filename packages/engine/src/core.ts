@@ -12,6 +12,8 @@ export {
 // The model
 export type * from './model';
 export { fromModel } from './fromModel';
+export { MODEL_SCHEMA } from './modelSchema';
+export { asModel, checkModel, type ModelProblem } from './checkModel';
 export * from './types';
 export * from './keys';
 export {

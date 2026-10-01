@@ -391,3 +391,84 @@ describe('fileLinkStore switching between files', () => {
     expect(stored().left).toEqual({});
   });
 });
+
+describe('fileLinkStore with model files', () => {
+  const TRACE = '/repo/trace.json';
+  const body = (tables: string[]) => `${JSON.stringify({
+    version: 1,
+    model: {
+      tables: tables.map((name) => ({
+        name,
+        fields: [{
+          name: 'id',
+          type: 'int',
+        }],
+      })),
+    },
+  }, null, 2)}\n`;
+  const withLayout = (text: string, x: number) => text.replace(/\n}\n$/, `,\n  "layout": {\n    "version": 1,\n    "views": {\n      "default": {\n        "tables": {\n          "public": {\n            "runs": { "x": ${x}, "y": 0 }\n          }\n        }\n      }\n    }\n  }\n}\n`);
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    disk.contents = {
+      [TRACE]: withLayout(body(['runs']), 40),
+      [MAIN]: DBML + FOOTER,
+    };
+    disk.mtimeMs = 1;
+    disk.files = [MAIN, TRACE];
+    disk.writes = [];
+    disk.listeners = [];
+  });
+
+  it('follows a model file: JSON without its layout in the editor, the layout on the diagram', async () => {
+    const link = useFileLinkStore();
+    const editor = useEditorStore();
+    const parser = useParserStore();
+    expect(await link.follow(TRACE)).toBe(true);
+    expect(editor.language).toBe('json');
+    expect(editor.text).toBe(body(['runs']));
+    expect(parser.errors).toEqual([]);
+    expect(parser.jsonModel!.tables.map((t) => t.name)).toEqual(['runs']);
+    expect(useLayoutStore().positions['public.runs']).toEqual({ x: 40, y: 0 });
+    expect(link.dirty).toBe(false);
+  });
+
+  it('saves the text with the layout as a property, and takes in a layout written by someone else', async () => {
+    const link = useFileLinkStore();
+    const editor = useEditorStore();
+    const layout = useLayoutStore();
+    await link.follow(TRACE);
+    editor.setText(body(['runs', 'steps']));
+    useParserStore().parseNow();
+    expect(link.dirty).toBe(true);
+    layout.setPosition('public.steps', { x: 400, y: 0 });
+    expect(await link.save()).toBe(true);
+    const written = JSON.parse(disk.writes.at(-1)!.text);
+    expect(written.model.tables.map((t: { name: string }) => t.name)).toEqual(['runs', 'steps']);
+    expect(written.layout.views.default.tables.public).toEqual({
+      runs: { x: 40, y: 0 },
+      steps: { x: 400, y: 0 },
+    });
+    expect(link.dirty).toBe(false);
+
+    disk.set(withLayout(body(['runs', 'steps']), 800), TRACE);
+    disk.change();
+    await flush();
+    expect(layout.positions['public.runs']).toEqual({ x: 800, y: 0 });
+  });
+
+  it('switches between a model file and DBML, reading each as what it is', async () => {
+    const link = useFileLinkStore();
+    const editor = useEditorStore();
+    const parser = useParserStore();
+    await link.follow(TRACE);
+    expect(await link.switchTo(MAIN)).toBe(true);
+    expect(editor.language).toBe('dbml');
+    expect(parser.errors).toEqual([]);
+    expect(parser.rawDatabase!.tables.map((t) => t.name)).toEqual(['users', 'posts']);
+    expect(await link.switchTo(TRACE)).toBe(true);
+    expect(editor.language).toBe('json');
+    expect(editor.text).toBe(body(['runs']));
+  });
+});

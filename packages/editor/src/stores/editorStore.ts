@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { defineStore } from 'pinia';
 import DEFAULT_SAMPLE from '@/sample/default.dbml?raw';
+import { DOCUMENT_LANGUAGES, type DocumentLanguage } from '@/model/documentFormat';
 import { usePersistedRef } from '@/utils/persistedRef';
 
 export const useEditorStore = defineStore('editor', () => {
@@ -11,6 +12,12 @@ export const useEditorStore = defineStore('editor', () => {
     deserialize: (s) => s,
     flushOnUnload: true,
   });
+  /** What the text is: DBML, or a model file's JSON. */
+  const language = usePersistedRef<DocumentLanguage>('language', 'dbml', {
+    serialize: (s) => s,
+    deserialize: (s) => s as DocumentLanguage,
+    validate: (v): v is DocumentLanguage => DOCUMENT_LANGUAGES.includes(v as DocumentLanguage),
+  });
 
   const isSample = computed(() => text.value === DEFAULT_SAMPLE);
 
@@ -18,14 +25,21 @@ export const useEditorStore = defineStore('editor', () => {
     text.value = value;
   }
 
+  function setLanguage (value: DocumentLanguage): void {
+    if (language.value !== value) language.value = value;
+  }
+
   function resetToSample (): void {
+    language.value = 'dbml';
     text.value = DEFAULT_SAMPLE;
   }
 
   return {
     text,
+    language,
     isSample,
     setText,
+    setLanguage,
     resetToSample,
   };
 });

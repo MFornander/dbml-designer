@@ -1,24 +1,25 @@
 /**
- * Following a `.dbml` file on disk through the dev server's file bridge. The file is the shared
- * document: when another program writes it, the editor picks the change up; when the user saves,
- * the editor text and the layout footer are written back. Unsaved edits are never thrown away
- * silently: a change that arrives while the editor is dirty waits for the user to reload or
- * overwrite. Each file keeps its own arrangement across switches, saved or not.
+ * Following a file on disk through the dev server's file bridge: a `.dbml`, or a model `.json`.
+ * The file is the shared document: when another program writes it, the editor picks the change up;
+ * when the user saves, the editor text and the layout (a footer comment, or a model file's `layout`
+ * property) are written back. Unsaved edits are never thrown away silently: a change that arrives
+ * while the editor is dirty waits for the user to reload or overwrite. Each file keeps its own
+ * arrangement across switches, saved or not.
  */
 import {
   computed, ref, shallowRef, watch,
 } from 'vue';
 import { defineStore } from 'pinia';
 import { BridgeError, fileBridge } from '@/files/fileBridge';
-import { splitLayoutComment } from '@/layout';
 import type { LayoutSnapshot } from '@/layout';
+import { languageOf, splitDocument } from '@/model/documentFormat';
 import { useFileIO } from '@/layout/useFileIO';
 import { usePersistedRef } from '@/utils/persistedRef';
 import { useEditorStore } from './editorStore';
 import { useLayoutStore } from './layoutStore';
 import { useParserStore } from './parserStore';
 
-/** A file's arrangement as it was when switching away from it, with the footer then on disk. */
+/** A file's arrangement as it was when switching away from it, with the layout then on disk. */
 interface LeftLayout {
   footer: string | null;
   layout: LayoutSnapshot;
@@ -34,8 +35,9 @@ interface FileLinkState {
 
 /** The file as last read from or written to disk. */
 export interface SyncedFile {
-  dbml: string;
-  /** The layout YAML in its footer, or null for none. */
+  /** What the editor shows: the file without its layout. */
+  body: string;
+  /** The layout the file carries, as text YAML reads (its footer's YAML, or a model file's JSON), or null for none. */
   footer: string | null;
   mtimeMs: number;
 }
@@ -119,9 +121,11 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   /** A change on disk not applied yet because the editor has unsaved edits. */
   const pending = shallowRef<{ text: string; mtimeMs: number } | null>(null);
   const following = computed(() => status.value === 'following' && synced.value !== null);
-  /** The editor's DBML differs from the file's (trailing blank lines aside). */
+  /** The editor's text differs from the file's (trailing blank lines aside). */
   const dirty = computed(() => synced.value !== null
-    && splitLayoutComment(editor.text).dbml.trimEnd() !== synced.value.dbml.trimEnd());
+    && splitDocument(editor.text, editor.language).body.trimEnd() !== synced.value.body.trimEnd());
+  /** How the followed file is split and joined: by its name. */
+  const languageOfPath = (p: string | null) => languageOf(p ?? '');
 
   let stopWatching: (() => void) | null = null;
   /** The text of our own last write, so its change event is not mistaken for someone else's. */
@@ -169,21 +173,23 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     return available.value;
   }
 
-  /** A footer on disk other than the one last read or written; one that merely vanished does not count. */
+  /** A layout on disk other than the one last read or written; one that merely vanished does not count. */
   const footerChanged = (footer: string | null) => footer !== null && footer !== synced.value?.footer;
 
-  /** Put a file's text, minus its footer, into the editor, and give the diagram the layout asked for. */
+  /** Put a file's text, minus its layout, into the editor, and give the diagram the layout asked for. */
   function applyFile (text: string, mtimeMs: number, take: LayoutSource): void {
-    const parts = splitLayoutComment(text);
+    const language = languageOfPath(path.value);
+    editor.setLanguage(language);
+    const parts = splitDocument(text, language);
     if (take === 'footer' && parts.layout !== null) {
       io.importText(name.value ?? 'file', text);
     } else {
-      io.replaceText(parts.dbml);
+      io.replaceText(parts.body);
       if (take === 'footer') layout.resetLayout();
       else if (take !== 'keep') layout.replaceLayout(take);
     }
     synced.value = {
-      dbml: parts.dbml,
+      body: parts.body,
       footer: parts.layout,
       mtimeMs,
     };
@@ -206,8 +212,8 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       if (synced.value) synced.value = { ...synced.value, mtimeMs: file.mtimeMs };
       return;
     }
-    const parts = splitLayoutComment(file.text);
-    const same = synced.value !== null && parts.dbml.trimEnd() === synced.value.dbml.trimEnd() && parts.layout === synced.value.footer;
+    const parts = splitDocument(file.text, languageOfPath(p));
+    const same = synced.value !== null && parts.body.trimEnd() === synced.value.body.trimEnd() && parts.layout === synced.value.footer;
     if (same) {
       synced.value = { ...synced.value!, mtimeMs: file.mtimeMs };
       return;
@@ -219,7 +225,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       };
       return;
     }
-    // Someone else changed the footer: take their layout. Otherwise keep ours and take the DBML.
+    // Someone else changed the layout: take theirs. Otherwise keep ours and take the text.
     applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
     // A new `use` may point at a file that did not exist a moment ago.
     parser.retryImports();
@@ -288,10 +294,12 @@ export const useFileLinkStore = defineStore('fileLink', () => {
         ...state.value,
         path: file.path,
       };
-      const parts = splitLayoutComment(file.text);
+      const language = languageOf(file.path);
+      const parts = splitDocument(file.text, language);
       const kept = opts.applyLayout ?? true ? takeLeft(file.path, parts.layout) : null;
-      // Imports in the text resolve relative to this path from now on.
-      parser.setEntryPath(file.path, parts.dbml);
+      // The text is read as what the file is; imports in DBML resolve relative to this path from now on.
+      editor.setLanguage(language);
+      parser.setEntryPath(file.path, parts.body);
       applyFile(file.text, file.mtimeMs, kept ?? (opts.applyLayout ?? true ? 'footer' : 'keep'));
       startWatching(file.path);
       status.value = 'following';
@@ -330,7 +338,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       error.value = message(e);
       return;
     }
-    const parts = splitLayoutComment(file.text);
+    const parts = splitDocument(file.text, languageOfPath(p));
     if (dirty.value) {
       pending.value = {
         text: file.text,
@@ -338,7 +346,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       };
       return;
     }
-    const same = synced.value !== null && parts.dbml.trimEnd() === synced.value.dbml.trimEnd() && parts.layout === synced.value.footer;
+    const same = synced.value !== null && parts.body.trimEnd() === synced.value.body.trimEnd() && parts.layout === synced.value.footer;
     if (same) synced.value = { ...synced.value!, mtimeMs: file.mtimeMs };
     else applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
     status.value = 'following';
@@ -351,10 +359,10 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   function reloadFromDisk (): void {
     const p = pending.value;
     if (!p) return;
-    applyFile(p.text, p.mtimeMs, footerChanged(splitLayoutComment(p.text).layout) ? 'footer' : 'keep');
+    applyFile(p.text, p.mtimeMs, footerChanged(splitDocument(p.text, languageOfPath(path.value)).layout) ? 'footer' : 'keep');
   }
 
-  /** Write the editor text with the layout footer. Refuses when the file changed since it was read, unless forced. */
+  /** Write the editor text with its layout. Refuses when the file changed since it was read, unless forced. */
   async function save (force = false): Promise<boolean> {
     const p = path.value;
     if (!p) return false;
@@ -362,9 +370,9 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     lastWritten = text;
     try {
       const r = await fileBridge.write(p, text, force ? undefined : synced.value?.mtimeMs);
-      const parts = splitLayoutComment(text);
+      const parts = splitDocument(text, languageOfPath(p));
       synced.value = {
-        dbml: parts.dbml,
+        body: parts.body,
         footer: parts.layout,
         mtimeMs: r.mtimeMs,
       };

@@ -47,7 +47,32 @@ The repository holds two npm workspace packages: the diagram engine (`packages/e
 ### Toolbar and menu
 
 - Bottom toolbar: zoom and fit on the left; the Table menu, the partial refs toggle (badges or lines), the Lineage menu, Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
-- The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end. Import reads any `.dbml`; if it ends with such a comment, the layout is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
+- The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end, or `<project>.json` for a model file. Import reads any `.dbml` or model `.json`; the layout it carries is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
+
+## Model files
+
+Besides DBML, the editor opens the diagram engine's model as JSON, for programs that know no DBML, such as a run or provenance inspector writing what it traced:
+
+```json
+{
+  "version": 1,
+  "model": {
+    "tables": [
+      { "schema": "money", "name": "line_price", "fields": [{ "name": "price", "type": "decimal" }] }
+    ],
+    "deps": [
+      { "from": { "table": "spec.order_line", "fields": ["quantity"] }, "to": { "table": "money.line_price", "fields": ["price"] } }
+    ]
+  },
+  "layout": { "version": 1, "views": { "default": { "tables": { "money": { "line_price": { "x": 0, "y": 0 } } } } } }
+}
+```
+
+- `model` is the engine's `Model`; [the engine's README](packages/engine/README.md) describes it, and `npm run graph -- file.dbml` prints the model of any DBML file.
+- `layout` has the structure of a `.dbml` footer and works the same way: the editor lifts it out of the text it shows and writes it back on save, leaving the rest of the text as it was.
+- Monaco checks the text against the model's JSON Schema as you type and completes property names. The Errors list adds what the model names but does not have, such as a ref to a missing table, at its place in the text.
+- Clicking a table reveals it in the JSON; colors picked in the diagram and views saved from the Diagram Views panel are written into the JSON (`headerColor`, `color`, `model.views`).
+- A model file is followed like a `.dbml` (below): it appears in the file menu, changes written to it show up within a second, and ⌘S saves it with its layout. `src/sample/trace.json` is an example. Model files have no imports.
 
 ## Layout comment
 
@@ -114,17 +139,17 @@ Other scripts:
 
 ## Following files
 
-To work on `.dbml` files together with another program, an agent or an editor, the app follows them from disk instead of importing them. Point the dev server at the folder in `.env.local` (colon-separated for several) and restart it:
+To work on `.dbml` files, or model `.json` files, together with another program, an agent or an editor, the app follows them from disk instead of importing them. Point the dev server at the folder in `.env.local` (colon-separated for several) and restart it:
 
 ```bash
 DBML_ROOTS=/Users/me/pipeline-wiki:/Users/me/other-repo
 ```
 
-The name next to the title is the current file; click it for every `.dbml` directly under those folders and switch by picking one; files are created outside the app, by you or the agent, and the list refreshes each time it opens. The first file is followed automatically, and the choice is remembered. Every change written to the current file appears within a second while the layout you arranged stays put; the arrow next to the name reads the file and its imports from disk again on demand, and with unsaved edits it offers the disk text instead of dropping them. ⌘S (Ctrl-S) writes the text and the layout footer back; the status after the name says whether you have unsaved changes, and switching files saves them first. Each file keeps its own arrangement: switch away and back, saved or not, and its tables sit and its groups fold the way you left them. A footer someone else wrote to the file meanwhile wins, since that is their layout; a footer that merely disappeared does not. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
+The name next to the title is the current file; click it for every `.dbml` and `.json` directly under those folders and switch by picking one; files are created outside the app, by you or the agent, and the list refreshes each time it opens. The first file is followed automatically, and the choice is remembered. Every change written to the current file appears within a second while the layout you arranged stays put; the arrow next to the name reads the file and its imports from disk again on demand, and with unsaved edits it offers the disk text instead of dropping them. ⌘S (Ctrl-S) writes the text and the layout footer back; the status after the name says whether you have unsaved changes, and switching files saves them first. Each file keeps its own arrangement: switch away and back, saved or not, and its tables sit and its groups fold the way you left them. A footer someone else wrote to the file meanwhile wins, since that is their layout; a footer that merely disappeared does not. If the file changes on disk while you have unsaved edits, a bar above the editor offers to reload from disk or overwrite with yours, and a save that would clobber someone else's write is refused the same way.
 
 A followed file can `use` others. DBML's [module system](https://dbml.dbdiagram.io/syntax/module-system) resolves `use * from './schema'` relative to the followed file, so a `pipeline.dbml` can import a `schema.dbml` next to it: the imported tables appear in the diagram, refs and `Dep` blocks may cross files, and changes to the imported files are picked up too. Imported elements are shown but not edited from here; problems in them are listed with the file's name. Without a followed file the text has no folder, so imports cannot resolve and the Errors list says so.
 
-Following works through the dev server only; without `DBML_ROOTS` it reaches the `.dbml` files in this repo. The bridge reads and writes only `.dbml` files directly under the roots, from the same origin, and reports changes to every followed and imported file over a single event stream, so a file with many imports does not run the browser out of connections. Remember the dev server listens on the network, so keep the roots to what you mean to share.
+Following works through the dev server only; without `DBML_ROOTS` it reaches the files in this repo. The bridge reads and writes only `.dbml` and `.json` files directly under the roots, from the same origin, and reports changes to every followed and imported file over a single event stream, so a file with many imports does not run the browser out of connections. Remember the dev server listens on the network, so keep the roots to what you mean to share.
 
 ## Working with an agent
 
@@ -163,13 +188,13 @@ Each write the agent makes lands in the diagram within a second. You arrange, pr
 
 ## Command line
 
-Two commands expose what the app knows about a `.dbml` file, for scripts and for an agent that writes DBML and needs feedback without a browser:
+Two commands expose what the app knows about a `.dbml` or model `.json` file, for scripts and for an agent that writes one and needs feedback without a browser:
 
 ```bash
 npm run check -- path/to/schema.dbml
 ```
 
-`check` prints the same errors and warnings the Errors button shows, plus the diagram adapter's warnings (duplicate refs, view entries that resolve to nothing) and any problems in the layout footer, as `file:line:col: severity: message`. `use` imports resolve next to the file on disk, and a problem inside an imported file is printed with that file's path. It exits 1 when there are errors, 0 otherwise, and takes several files at once.
+`check` prints the same errors and warnings the Errors button shows, plus the diagram adapter's warnings (duplicate refs, view entries that resolve to nothing) and any problems in the layout footer, as `file:line:col: severity: message`. `use` imports resolve next to the file on disk, and a problem inside an imported file is printed with that file's path. It exits 1 when there are errors, 0 otherwise, and takes several files at once. A model `.json` gets the checks the editor makes: its JSON, the model's shape against the schema, the names the model uses but does not have, and its `layout`, marked `(layout property)`.
 
 ```bash
 npm run graph -- path/to/schema.dbml
@@ -184,7 +209,7 @@ Two npm workspace packages under `packages/`, with the shared tooling (ESLint, t
 
 `packages/engine` (`@dbml-designer/engine`) is the diagram engine (issue #8). It knows no DBML, editor, or file; everything else reaches it through `src/index.ts`, or `src/core.ts` (no components, so it loads in Node too). See [its README](packages/engine/README.md) for the model and the API.
 
-- `src/model.ts` is its input, a diagram's content as plain JSON, and `src/fromModel.ts` indexes that into the view model it draws.
+- `src/model.ts` is its input, a diagram's content as plain JSON, and `src/fromModel.ts` indexes that into the view model it draws. `src/modelSchema.ts` is the model as a JSON Schema, and `src/checkModel.ts` checks untrusted JSON against it.
 - `src/engine/` holds one engine's state, created per instance: `createEngine()` (`engine.ts`) ties a model, its views, its layout, and display options together; `layout.ts` and `layers.ts` are the layout layers with their inheritance, arranging, and taking it back; `views.ts` is the active view.
 - `src/components/EngineDiagram.vue` draws one engine; the other components are the SVG nodes. `src/geometry/` holds framework-free layout, routing, and marker math, `src/state/` the Vue composables for pan, zoom, drag, hover, and tooltips.
 - Tests that describe their diagram in DBML get it through `#dbml-testing`, which only the engine's test configuration maps, to the editor's adapter.
@@ -192,13 +217,14 @@ Two npm workspace packages under `packages/`, with the shared tooling (ESLint, t
 `packages/editor` (`@dbml-designer/editor`) is this app, its command line, and the dev-server plugin.
 
 - `src/dbml/` converts DBML to the engine's model: `toModel.ts` resolves names and aliases, splices in `TablePartial`s, and keeps each element's place in the text as its `source`, and `buildModel.ts` hands the result to the engine.
+- `src/model/` is model files: `modelFile.ts` reads one (JSON syntax, the model's shape, what it names), lifts its `layout` out and puts it back, and edits it in place through jsonc-parser; `documentFormat.ts` splits and joins either kind of document by language; `viewEdits.ts` writes views into `model.views`; `modelFileSchema.ts` is the JSON Schema Monaco checks against.
 - `src/editor/` wraps Monaco and registers the DBML language services.
 - `src/layout/` is the layout in a `.dbml`: its YAML format and writer, the validator that turns imported YAML into diagnostics and a snapshot, the comment handling that puts it into and lifts it out of a file, and the import/export composable.
 - `src/cli/` is the pure logic behind the `check` and `graph` commands; `cli/` is their Node entry point.
 - `plugins/fileBridge.ts` is the dev-server side of following a file; `src/files/` is its browser client and `src/stores/fileLinkStore.ts` the state around it.
 - `src/stores/` holds Pinia stores for the editor text, the compiler state, and UI preferences. `engineStore.ts` holds the editor's one engine, fed the converted DBML, the footers of imported files, and the UI preferences, with its layout and active view persisted; the layout and view stores wrap its state.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
-- `src/sample/` holds the starter schema and the Load Example schema, plus two models to try things on: `grain.dbml` (8 tables keyed by shared `TablePartial`s, the example from the partial-badge and arrange issues) and `synthetic.dbml` (150 tables in 8 groups joined by 400 `Dep` edges, for checking speed).
+- `src/sample/` holds the starter schema and the Load Example schema, plus models to try things on: `grain.dbml` (8 tables keyed by shared `TablePartial`s, the example from the partial-badge and arrange issues), `synthetic.dbml` (150 tables in 8 groups joined by 400 `Dep` edges, for checking speed), and `trace.json` (a model file: how one order line's price came about).
 
 ## Licensing
 

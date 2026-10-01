@@ -1,5 +1,6 @@
 // Adapted from holistics/dbml dbml-playground (src/main.ts), Apache-2.0. See NOTICE.
 import editorWorker from 'monaco-editor/editor/editor.worker?worker';
+import jsonWorker from 'monaco-editor/language/json/json.worker?worker';
 
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
@@ -13,7 +14,8 @@ import { DBMLLanguageService } from '@/editor/dbml_language';
 import App from './App.vue';
 
 self.MonacoEnvironment = {
-  getWorker: () => new editorWorker(),
+  // Model files are JSON, checked against their schema in the JSON worker.
+  getWorker: (_workerId: string, label: string) => (label === 'json' ? new jsonWorker() : new editorWorker()),
 };
 
 DBMLLanguageService.registerLanguage();

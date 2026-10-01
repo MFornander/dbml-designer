@@ -7,7 +7,7 @@
     />
     <div class="status-bar bg-white border-t border-gray-200 px-3 py-1 text-xs text-gray-600 flex justify-between items-center dark:bg-[#1e1e1e] dark:border-gray-700 dark:text-gray-400">
       <div class="flex items-center space-x-4">
-        <span>DBML</span>
+        <span>{{ doc.language === 'json' ? 'JSON' : 'DBML' }}</span>
         <span v-if="!readOnly">UTF-8</span>
       </div>
       <div class="flex items-center space-x-4">
@@ -31,8 +31,11 @@ import {
 } from '@/editor/dbml_language';
 import { useMonacoModel } from '@/editor/useMonacoModel';
 import { setupDbmlServices, updateDiagnosticMarkers } from '@/editor/dbml_services';
+import { MODEL_FILE_SCHEMA } from '@/model/modelFileSchema';
+import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
+import type { ParserDiagnostic } from '@/types/diagnostics';
 
 const {
   readOnly = false,
@@ -56,6 +59,7 @@ const emit = defineEmits<{
 
 const parser = useParserStore();
 const ui = useUiStore();
+const doc = useEditorStore();
 
 // Monaco model
 
@@ -69,7 +73,58 @@ const {
   setLanguage,
 } = useMonacoModel(monacoUri);
 
-setLanguage(DBML_LANGUAGE_ID);
+/** Owner of the markers for names a model file uses but does not have; Monaco's JSON service marks the rest. */
+const MODEL_MARKERS = 'dbml-designer-model';
+
+function toMarker (d: ParserDiagnostic): monaco.editor.IMarkerData {
+  return {
+    severity: monaco.MarkerSeverity.Warning,
+    message: d.message,
+    startLineNumber: d.location.line,
+    startColumn: d.location.column,
+    endLineNumber: d.endLocation.line,
+    endColumn: d.endLocation.column,
+  };
+}
+
+/** Markers for the document as it was last read: the DBML compiler's, or a model file's reference problems. */
+function refreshMarkers (): void {
+  const m = model.value;
+  if (doc.language === 'json') {
+    monaco.editor.setModelMarkers(m, DBML_LANGUAGE_ID, []);
+    monaco.editor.setModelMarkers(m, MODEL_MARKERS, parser.warnings.filter((w) => w.category === 'reference').map(toMarker));
+  } else {
+    monaco.editor.setModelMarkers(m, MODEL_MARKERS, []);
+    updateDiagnosticMarkers(m);
+  }
+}
+
+// The document is DBML or a model file; Monaco follows, also when a switch of files brings another
+// Monaco model, which may have been left in the other language.
+watch([model, () => doc.language], ([, language]) => {
+  setLanguage(language === 'json' ? 'json' : DBML_LANGUAGE_ID);
+  refreshMarkers();
+}, {
+  immediate: true,
+});
+
+// A model file is checked and completed against its schema; only the document in this editor is one.
+watch(monacoUri, (uri) => {
+  monaco.json.jsonDefaults.setDiagnosticsOptions({
+    validate: true,
+    allowComments: false,
+    trailingCommas: 'error',
+    schemaValidation: 'warning',
+    enableSchemaRequest: false,
+    schemas: [{
+      uri: MODEL_FILE_SCHEMA.$id,
+      fileMatch: [uri.toString()],
+      schema: MODEL_FILE_SCHEMA,
+    }],
+  });
+}, {
+  immediate: true,
+});
 
 // Sync model <-> v-model
 watch(model, (m, _, onCleanup) => {
@@ -167,14 +222,14 @@ onMounted(async () => {
     model: model.value,
   });
 
-  updateDiagnosticMarkers(model.value);
+  refreshMarkers();
   emit('editor-mounted', editor.value);
 });
 
 // The parser store replaces its compiler when imported files come and go; the services follow.
 watch(() => parser.compiler, (compiler) => {
   setupDbmlServices(compiler, parser.layout);
-  updateDiagnosticMarkers(model.value);
+  refreshMarkers();
 });
 
 onBeforeUnmount(() => {
@@ -292,8 +347,7 @@ watch(editor, (_editor, _, onCleanup) => {
 watch(() => parser.parseVersion, () => {
   const _editor = editor.value;
   if (!_editor) return;
-  const m = _editor.getModel();
-  if (m) updateDiagnosticMarkers(m);
+  refreshMarkers();
 
   if (!pendingRetrigger) return;
   pendingRetrigger = false;

@@ -1,9 +1,10 @@
 /**
- * Dev-server bridge to `.dbml` files on disk, so the app can follow a file that another program
- * (an agent, an editor) is writing and save back to it. The dev server listens on the LAN, so the
- * bridge stays narrow: only `.dbml` files, only under the configured roots, same origin only.
+ * Dev-server bridge to diagram files on disk, `.dbml` and model `.json`, so the app can follow a
+ * file that another program (an agent, an editor, an inspector) is writing and save back to it.
+ * The dev server listens on the LAN, so the bridge stays narrow: only those two kinds of file,
+ * only under the configured roots, same origin only.
  *
- *   GET  /__dbml/roots           { roots, files }: the roots and the .dbml files under them
+ *   GET  /__dbml/roots           { roots, files }: the roots and the diagram files under them
  *   GET  /__dbml/file?path=…     { path, text, mtimeMs }
  *   PUT  /__dbml/file?path=…     body: the text; header If-Match-Mtime: the mtimeMs last seen,
  *                                answered 409 when the file changed since
@@ -23,9 +24,15 @@ export interface FileBridgeOptions {
   roots: readonly string[];
 }
 
-/** A `.dbml` file that is one of the roots or lies under one of them. */
+/** A file the app can follow: DBML, or a model as JSON. */
+export function isDiagramFile (name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.dbml') || lower.endsWith('.json');
+}
+
+/** A diagram file that is one of the roots or lies under one of them. */
 export function isAllowed (roots: readonly string[], file: string): boolean {
-  if (!file.toLowerCase().endsWith('.dbml')) return false;
+  if (!isDiagramFile(file)) return false;
   const abs = path.resolve(file);
   return roots.some((r) => {
     const root = path.resolve(r);
@@ -35,7 +42,7 @@ export function isAllowed (roots: readonly string[], file: string): boolean {
 
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'coverage']);
 
-/** The `.dbml` files directly under each root (deeper only when asked), skipping dependency and build folders. */
+/** The diagram files directly under each root (deeper only when asked), skipping dependency and build folders. */
 export async function listDbmlFiles (roots: readonly string[], limits = {
   maxDepth: 0,
   max: 200,
@@ -55,7 +62,7 @@ export async function listDbmlFiles (roots: readonly string[], limits = {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (!SKIPPED_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(p, depth + 1);
-      } else if (e.isFile() && e.name.toLowerCase().endsWith('.dbml')) {
+      } else if (e.isFile() && isDiagramFile(e.name)) {
         out.push(p);
       }
     }
@@ -82,7 +89,7 @@ function readBody (req: IncomingMessage): Promise<string> {
   });
 }
 
-const FORBIDDEN = 'Only .dbml files under the configured roots can be followed (see DBML_ROOTS)';
+const FORBIDDEN = 'Only .dbml and .json files under the configured roots can be followed (see DBML_ROOTS)';
 
 /** Watch every listed file and send one event per change until the request closes. */
 function streamChanges (paths: readonly string[], req: IncomingMessage, res: ServerResponse): void {

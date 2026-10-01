@@ -42,9 +42,9 @@ The input is a `Model` (`src/model.ts`). Elements refer to each other by key: a 
 - **Partials**: a table can list the partials it injects, and a ref with `viaPartial` naming one of them is drawn as a badge in that table's header instead of a line.
 - **Sources**: every element can carry a `source`, which the engine hands back untouched with clicks and hovers. The DBML editor keeps the element's place in the text there.
 
-`npm run graph -- file.dbml` in the repository root prints the model of any DBML file, so DBML is one quick way to write a model by hand.
+`npm run graph -- file.dbml` in the repository root prints the model of any DBML file, so DBML is one quick way to write a model by hand. The DBML Designer editor opens models as files, `{ "version": 1, "model": {...} }` with their layout alongside, and checks them as you type.
 
-An element that names a table, field, group, or note that is not there is left out and reported in the diagram model's `diagnostics`, with its source, so a mistake costs that element and not the diagram.
+`MODEL_SCHEMA` is the model as a JSON Schema (draft-07), for editors and validators. For JSON from a file or the network, `checkModel(value)` lists every problem with its path, an error where the engine could not draw the model and a warning for what it ignores, such as an unknown property; `asModel(value)` returns the model when there is no error. An element that names a table, field, group, or note that is not there is left out and reported in the diagram model's `diagnostics`, with its source, so a mistake costs that element and not the diagram.
 
 ## Using it
 

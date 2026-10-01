@@ -1,7 +1,7 @@
 /**
- * What the command line offers an agent or a script: the same DBML diagnostics the app shows,
- * a check of the layout footer, and the schema as the diagram engine's model. Pure functions over
- * text; `cli/dbml-designer.ts` wraps them for the terminal.
+ * What the command line offers an agent or a script: the same diagnostics the app shows for a
+ * `.dbml` or a model `.json`, a check of the layout the file carries, and the schema as the diagram
+ * engine's model. Pure functions over text; `cli/dbml-designer.ts` wraps them for the terminal.
  */
 import {
   Compiler, DBMLDiagnosticsProvider, DEFAULT_ENTRY, MemoryProjectLayout,
@@ -13,9 +13,10 @@ import { buildDiagramModel } from '@/dbml/buildModel';
 import { toModel } from '@/dbml/toModel';
 import { tokenOf } from '@/dbml/token';
 import {
-  fromModel, type EdgeEndpointVM, type FieldVM, type Model, type RefEndpointVM,
+  fromModel, layoutKeysOfModel, type EdgeEndpointVM, type FieldVM, type Model, type RefEndpointVM,
 } from '@dbml-designer/engine/core';
 import { splitLayoutComment, validateLayout } from '@/layout';
+import { readModelDocument, splitModelFile } from '@/model/modelFile';
 import { layoutKeysOf } from '@/layout/schemaKeys';
 import type { ParserDiagnostic } from '@/types/diagnostics';
 
@@ -27,8 +28,8 @@ export interface CliDiagnostic {
   column: number;
   severity: Severity;
   message: string;
-  /** The DBML itself, or the layout YAML in the footer comment. */
-  source: 'dbml' | 'layout';
+  /** The DBML itself, the layout YAML in its footer comment, a model file's JSON, or its `layout` property. */
+  source: 'dbml' | 'layout' | 'model' | 'model-layout';
   /** Absolute path of the file the problem is in when it is an imported file, not the entry. */
   file?: string;
 }
@@ -108,13 +109,13 @@ function fromCompiler (d: Diagnostic, severity: Severity, entry: Filepath): CliD
   };
 }
 
-function fromLayout (d: ParserDiagnostic, severity: Severity, lineOffset: number): CliDiagnostic {
+function fromLayout (d: ParserDiagnostic, severity: Severity, lineOffset: number, source: 'layout' | 'model-layout' = 'layout'): CliDiagnostic {
   return {
     line: d.location.line + lineOffset,
     column: d.location.column,
     severity,
     message: d.message,
-    source: 'layout',
+    source,
   };
 }
 
@@ -169,6 +170,39 @@ export function checkText (text: string, opts: CompileOptions = {}): CheckResult
     errors: diagnostics.filter((d) => d.severity === 'error').length,
     warnings: diagnostics.filter((d) => d.severity === 'warning').length,
     db: compiled.db,
+  };
+}
+
+/**
+ * Everything wrong with a model file: JSON syntax, the file's and the model's shape, names the
+ * model uses but does not have, and problems in its `layout`, at their position in the file.
+ */
+export function checkModelFileText (text: string): CheckResult & { model: Model | null } {
+  const doc = readModelDocument(text);
+  const diagnostics: CliDiagnostic[] = [];
+  const fromModelFile = (d: ParserDiagnostic, severity: Severity): CliDiagnostic => ({
+    line: d.location.line,
+    column: d.location.column,
+    severity,
+    message: d.message,
+    source: 'model',
+  });
+  for (const d of doc.errors) diagnostics.push(fromModelFile(d, 'error'));
+  for (const d of doc.warnings) diagnostics.push(fromModelFile(d, 'warning'));
+  const { layout } = splitModelFile(text);
+  if (layout !== null) {
+    const lineOffset = text.slice(0, text.indexOf(layout)).split('\n').length - 1;
+    const v = validateLayout(layout, doc.model ? layoutKeysOfModel(fromModel(doc.model)) : undefined);
+    for (const d of v.errors) diagnostics.push(fromLayout(d, 'error', lineOffset, 'model-layout'));
+    for (const d of v.warnings) diagnostics.push(fromLayout(d, 'warning', lineOffset, 'model-layout'));
+  }
+  diagnostics.sort(byPosition);
+  return {
+    diagnostics,
+    errors: diagnostics.filter((d) => d.severity === 'error').length,
+    warnings: diagnostics.filter((d) => d.severity === 'warning').length,
+    db: null,
+    model: doc.model ? withoutSources(doc.model) : null,
   };
 }
 
@@ -233,7 +267,8 @@ export function formatModelText (model: Model): string {
 
 /** `file:line:col: severity: message`, one per line, then a summary. */
 export function formatCheck (file: string, result: CheckResult): string {
-  const lines = result.diagnostics.map((d) => `${d.file ?? file}:${d.line}:${d.column}: ${d.severity}: ${d.message}${d.source === 'layout' ? ' (layout footer)' : ''}`);
+  const where = (d: CliDiagnostic) => (d.source === 'layout' ? ' (layout footer)' : d.source === 'model-layout' ? ' (layout property)' : '');
+  const lines = result.diagnostics.map((d) => `${d.file ?? file}:${d.line}:${d.column}: ${d.severity}: ${d.message}${where(d)}`);
   const count = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
   lines.push(`${file}: ${count(result.errors, 'error')}, ${count(result.warnings, 'warning')}`);
   return `${lines.join('\n')}\n`;

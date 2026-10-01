@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  checkText, formatCheck, formatModelText, modelOf,
+  checkModelFileText, checkText, formatCheck, formatModelText, modelOf,
 } from '@/cli/lib';
 import { buildDiagramModel } from '@/dbml/buildModel';
-import { fromModel } from '@dbml-designer/engine/core';
+import { checkModel, fromModel } from '@dbml-designer/engine/core';
 
 /** Every sample schema and test fixture, by path. */
 const SCHEMAS = ['../../sample', '../../dbml/__tests__/fixtures']
@@ -169,10 +169,40 @@ describe('modelOf', () => {
 
   it.each(SCHEMAS)('prints a model of %s that draws exactly what the editor draws', (file) => {
     const { model, check } = modelOf(readFileSync(file, 'utf8'));
+    expect(checkModel(model)).toEqual([]);
     expect(withoutSource(fromModel(model!))).toEqual(withoutSource({
       ...buildDiagramModel(check.db!),
       diagnostics: [],
     }));
+  });
+
+  it('checks a model file: its JSON, its model, what the model names, and its layout, at their lines', () => {
+    const text = [
+      '{',
+      '  "version": 1,',
+      '  "model": {',
+      '    "tables": [{ "name": "a", "fields": [] }],',
+      '    "refs": [{ "from": { "table": "public.a" }, "to": { "table": "public.b" } }]',
+      '  },',
+      '  "layout": {',
+      '    "version": 1,',
+      '    "views": { "default": { "tables": { "public": { "ghost": { "x": 0, "y": 0 } } } } }',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const r = checkModelFileText(text);
+    expect(r.errors).toBe(0);
+    expect(r.model!.tables.map((t) => t.name)).toEqual(['a']);
+    expect(JSON.stringify(r.model)).not.toContain('"source"');
+    const out = formatCheck('trace.json', r);
+    expect(out).toContain('trace.json:5:14: warning: Table "public.b" not found\n');
+    expect(out).toMatch(/trace\.json:9:\d+: warning: Table "ghost".*\(layout property\)\n/);
+    expect(out).toMatch(/trace\.json: 0 errors, 2 warnings\n$/);
+
+    const broken = checkModelFileText('{ "version": 1, "model": { "tables": [ }');
+    expect(broken.errors).toBeGreaterThan(0);
+    expect(broken.model).toBeNull();
   });
 
   it('gives no model for DBML with errors', () => {

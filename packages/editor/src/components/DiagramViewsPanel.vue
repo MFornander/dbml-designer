@@ -269,8 +269,6 @@ import {
   PhCaretDown, PhEye, PhEyeSlash, PhInfo, PhNote, PhSquaresFour, PhStack, PhTable, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { type DiagramModel, type TableVM, visibleEntities } from '@dbml-designer/engine';
-import { diagramViewText, renameDiagramView, upsertDiagramView } from '@/editor/viewText';
-import { useTextEdits } from '@/editor/useTextEdits';
 import { MENU_ITEM, MENU_PANEL } from '@/components/common/menuStyles';
 import { useParserStore } from '@/stores/parserStore';
 import { useLayoutStore } from '@/stores/layoutStore';
@@ -295,8 +293,7 @@ const MAX_CHIPS = 6;
 const views = useViewStore();
 const layout = useLayoutStore();
 const parser = useParserStore();
-const textEdits = useTextEdits();
-const { rangeOf, editable } = useViewActions();
+const { editable, writeView, renameView } = useViewActions();
 
 // The Save arrow's list; the type stays open for more.
 type Menu = 'save';
@@ -499,17 +496,10 @@ const saveTitle = computed(() => {
   return views.dirty ? `Write these choices into DiagramView ${views.view.name}` : 'No unsaved changes';
 });
 
-function blockFor (name: string): string {
-  return diagramViewText(name, visibleEntities(props.model, views.hidden), {
-    tables: props.model.tables.length,
-    notes: props.model.notes.length,
-  });
-}
-
 function save () {
   const v = views.view;
   if (!v || !canSave.value || !editable(v)) return;
-  textEdits.apply(upsertDiagramView(textEdits.text(), rangeOf(v.source), blockFor(v.name)));
+  writeView(props.model, v, v.name);
   views.adopt(v.name);
 }
 
@@ -580,13 +570,11 @@ function submitName () {
       nameError.value = unexpressible.value;
       return;
     }
-    textEdits.apply(upsertDiagramView(textEdits.text(), null, blockFor(name)));
+    writeView(props.model, null, name);
     // A view saved from another named view starts out arranged like it.
     if (current) layout.copyView(current.name, name);
   } else {
-    const range = current ? rangeOf(current.source) : null;
-    if (!current || !range || !editable(current)) return;
-    textEdits.apply(renameDiagramView(textEdits.text(), range, name));
+    if (!current || !editable(current) || !renameView(current, name)) return;
     layout.renameView(current.name, name);
   }
   // The header shows the active name right away; the next parse brings the block itself.

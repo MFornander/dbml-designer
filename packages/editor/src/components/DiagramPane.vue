@@ -153,6 +153,7 @@ import EdgeModeSelect from '@/components/EdgeModeSelect.vue';
 import ErrorsPopover from '@/components/problems/ErrorsPopover.vue';
 import { useArrange } from '@/components/useArrange';
 import { useEditorInstance } from '@/editor/editorInstance';
+import { jsonPathOf, locateInModelFile, setAtPath } from '@/model/modelFile';
 import { offsetAt, setColorSetting, setRefColor } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
 import { useTextEdits } from '@/editor/useTextEdits';
@@ -174,20 +175,44 @@ const textEdits = useTextEdits();
 const canvas = useTemplateRef<InstanceType<typeof EngineDiagram>>('canvas');
 const zoom = ref(1);
 
-/** What the engine draws: the last error-free parse, converted from DBML. */
+/** What the engine draws: the last error-free read of the document, DBML or a model file. */
 const model = computed(() => engine.diagram.value);
 
-/** Where an element sits in the text being edited; none for one declared in an imported file, where edits and jumps make no sense. */
+/**
+ * Where an element sits in the text being edited: its place in the DBML, or in a model file's JSON.
+ * None for one declared in an imported file, where edits and jumps make no sense.
+ */
 function editorToken (source: unknown): TokenRange | undefined {
+  const inModelFile = locateInModelFile(textEdits.text(), source);
+  if (inModelFile) return inModelFile;
   const token = tokenOf(source);
   return token && (token.file === undefined || token.file === parser.entryPath) ? token : undefined;
 }
 
-/** The color picker's choice becomes a `headercolor` or `color` setting in the DBML text. */
+/** The source of what the color picker is coloring. */
+function sourceOf (payload: ColorChangePayload): unknown {
+  switch (payload.kind) {
+    case 'ref':
+      return model.value.refs.find((r) => r.key === payload.key)?.source;
+    case 'table':
+      return model.value.tablesByKey.get(payload.key)?.source;
+    case 'group':
+      return model.value.groups.find((g) => g.key === payload.key)?.source;
+    default:
+      return model.value.notes.find((n) => n.key === payload.key)?.source;
+  }
+}
+
+/** The color picker's choice becomes a `headercolor` or `color` setting in the DBML, or the same property in a model file. */
 function onSetColor (payload: ColorChangePayload) {
   // The diagram shows the last error-free parse; while the text is ahead of it, positions are unreliable.
   if (parser.isStale) return;
   const text = textEdits.text();
+  const path = jsonPathOf(sourceOf(payload));
+  if (path) {
+    textEdits.apply(setAtPath(text, [...path, payload.kind === 'table' ? 'headerColor' : 'color'], payload.color));
+    return;
+  }
   if (payload.kind === 'ref') {
     const ref = model.value.refs.find((r) => r.key === payload.key);
     const token = editorToken(ref?.source);
@@ -217,7 +242,7 @@ function onTableClick (payload: TableLinkPayload) {
 }
 
 function onTableHover (payload: TableLinkPayload | null) {
-  const token = payload ? tokenOf(payload.source) : undefined;
+  const token = payload ? locateInModelFile(textEdits.text(), payload.source) ?? tokenOf(payload.source) : undefined;
   editorInstance.highlightLines(token
     ? {
         startLine: token.start.line,

@@ -1,13 +1,15 @@
 import { computed, ref } from 'vue';
+import { layoutKeysOfModel } from '@dbml-designer/engine/core';
 import { useEditorStore } from '@/stores/editorStore';
+import { useEngineStore } from '@/stores/engineStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useEditorInstance } from '@/editor/editorInstance';
 import { downloadTextFile } from '@/utils/download';
+import { baseFileName, serializeLayout, validateLayout } from '@/layout';
 import {
-  baseFileName, dbmlFileName, serializeLayout, splitLayoutComment, validateLayout, withLayoutComment,
-} from '@/layout';
-import { layoutKeysOf } from '@/layout/schemaKeys';
+  extensionOf, joinDocument, languageOf, splitDocument,
+} from '@/model/documentFormat';
 import EXAMPLE_DBML from '@/sample/example.dbml?raw';
 
 const MESSAGE_MS = 5000;
@@ -15,13 +17,15 @@ const MESSAGE_MS = 5000;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * Export and import of one `.dbml` file that carries the layout as YAML in a footer comment. The
- * editor never shows the footer: it is removed on the way in and written on the way out.
+ * Export and import of one file that carries its layout: a `.dbml` with the layout as YAML in a
+ * footer comment, or a model `.json` with it as a property. The editor never shows the layout: it
+ * is lifted out on the way in and written on the way out.
  */
 export function useFileIO () {
   const editor = useEditorStore();
   const layout = useLayoutStore();
   const parser = useParserStore();
+  const { engine } = useEngineStore();
   const editorInstance = useEditorInstance();
 
   /** Transient status line for the header. */
@@ -35,21 +39,24 @@ export function useFileIO () {
     }, MESSAGE_MS);
   }
 
-  /** File base name from the DBML `Project`, else `schema`. */
+  /** File base name from the project's name, else `schema`. */
   const baseName = computed(() => {
-    const project = parser.rawDatabase?.project as { name?: string | null } | undefined;
-    return baseFileName(project?.name);
+    const name = editor.language === 'json'
+      ? parser.jsonModel?.project?.name
+      : (parser.rawDatabase?.project as { name?: string | null } | undefined)?.name;
+    return baseFileName(name);
   });
 
-  /** The file Export writes: the text with the layout YAML in a comment at the end. */
+  /** The file Export and Save write: the text with the layout put back in. */
   function exportText (): string {
-    return withLayoutComment(editor.text, serializeLayout(layout.snapshot()));
+    return joinDocument(editor.text, serializeLayout(layout.snapshot()), editor.language);
   }
 
   function exportFile (): void {
-    const name = dbmlFileName(baseName.value);
-    downloadTextFile(name, exportText(), 'text/plain');
-    notify(`Downloaded ${name} with the layout in a comment at the end`);
+    const json = editor.language === 'json';
+    const name = `${baseName.value}${extensionOf(editor.language)}`;
+    downloadTextFile(name, exportText(), json ? 'application/json' : 'text/plain');
+    notify(`Downloaded ${name} with the layout ${json ? 'in its layout property' : 'in a comment at the end'}`);
   }
 
   /** Replace the whole text as one undoable edit and parse it right away. */
@@ -66,18 +73,21 @@ export function useFileIO () {
   }
 
   /**
-   * Take in one file's text. Its footer is lifted out: the layout is checked against the schema
-   * and applied to the diagram, and the editor gets the text without it. Returns the line for the
-   * status message, or the failure.
+   * Take in one file's text, as DBML or as a model file by its name. Its layout is lifted out,
+   * checked against the schema, and applied to the diagram; the editor gets the text without it.
+   * Returns the line for the status message, or the failure.
    */
   function importText (name: string, text: string): { done: string } | { failed: string } {
-    const { dbml, layout: yaml } = splitLayoutComment(text);
-    replaceText(dbml);
+    const language = languageOf(name);
+    editor.setLanguage(language);
+    const { body, layout: yaml } = splitDocument(text, language);
+    replaceText(body);
     if (yaml === null) return { done: name };
-    // While imports are still loading the model is the previous text's; checking against it would drop what this text declares.
-    const keys = parser.rawDatabase && !parser.isLoading ? layoutKeysOf(parser.rawDatabase) : undefined;
+    // Without a model yet, or while imports are still loading and the model is the previous text's, nothing is checked against it.
+    const hasModel = language === 'json' ? parser.jsonModel !== undefined : parser.rawDatabase !== undefined;
+    const keys = hasModel && !parser.isLoading ? layoutKeysOfModel(engine.diagram.value) : undefined;
     const v = validateLayout(yaml, keys);
-    if (!v.ok) return { failed: `${name}: layout comment not applied, ${v.errors[0]!.message}` };
+    if (!v.ok) return { failed: `${name}: layout ${language === 'json' ? 'property' : 'comment'} not applied, ${v.errors[0]!.message}` };
     layout.replaceLayout(v.snapshot);
     return {
       done: v.warnings.length
@@ -86,7 +96,7 @@ export function useFileIO () {
     };
   }
 
-  /** Import `.dbml` files, each through `importText`. Returns what was applied and what failed. */
+  /** Import `.dbml` and model `.json` files, each through `importText`. Returns what was applied and what failed. */
   async function importFiles (files: Iterable<File>): Promise<{ done: string[]; failed: string[] }> {
     const done: string[] = [];
     const failed: string[] = [];
@@ -104,7 +114,7 @@ export function useFileIO () {
 
   /** The starter blog schema, a `.dbml` with its arranged layout in the footer, imported like any file. */
   function loadExample (): void {
-    importText('example', EXAMPLE_DBML);
+    importText('example.dbml', EXAMPLE_DBML);
     notify('Loaded the example schema and its layout');
   }
 

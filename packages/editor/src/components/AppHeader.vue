@@ -107,7 +107,7 @@
       type="file"
       class="hidden"
       multiple
-      accept=".dbml,.txt"
+      accept=".dbml,.json,.txt"
       @change="onPick"
     >
   </header>

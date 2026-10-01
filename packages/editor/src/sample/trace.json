@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "model": {
+    "project": {
+      "name": "trace",
+      "note": "How the price of one order line came about: a model a tracing tool writes, no DBML involved."
+    },
+    "tables": [
+      {
+        "schema": "spec",
+        "name": "order_line",
+        "headerColor": "#4B82B0",
+        "note": "One row per order line.",
+        "fields": [
+          { "name": "line_id", "type": "int", "pk": true },
+          { "name": "item_id", "type": "int", "note": "Picks the item whose cost is used." },
+          { "name": "quantity", "type": "int" }
+        ]
+      },
+      {
+        "schema": "input",
+        "name": "item",
+        "headerColor": "#24BAB1",
+        "fields": [
+          { "name": "item_id", "type": "int", "pk": true },
+          { "name": "unit_cost", "type": "decimal(10,2)" }
+        ]
+      },
+      {
+        "schema": "input",
+        "name": "markup",
+        "headerColor": "#24BAB1",
+        "fields": [
+          { "name": "markup_id", "type": "int", "pk": true },
+          { "name": "rate", "type": "decimal(5,4)" }
+        ]
+      },
+      {
+        "schema": "money",
+        "name": "line_price",
+        "headerColor": "#E4A62E",
+        "note": "price = quantity × unit_cost × (1 + rate)",
+        "fields": [
+          { "name": "line_id", "type": "int", "pk": true },
+          { "name": "price", "type": "decimal(12,2)" }
+        ]
+      }
+    ],
+    "refs": [
+      {
+        "from": { "table": "spec.order_line", "fields": ["item_id"], "cardinality": "*" },
+        "to": { "table": "input.item", "fields": ["item_id"], "cardinality": "1" }
+      },
+      {
+        "from": { "table": "money.line_price", "fields": ["line_id"], "cardinality": "1" },
+        "to": { "table": "spec.order_line", "fields": ["line_id"], "cardinality": "1" }
+      }
+    ],
+    "deps": [
+      { "from": { "table": "spec.order_line", "fields": ["quantity"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
+      { "from": { "table": "input.item", "fields": ["unit_cost"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
+      { "from": { "table": "input.markup", "fields": ["rate"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
+      { "from": { "table": "spec.order_line", "fields": ["item_id"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "row" }
+    ],
+    "groups": [
+      { "name": "inputs", "color": "#24BAB1", "tables": ["input.item", "input.markup"] }
+    ],
+    "views": [
+      { "name": "price", "tables": ["spec.order_line", "input.item", "money.line_price"] }
+    ]
+  }
+}

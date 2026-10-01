@@ -53,6 +53,49 @@ describe('useFileIO', () => {
     expect(splitLayoutComment(editor.text).layout).toBeNull();
   });
 
+  it('imports a model file as JSON with its layout, and exports it back as a model file', async () => {
+    const editor = useEditorStore();
+    const layout = useLayoutStore();
+    const io = useFileIO();
+    const model = {
+      project: { name: 'trace' },
+      tables: [{
+        name: 'runs',
+        fields: [{
+          name: 'id',
+          type: 'int',
+        }],
+      }],
+    };
+    const text = `${JSON.stringify({
+      version: 1,
+      model,
+      layout: {
+        version: 1,
+        views: { default: { tables: { public: { runs: { x: 24, y: 32 }, ghost: { x: 0, y: 0 } } } } },
+      },
+    }, null, 2)}\n`;
+    const result = await io.importFiles([file('trace.json', text)]);
+    expect(result.done).toEqual(['trace.json (layout: 1 entry not in the schema, ignored)']);
+    expect(editor.language).toBe('json');
+    expect(JSON.parse(editor.text)).toEqual({
+      version: 1,
+      model,
+    });
+    expect(layout.positions).toEqual({ 'public.runs': { x: 24, y: 32 } });
+    expect(io.baseName.value).toBe('trace');
+
+    layout.setPosition('public.runs', { x: 64, y: 8 });
+    const out = JSON.parse(io.exportText());
+    expect(out.model).toEqual(model);
+    expect(out.layout.views.default.tables.public.runs).toEqual({ x: 64, y: 8 });
+
+    // Back to DBML with the example, read as DBML.
+    io.loadExample();
+    expect(editor.language).toBe('dbml');
+    expect(useParserStore().errors).toEqual([]);
+  });
+
   it('loads the example schema with its layout and no footer in the text', () => {
     const editor = useEditorStore();
     const layout = useLayoutStore();

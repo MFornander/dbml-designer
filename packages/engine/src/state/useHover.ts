@@ -1,4 +1,6 @@
-import { computed, shallowRef, type Ref } from 'vue';
+import {
+  computed, shallowRef, watch, type Ref,
+} from 'vue';
 import type { DiagramModel } from '../types';
 import type {
   DepKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
@@ -137,9 +139,35 @@ export function sameTarget (a: HoverTarget | null, b: HoverTarget | null): boole
   return false;
 }
 
+/** Whether the model still has what a target points at. */
+export function targetExists (model: DiagramModel, t: HoverTarget): boolean {
+  switch (t.kind) {
+    case 'table':
+      return model.tablesByKey.has(t.key);
+    case 'field':
+      return model.tablesByKey.get(t.tableKey)?.fields.some((f) => f.key === t.fieldKey) ?? false;
+    case 'partial':
+      return model.tablesByKey.get(t.tableKey)?.partialRefs?.some((p) => p.partial === t.partial) ?? false;
+    case 'ref':
+      return model.refs.some((r) => r.key === t.key);
+    case 'dep':
+      return model.deps.some((d) => d.key === t.key || d.columns.some((c) => c.key === t.key));
+    case 'group':
+      return model.groups.some((g) => g.key === t.key);
+    default:
+      return model.notes.some((n) => n.key === t.key);
+  }
+}
+
 export function useHover (model: Ref<DiagramModel>, suppressed: Ref<boolean>) {
   const hover = shallowRef<HoverTarget | null>(null);
   const pinned = shallowRef<HoverTarget | null>(null);
+
+  // A new model may no longer have what was hovered or pinned, for example after a switch of files.
+  watch(model, (m) => {
+    if (hover.value && !targetExists(m, hover.value)) hover.value = null;
+    if (pinned.value && !targetExists(m, pinned.value)) pinned.value = null;
+  });
 
   const effective = computed<HoverTarget | null>(() => {
     if (suppressed.value) return null;

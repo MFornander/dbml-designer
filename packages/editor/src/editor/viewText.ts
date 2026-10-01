@@ -2,7 +2,7 @@
  * Writing `DiagramView` blocks: the text for a view, and the edits that add, replace, or remove
  * one in the DBML source.
  */
-import { type NoteVM, type TableVM, DEFAULT_SCHEMA } from '@dbml-designer/engine';
+import { type NoteVM, type TableVM, DEFAULT_SCHEMA } from '@dbml-designer/engine/core';
 import { quoteIdentifier } from './refText';
 import type { TextEdit } from './colorEdit';
 

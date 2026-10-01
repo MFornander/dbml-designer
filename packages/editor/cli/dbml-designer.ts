@@ -1,24 +1,26 @@
 /**
- * DBML Designer on the command line, for scripts and for an agent editing the DBML.
+ * DBML Designer on the command line, for scripts and for an agent editing a diagram file.
  *
- *   npm run check -- path/to/file.dbml [more.dbml ...]
+ *   npm run check -- path/to/file.dbml [more.dbml model.json ...]
  *   npm run graph -- path/to/file.dbml [--text]
  *
- * `check` prints the app's DBML errors and warnings plus problems in the layout footer as
- * `file:line:col: severity: message` and exits 1 when there are errors. `graph` prints the
- * diagram engine's model of the file as JSON, or as a compact listing with `--text`.
+ * `check` prints the app's errors and warnings for a `.dbml` or a model `.json`, plus problems in
+ * the layout the file carries, as `file:line:col: severity: message`, and exits 1 when there are
+ * errors. `graph` prints the diagram engine's model of the file as JSON, or as a compact listing
+ * with `--text`.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Filepath } from '@dbml/parse';
 import {
-  checkText, formatCheck, formatModelText, modelOf,
+  checkModelFileText, checkText, formatCheck, formatModelText, modelOf,
 } from '../src/cli/lib';
+import { languageOf } from '../src/model/documentFormat';
 import { DiskProjectLayout } from './diskLayout';
 
 const USAGE = `Usage:
-  dbml-designer check <file.dbml> [...]   Report errors and warnings; exit 1 on errors
-  dbml-designer graph <file.dbml> [--text] Print the engine's model as JSON (or a listing)
+  dbml-designer check <file.dbml|file.json> [...]   Report errors and warnings; exit 1 on errors
+  dbml-designer graph <file.dbml|file.json> [--text] Print the engine's model as JSON (or a listing)
 `;
 
 function read (file: string): string {
@@ -47,7 +49,7 @@ function main (argv: string[]): number {
     let failed = false;
     for (const file of files) {
       const { text, opts } = project(file);
-      const result = checkText(text, opts);
+      const result = languageOf(file) === 'json' ? checkModelFileText(text) : checkText(text, opts);
       process.stdout.write(formatCheck(file, result));
       if (result.errors > 0) failed = true;
     }
@@ -57,7 +59,12 @@ function main (argv: string[]): number {
   if (command === 'graph' && files.length === 1) {
     const file = files[0]!;
     const { text, opts } = project(file);
-    const { model, check } = modelOf(text, opts);
+    const { model, check } = languageOf(file) === 'json'
+      ? (({ model: m, ...c }) => ({
+          model: m,
+          check: c,
+        }))(checkModelFileText(text))
+      : modelOf(text, opts);
     if (!model) {
       process.stderr.write(formatCheck(file, check));
       return 1;

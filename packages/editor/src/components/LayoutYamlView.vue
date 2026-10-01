@@ -13,15 +13,25 @@ import * as monaco from 'monaco-editor';
 import {
   DBMLLanguageService, EDITOR_FONT_FAMILY, EDITOR_FONT_SIZE, EDITOR_LINE_HEIGHT,
 } from '@/editor/dbml_language';
+import YAML from 'yaml';
 import { serializeLayout } from '@/layout';
+import { useEditorStore } from '@/stores/editorStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useUiStore } from '@/stores/uiStore';
 
-/** Read-only view of the layout YAML exactly as Export writes it into the `.dbml`'s footer comment. */
+/**
+ * Read-only view of the layout exactly as Export and Save write it: YAML in a `.dbml`'s footer
+ * comment, or JSON in a model file's `layout` property.
+ */
 const layout = useLayoutStore();
 const ui = useUiStore();
+const doc = useEditorStore();
 
-const text = computed(() => serializeLayout(layout.snapshot()));
+const language = computed(() => (doc.language === 'json' ? 'json' : 'yaml'));
+const text = computed(() => {
+  const yaml = serializeLayout(layout.snapshot());
+  return language.value === 'json' ? `${JSON.stringify(YAML.parse(yaml), null, 2)}\n` : yaml;
+});
 
 const container = useTemplateRef<HTMLElement>('container');
 const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -29,7 +39,8 @@ let model: monaco.editor.ITextModel | null = null;
 
 onMounted(() => {
   if (!container.value) return;
-  model = monaco.editor.createModel(text.value, 'yaml');
+  // Its own address, so the model file schema that checks the editor's JSON leaves it alone.
+  model = monaco.editor.createModel(text.value, language.value, monaco.Uri.parse('inmemory://layout/view'));
   editor.value = monaco.editor.create(container.value, {
     model,
     theme: DBMLLanguageService.getThemeName(ui.theme),
@@ -64,6 +75,10 @@ onMounted(() => {
       horizontalScrollbarSize: 10,
     },
   });
+});
+
+watch(language, (l) => {
+  if (model) monaco.editor.setModelLanguage(model, l);
 });
 
 // Follow the diagram without losing the scroll position.

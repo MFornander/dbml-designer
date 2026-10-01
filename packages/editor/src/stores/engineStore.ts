@@ -7,6 +7,7 @@ import {
 import { splitLayoutComment, validateLayout } from '@/layout';
 import type { LayoutSnapshot } from '@/layout';
 import { usePersistedRef } from '@/utils/persistedRef';
+import { useEditorStore } from './editorStore';
 import { useParserStore } from './parserStore';
 import { useUiStore } from './uiStore';
 
@@ -23,13 +24,15 @@ function isViewState (v: unknown): v is ViewState {
 }
 
 /**
- * The editor's one diagram engine. It draws the last error-free parse, converted from DBML,
- * inherits the layouts in the footers of the files the DBML imports, takes its display options
- * from the UI preferences, and keeps its layout layers and active view in local storage.
+ * The editor's one diagram engine. It draws the last error-free read of the document: DBML
+ * converted to the engine's model, or a model file's model as it stands. It inherits the layouts
+ * in the footers of the files the DBML imports, takes its display options from the UI preferences,
+ * and keeps its layout layers and active view in local storage.
  */
 export const useEngineStore = defineStore('engine', () => {
   const parser = useParserStore();
   const ui = useUiStore();
+  const editor = useEditorStore();
 
   const layoutState = usePersistedRef<LayoutState>('layout', emptyLayoutState, {
     debounceMs: 250,
@@ -64,11 +67,12 @@ export const useEngineStore = defineStore('engine', () => {
     return snapshots;
   });
 
-  // rawDatabase only changes after an error-free parse, so a syntax error never reaches the engine.
+  // Both kinds of document change the model only after a read without errors, so a typo never reaches the engine.
   const engine = markRaw(createEngine({
-    model: () => toModel(parser.rawDatabase).model,
+    model: () => (editor.language === 'json' ? parser.jsonModel ?? null : toModel(parser.rawDatabase).model),
     loading: () => parser.isLoading,
-    bases: () => importedSnapshots.value,
+    // A model file imports nothing, so it inherits no layout.
+    bases: () => (editor.language === 'json' ? [] : importedSnapshots.value),
     display: () => ({
       detailLevel: ui.detailLevel,
       dark: ui.isDark,
