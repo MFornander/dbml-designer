@@ -1,0 +1,583 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/MFornander/dbml-designer/schemas/model.json",
+  "title": "Diagram model",
+  "description": "What a diagram shows, as plain data. Tables are named by key, `schema.name`, with the schema `public` when a table has none.",
+  "type": "object",
+  "required": [
+    "tables"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "$ref": "#/definitions/project"
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/table"
+      },
+      "description": "The tables, in the order they are declared."
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ref"
+      },
+      "description": "Relationships between tables or fields."
+    },
+    "deps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/dep"
+      },
+      "description": "Lineage edges, upstream to downstream; every edge between the same two tables is drawn as one."
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/group"
+      },
+      "description": "Table groups; a table belongs to the first group that lists it."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/note"
+      },
+      "description": "Sticky notes."
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/view"
+      },
+      "description": "Named views of the diagram."
+    },
+    "enums": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/enum"
+      },
+      "description": "Enums, whose values field tooltips list."
+    }
+  },
+  "definitions": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name."
+        },
+        "databaseType": {
+          "type": "string",
+          "description": "Database type, for example `PostgreSQL`."
+        },
+        "note": {
+          "type": "string",
+          "description": "Project note."
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": [
+        "name",
+        "fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "type": "string",
+          "description": "Schema; absent for the default schema, `public`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Table name."
+        },
+        "alias": {
+          "type": "string",
+          "description": "Alias, shown in the tooltip."
+        },
+        "headerColor": {
+          "type": "string",
+          "description": "Header color. `#RGB` or `#RRGGBB`; anything else draws the default."
+        },
+        "note": {
+          "type": "string",
+          "description": "Note, Markdown."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Name and value pairs listed in tooltips."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/field"
+          },
+          "description": "The fields, in order."
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/index"
+          },
+          "description": "Indexes; a `pk` index marks a composite primary key."
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Check constraints as shown, for example `positive: price > 0`."
+        },
+        "partials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/partial"
+          },
+          "description": "The TablePartials the table injects, in injection order."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/record"
+          },
+          "description": "Rows of data by field name. One shows its values on the fields; several show their count in the header, which opens them."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      },
+      "description": "One row: values by field name; dates and times as text."
+    },
+    "partial": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "TablePartial name."
+        },
+        "keyColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The partial's primary key columns, listed in its badge's tooltip."
+        },
+        "note": {
+          "type": "string",
+          "description": "The partial's note."
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type as shown, arguments included, for example `varchar(64)`."
+        },
+        "pk": {
+          "type": "boolean",
+          "description": "Part of the primary key."
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "Unique."
+        },
+        "notNull": {
+          "type": "boolean",
+          "description": "Not null."
+        },
+        "increment": {
+          "type": "boolean",
+          "description": "Auto-increment."
+        },
+        "default": {
+          "type": "string",
+          "description": "Default as shown, for example `'draft'` or `` `now()` ``."
+        },
+        "note": {
+          "type": "string",
+          "description": "Note, Markdown."
+        },
+        "enum": {
+          "type": "string",
+          "description": "`schema.name` of the enum the type is."
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Check constraints as shown."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Name and value pairs listed in tooltips."
+        },
+        "injectedFrom": {
+          "type": "string",
+          "description": "Name of the TablePartial the field came from."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "required": [
+        "columns"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names, or expressions in backticks, in order."
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "Unique index."
+        },
+        "pk": {
+          "type": "boolean",
+          "description": "Composite primary key."
+        },
+        "type": {
+          "type": "string",
+          "description": "Index type, for example `btree`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Index name."
+        },
+        "note": {
+          "type": "string",
+          "description": "Note."
+        }
+      }
+    },
+    "refEnd": {
+      "type": "object",
+      "required": [
+        "table"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "type": "string",
+          "description": "Table key, `schema.name`."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Field names; none for a ref between whole tables."
+        },
+        "cardinality": {
+          "type": "string",
+          "pattern": "^(\\*|\\d+|\\d+\\.\\.(\\d+|\\*))$",
+          "description": "How many rows take part at this end: `1`, `*` (one or more), `0..1`, `0..*`, `1..*`, or `m..n`. `1` when absent."
+        }
+      }
+    },
+    "ref": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Relationship name."
+        },
+        "from": {
+          "$ref": "#/definitions/refEnd"
+        },
+        "to": {
+          "$ref": "#/definitions/refEnd"
+        },
+        "color": {
+          "type": "string",
+          "description": "Line color; otherwise the header color of the \"one\" side. `#RGB` or `#RRGGBB`; anything else draws the default."
+        },
+        "inactive": {
+          "type": "boolean",
+          "description": "Drawn dashed."
+        },
+        "onDelete": {
+          "type": "string",
+          "description": "Delete rule, shown in the tooltip."
+        },
+        "onUpdate": {
+          "type": "string",
+          "description": "Update rule, shown in the tooltip."
+        },
+        "viaPartial": {
+          "type": "string",
+          "description": "The TablePartial whose injected field declares the ref; drawn as a badge on the `from` table."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "edgeEnd": {
+      "type": "object",
+      "required": [
+        "table"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "type": "string",
+          "description": "Table key, `schema.name`."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Field names for a column-level edge; none between whole tables."
+        }
+      }
+    },
+    "dep": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/edgeEnd"
+        },
+        "to": {
+          "$ref": "#/definitions/edgeEnd"
+        },
+        "name": {
+          "type": "string",
+          "description": "Shown on the edge while it is highlighted; the names of every dep between two tables are joined."
+        },
+        "kind": {
+          "type": "string",
+          "description": "What the upstream end does for the downstream one: `value`, an operand of the formula, drawn solid; `row`, it chose the row used, drawn in short dashes. Any other kind is listed in the tooltip.",
+          "examples": [
+            "value",
+            "row"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "description": "Edge color, whatever its kind. `#RGB` or `#RRGGBB`; anything else draws the default."
+        },
+        "note": {
+          "type": "string",
+          "description": "Note, listed in the edge's tooltip."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Name and value pairs listed in tooltips."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": [
+        "name",
+        "tables"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "type": "string",
+          "description": "Schema; absent for the default schema, `public`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Group name."
+        },
+        "color": {
+          "type": "string",
+          "description": "Group color. `#RGB` or `#RRGGBB`; anything else draws the default."
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Table keys."
+        },
+        "note": {
+          "type": "string",
+          "description": "Note."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Name and value pairs listed in tooltips."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "required": [
+        "name",
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name."
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown."
+        },
+        "color": {
+          "type": "string",
+          "description": "Paper color. `#RGB` or `#RRGGBB`; anything else draws the default."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "View name."
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Table keys the view shows."
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Groups, as `schema.name`, whose tables the view shows."
+        },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Schemas whose tables the view shows."
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Note names the view shows."
+        },
+        "source": {
+          "description": "Anything the host recognizes the element by; handed back with clicks and hovers."
+        }
+      }
+    },
+    "enum": {
+      "type": "object",
+      "required": [
+        "name",
+        "values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "type": "string",
+          "description": "Schema; absent for the default schema, `public`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Enum name."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Value."
+              },
+              "note": {
+                "type": "string",
+                "description": "Note."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

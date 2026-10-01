@@ -7,12 +7,13 @@
  * never comes into it.
  *
  * Messages are objects with a `type` starting `dbml-designer:`. Only the embedding page is heard,
- * and it is told `dbml-designer:ready` once the editor listens. A message that does not fit gets a
- * `dbml-designer:error` reply.
+ * and it is told `dbml-designer:ready`, with the protocol and engine versions, once the editor
+ * listens. A message that does not fit gets a `dbml-designer:error` reply. The protocol is
+ * documented in `docs/embedding.md`; change both together.
  */
 import { onBeforeUnmount, onMounted } from 'vue';
 import {
-  asModel, withEdges, withRows, withTables, withViewTables,
+  asModel, ENGINE_VERSION, withEdges, withRows, withTables, withViewTables,
   type Model, type ModelDep, type ModelRecord, type ModelTable,
 } from '@dbml-designer/engine/core';
 import { modelFileText, withoutSources } from '@/model/modelFile';
@@ -38,6 +39,29 @@ export type HostMessage =
 export type HostReply =
   | { type: 'dbml-designer:rect'; key: string; rect: { x: number; y: number; width: number; height: number } | null }
   | { type: 'dbml-designer:error'; message: string; request?: string };
+
+/**
+ * The version of these messages, sent with `dbml-designer:ready`. It goes up when a page written
+ * for the version before could break: a message or field removed or changed in meaning. New
+ * messages and new optional fields keep it.
+ */
+export const HOST_PROTOCOL_VERSION = 1;
+
+/** Every message the editor takes, then every one it sends; `docs/embedding.md` describes each. */
+export const HOST_MESSAGE_TYPES: readonly HostMessage['type'][] = [
+  'dbml-designer:model', 'dbml-designer:addTables', 'dbml-designer:addEdges', 'dbml-designer:setRows', 'dbml-designer:addToView',
+  'dbml-designer:setView', 'dbml-designer:readOnly', 'dbml-designer:rect',
+];
+export const HOST_REPLY_TYPES = ['dbml-designer:ready', 'dbml-designer:rect', 'dbml-designer:error'] as const;
+
+/** What the editor says once it listens. */
+export function readyMessage () {
+  return {
+    type: 'dbml-designer:ready',
+    protocol: HOST_PROTOCOL_VERSION,
+    engine: ENGINE_VERSION,
+  } as const;
+}
 
 const PREFIX = 'dbml-designer:';
 
@@ -173,7 +197,7 @@ export function useHostMessages (): void {
   }
   onMounted(() => {
     window.addEventListener('message', onMessage);
-    window.parent.postMessage({ type: 'dbml-designer:ready' }, '*');
+    window.parent.postMessage(readyMessage(), '*');
   });
   onBeforeUnmount(() => window.removeEventListener('message', onMessage));
 }

@@ -4,6 +4,7 @@
  * line tool, import this; `index.ts` adds the components that draw an engine.
  */
 
+export { ENGINE_VERSION } from './version';
 export {
   createEngine, DEFAULT_DISPLAY, MARK_MS, MARK_WAIT_MS,
   type DiagramHandle, type DisplayOptions, type Engine, type EngineOptions, type Input,
@@ -42,8 +43,10 @@ export {
   type ArrangeInput, type ArrangeOptions, type ArrangeResult, type PendingInput,
 } from './geometry/arrange';
 export {
-  placeByLineage, placeNewItems, type LineageLink, type PlacementItem,
+  placeByLineage, placeNewItems, type LineageLink, type PlacementItem, type PlacementOptions,
 } from './geometry/layout';
+export type { Point, Rect, Size } from './geometry/rect';
+export type { HoverTarget } from './state/useHover';
 export { createMeasurer, type Measurer } from './geometry/measure';
 export { computeTableSize, type TableSize } from './geometry/tableSize';
 export { visibleFields } from './geometry/lod';

@@ -6,6 +6,8 @@ Everything runs in the browser: no accounts, no server. Your text and layout are
 
 The repository holds two npm workspace packages: the diagram engine (`packages/engine`, [its README](packages/engine/README.md)), which draws a diagram from a plain JSON model and knows nothing of DBML, and this editor (`packages/editor`), which converts DBML to the engine's model and runs on the engine. Other programs, such as a run or provenance inspector, can use the engine directly.
 
+**Documentation:** this README covers the editor. [packages/engine/README.md](packages/engine/README.md) is the engine's reference, with its [CHANGELOG.md](packages/engine/CHANGELOG.md), [api.json](packages/engine/api.json), and [model.schema.json](packages/engine/model.schema.json). [docs/embedding.md](docs/embedding.md) covers putting a diagram in another app, and [AGENTS.md](AGENTS.md) is the short version for coding agents.
+
 ![DBML Designer showing the example blog schema: the DBML editor and the collapsible Layout panel on the left, the diagram with tables, a table group, relationships, a lineage edge, and a sticky note on the right](docs/screenshot.png)
 
 ## Features
@@ -137,6 +139,7 @@ Other scripts:
 | `npm run type-check` | `vue-tsc` for the engine and the app, `tsc` for the command line |
 | `npm run lint` | ESLint over both packages, including the rules that keep the engine free of DBML and each package to the dependencies it declares |
 | `npm run build` | Build the engine library in `packages/engine/dist/` (ES modules for Vue hosts and Node, a standalone bundle with Vue for other hosts, type declarations), then type-check and build the editor in `packages/editor/dist/` |
+| `npm run api -w @dbml-designer/engine` | Record a change to the engine's public API in `api.json` and `model.schema.json`, after setting a new version (see the engine README, "Versioning") |
 | `npm run preview` | Serve the production build locally |
 
 ## Following files
@@ -157,12 +160,12 @@ Following works through the dev server only; without `DBML_ROOTS` it reaches the
 
 ## Embedding
 
-An app that shows a growing diagram, such as an explanation expanded a level at a time, has two ways in that need no file and no DBML:
+An app that shows a growing diagram, such as an explanation expanded a level at a time, can do it without files or DBML, in either of two ways. [docs/embedding.md](docs/embedding.md) compares them and documents the iframe protocol.
 
-- **As a component**: the engine package, `@dbml-designer/engine`, draws from a model the app hands it and grows it with `addTables`, `addEdges`, `setRows`, and `addToView`, each taken in at once with the layout kept, new tables placed beside their lineage neighbours, and what is new highlighted for a moment; `setView` switches views, and `elementOf(key)` gives the drawn element of a table, field, or edge to anchor the app's own overlays. See [its README](packages/engine/README.md).
-- **In an iframe** of the editor: the page sends messages with `postMessage`, `{ type: 'dbml-designer:model', model }` to show a model, then `dbml-designer:addTables` (`tables`), `addEdges` (`edges`, the model's deps), `setRows` (`table`, `rows`), `addToView` (`view`, `tables`), `setView` (`view`), `readOnly` (`readOnly`), and `rect` (`key`, answered with where that element is drawn). The editor says `dbml-designer:ready` when it listens, answers a message it cannot carry out with `dbml-designer:error`, and takes additions posted together in as one change, so a table and the edges that connect it are placed together. An embedded editor keeps its state to itself, follows no file until one is picked, and holds the page's model as a model file's JSON.
+- **As a component:** the engine package draws from a model the app hands it, and grows it with `addTables`, `addEdges`, `setRows`, and `addToView`. See [its README](packages/engine/README.md).
+- **In an iframe** of the editor: the page sends the same model and additions with `postMessage`.
 
-`?readonly` in the editor's address shows the diagram alone: no editor pane, nothing saved, and nothing written into the text, so no color picker, view saving, Import, or Load Example; following a file and arranging still work.
+`?readonly` in the editor's address shows the diagram alone: no editor pane, nothing saved, and nothing written into the text, so no color picker, view saving, Import, or Load Example. Following a file and arranging still work.
 
 ## Working with an agent
 
@@ -214,7 +217,7 @@ npm run graph -- path/to/schema.dbml
 npm run graph -- path/to/schema.dbml --text
 ```
 
-`graph` prints the diagram engine's model of the file (`packages/engine/src/model.ts`): the JSON a program would hand the engine to draw the same diagram, with names resolved to keys and `TablePartial`s spliced into the tables that inject them. In declaration order it holds the project, tables with their fields, indexes, and partials, refs with both ends and cardinalities, `Dep` edges with their column mappings (one per edge, carrying its block's name, color, note, and metadata), groups, sticky notes, views, and enums. JSON by default, or with `--text` a compact listing of the model as the engine resolves it, with each table's group and the `Dep` edges between two tables folded into one. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
+`graph` prints the diagram engine's model of the file (`packages/engine/src/model.ts`): the JSON a program would hand the engine to draw the same diagram, with names resolved to keys and `TablePartial`s spliced into the tables that inject them. In declaration order it holds the project, tables with their fields, indexes, and partials, refs with both ends and cardinalities, `Dep` edges with their column mappings (one per edge, carrying its block's name, kind, color, note, and metadata), groups, sticky notes, views, and enums. JSON by default, or with `--text` a compact listing of the model as the engine resolves it, with each table's group and the `Dep` edges between two tables folded into one. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
 
 ## Layout of the code
 
@@ -223,6 +226,7 @@ Two npm workspace packages under `packages/`, with the shared tooling (ESLint, t
 `packages/engine` (`@dbml-designer/engine`) is the diagram engine (issue #8). It knows no DBML, editor, or file; everything else reaches it through `src/index.ts`, or `src/core.ts` (no components, so it loads in Node too). See [its README](packages/engine/README.md) for the model and the API.
 
 - `src/model.ts` is its input, a diagram's content as plain JSON, and `src/fromModel.ts` indexes that into the view model it draws. `src/modelSchema.ts` is the model as a JSON Schema, and `src/checkModel.ts` checks untrusted JSON against it.
+- `src/version.ts`, `api.json`, `model.schema.json`, and `CHANGELOG.md` version the public API; `src/__tests__/api.test.ts` keeps them, and the README, in step with the code.
 - `src/engine/` holds one engine's state, created per instance: `createEngine()` (`engine.ts`) ties a model, its views, its layout, and display options together; `layout.ts` and `layers.ts` are the layout layers with their inheritance, arranging, and taking it back; `views.ts` is the active view; `changes.ts` finds what an update added, and `modelEdits.ts` grows a model.
 - `src/components/EngineDiagram.vue` draws one engine; the other components are the SVG nodes. `src/geometry/` holds framework-free layout, routing, and marker math, `src/state/` the Vue composables for pan, zoom, drag, hover, and tooltips.
 - Tests that describe their diagram in DBML get it through `#dbml-testing`, which only the engine's test configuration maps, to the editor's adapter.

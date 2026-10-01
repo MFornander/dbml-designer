@@ -1,111 +1,23 @@
 # @dbml-designer/engine
 
-A diagram engine for database schemas and their lineage. Hand it a model as plain JSON, with tables, relationships, lineage edges, groups, sticky notes, and views, and it draws an interactive diagram: drag, pan and zoom, hover highlights with marching ants, tooltips, detail levels, light and dark themes, partial-ref badges, and an Arrange that lays out pipelines by group and lineage.
+A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-It knows nothing of DBML, editors, or files. The DBML Designer editor in this repository is one host: it converts DBML to this model. A run inspector or a provenance tool can be another, building the model from whatever it already has.
+This README documents version 0.2.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
-## The model
+**Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
-The input is a `Model` (`src/model.ts`). Elements refer to each other by key: a table by `schema.name`, with the schema `public` when the table has none; a field by its name within its table; a group or an enum by `schema.name`; a sticky note by its name.
+## Quick start
 
-```json
-{
-  "tables": [
-    { "schema": "spec", "name": "order_line", "fields": [
-      { "name": "line_id", "type": "int", "pk": true },
-      { "name": "item_id", "type": "int" },
-      { "name": "quantity", "type": "int" }
-    ] },
-    { "schema": "money", "name": "line_price", "headerColor": "#24BAB1", "fields": [
-      { "name": "line_id", "type": "int", "pk": true },
-      { "name": "price", "type": "decimal(10,2)" }
-    ] }
-  ],
-  "refs": [
-    { "from": { "table": "money.line_price", "fields": ["line_id"], "cardinality": "1" },
-      "to": { "table": "spec.order_line", "fields": ["line_id"], "cardinality": "1" } }
-  ],
-  "deps": [
-    { "from": { "table": "spec.order_line", "fields": ["quantity"] },
-      "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" }
-  ],
-  "groups": [{ "name": "trace", "tables": ["spec.order_line", "money.line_price"] }],
-  "views": [{ "name": "prices", "tables": ["money.line_price"] }]
-}
-```
-
-- **Tables** carry fields (type as shown, keys, default, note, enum, metadata), indexes, checks, a header color, a note, and metadata.
-- **Records** are a table's rows, each an object from field name to a string, number, boolean, or null. With one record, each field it names shows its value at the right of the row; with several, a row-count badge in the header opens them as a table. The `showValues` display option hides both.
-- **Refs** have two ends, each a table with optional fields and a cardinality (`1`, `*` for one or more, `0..1`, `0..*`, `1..*`, `m..n`; `1` when left out). A ref is colored after its "one" side unless it has a color of its own.
-- **Deps** are lineage edges from an upstream end to a downstream one, column-level when both ends name fields. Every dep between the same two tables is drawn as one edge; its column mappings show when a mapped field is hovered. With the `lineageColumns` display option, every column mapping is drawn field to field all the time instead, styled by its dep's `kind`: `value` (an operand of the downstream formula) solid, `row` (it chose the row used, as a join key or a filter) in short dashes, anything else in the usual lineage dashes, with a legend in the corner. An explicit `color` sets the line's color whatever its kind. A mapping keeps its own dep's name, kind, note, and metadata for its tooltip.
-- **Groups** list their tables; a table belongs to the first group that lists it.
-- **Views** say what they show: tables, groups, schemas, notes. Each list restricts only its own kind, and only when it is there.
-- **Partials**: a table can list the partials it injects, and a ref with `viaPartial` naming one of them is drawn as a badge in that table's header instead of a line.
-- **Sources**: every element can carry a `source`, which the engine hands back untouched with clicks and hovers. The DBML editor keeps the element's place in the text there.
-
-`npm run graph -- file.dbml` in the repository root prints the model of any DBML file, so DBML is one quick way to write a model by hand. The DBML Designer editor opens models as files, `{ "version": 1, "model": {...} }` with their layout alongside, and checks them as you type.
-
-`MODEL_SCHEMA` is the model as a JSON Schema (draft-07), for editors and validators. For JSON from a file or the network, `checkModel(value)` lists every problem with its path, an error where the engine could not draw the model and a warning for what it ignores, such as an unknown property; `asModel(value)` returns the model when there is no error. An element that names a table, field, group, or note that is not there is left out and reported in the diagram model's `diagnostics`, with its source, so a mistake costs that element and not the diagram.
-
-## Using it
+In a Vue app:
 
 ```ts
 import { createEngine, EngineDiagram } from '@dbml-designer/engine';
 
-const engine = createEngine({
-  model,                          // a Model, or a getter the engine follows
-  display: { detailLevel: 'all', dark: false },
-  layout: savedSnapshot,          // optional: what snapshot() returned last time
-});
+const engine = createEngine({ model, display: { detailLevel: 'all' } });
+// <EngineDiagram :engine="engine" @table-click="({ key, source }) => open(source)" />
 ```
 
-```vue
-<EngineDiagram :engine="engine" @table-click="({ key, source }) => open(key)" />
-```
-
-`EngineDiagram` fills its container. Its events are `table-click` and `table-hover` (`{ key, source }`, the source undefined for a table that has none), `set-color` (a color picked for a table, group, note, or ref; the host decides where it goes), `zoom-change`, and `arrange` (an arrangement was stored).
-
-### The engine
-
-| Member | What it does |
-|---|---|
-| `diagram` | The view model being drawn, computed from the model |
-| `setModel(model)` | Show another model. The layout is kept, tables without a position are placed, and what the model no longer has is dropped from the layout |
-| `addTables(tables)`, `addEdges(deps)`, `setRows(table, rows)`, `addToView(name, tables)` | Grow the model a little at a time, for a host that gave it as a value: add tables (or replace those with the same key), add lineage edges, replace a table's rows, add tables to a view (creating it). Calls made together are taken in as one change; what is new is marked |
-| `model` | The model being shown, with what those calls added |
-| `markChanges()`, `marked` | Highlight what the next model adds (tables, fields, relationships, lineage) for two seconds; `marked` holds their keys meanwhile. The methods above do it themselves; the editor asks for it when a followed file changes on disk |
-| `setView(name)` | `selectView` by another name |
-| `elementOf(key)` | The drawn element of a table, field (`schema.table.field`), group, note, or edge, by key, to anchor the host's own overlays to; null when it is not drawn |
-| `setLoading(flag)` | While true, the model is taken to be behind what the host is loading: nothing is placed or dropped against it |
-| `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), lineage by column (`lineageColumns`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all, and whether the color picker is offered (`pickColors`; the host writes a picked color wherever it keeps the model) |
-| `views` | The views: `activeView`, `select`, the hidden set, and toggles that can be saved back into a view |
-| `selectView(name)` | Switch to a view, or to the Default View with `null`, and fit it to the window. A named view with no arrangement of its own, as when a program just wrote it, is arranged first by group and lineage, into its own layer |
-| `layout` | Positions, folded groups, hand-drawn routes, kept as layers: the Default View's, and one per named view on top |
-| `snapshot()`, `restore(snapshot)` | The layout as plain data, to keep wherever the host likes, and back |
-| `arrange(onlyNew?)`, `undoArrange()` | Lay out what the view shows by group and lineage, or only the tables placed automatically since the layout was loaded, and take it back |
-| `fitToScreen()`, `zoomIn()`, `zoomOut()`, `resetZoom()` | The view of the mounted diagram |
-| `dispose()` | Stop following the inputs |
-
-Each input of `createEngine` (`model`, `loading`, `display`, `bases`) is a value or a getter. A Vue host that keeps them in reactive state passes getters and the engine follows them; any other host passes values and calls the setters. `bases` are layouts the diagram inherits, nearest first; the editor passes the footers of the files a DBML file imports. `layoutState` and `activeView` take refs for a host that persists the layout layers and the active view as they change. `arrangeViews: false` leaves a view switched to without an arrangement looking like the Default View instead of arranging it.
-
-Engines share nothing: several can live on one page, each with its own model, layout, and views.
-
-### A diagram that grows
-
-Tables without a position are placed as the diagram draws them. One that a dep connects to a placed table goes beside it, so a diagram that grows a few tables at a time extends from where they connect: an upstream table to the left of the table that reads it, else a downstream table to the right of the one it reads, level with it and pushed down past whatever is in the way, so several stack top to bottom. Tables placed so anchor the next; tables already placed never move. The others are packed in columns at the right. Add a table and the edges that connect it in the same task, so they are placed together.
-
-What an update adds is highlighted for two seconds, updates in quick succession together. The zoom and pan stay where they are, except to bring the tables an update added into view when they land off screen, panning just enough.
-
-```ts
-engine.addTables([{ schema: 'input', name: 'item', fields: [{ name: 'unit_cost', type: 'double' }], records: [{ unit_cost: 12.5 }] }]);
-engine.addEdges([{ from: { table: 'input.item', fields: ['unit_cost'] }, to: { table: 'money.line_price', fields: ['price'] }, kind: 'value' }]);
-engine.addToView('trace_L1_price', ['input.item']);
-const price = engine.elementOf('money.line_price.price'); // the field's row, for a tooltip of the host's own
-```
-
-### Hosts without Vue
-
-`mount(element, options)` draws a diagram into any element and returns `{ engine, unmount }`. The options are those of `createEngine`, or an `engine` made elsewhere, plus callbacks: `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, and `onArrange`. `@dbml-designer/engine/standalone` has `mount` and everything in `core` with Vue bundled in, for hosts that have no Vue of their own, React for example:
+In any other app, React for example, through the entry that brings its own Vue:
 
 ```tsx
 import { useEffect, useRef } from 'react';
@@ -124,23 +36,19 @@ export function Diagram ({ model }: { model: Model }) {
 }
 ```
 
-The diagram fills its element, so give the element a size. It brings its styles: the first diagram to draw adds one `style` element to the page. It draws with Open Sans and Inconsolata; load them (for example from `@fontsource/open-sans` and `@fontsource/inconsolata`) for the intended look, or the browser's fallbacks are used and measured alike.
+In Node, or anywhere without a DOM, `@dbml-designer/engine/core` has everything but the components: build and check models, resolve them with `fromModel`, and work on layouts and views.
 
-### Without components
-
-`@dbml-designer/engine/core` has everything but the components, and loads without a DOM or a Vue compiler, in Node too: the model and its types, `fromModel`, the layout and view state, and Arrange with its table sizing, which estimates text widths when no canvas can measure them.
-
-## Entry points
-
-| Import | What it is |
+| Entry | What it is |
 |---|---|
-| `@dbml-designer/engine` | Everything: `createEngine`, `EngineDiagram`, `mount`, and all of `core`. Vue is the host's (a peer dependency). |
-| `@dbml-designer/engine/core` | No components, no DOM: models, `fromModel`, layout and view state, Arrange. |
-| `@dbml-designer/engine/standalone` | `mount` and all of `core` with Vue bundled in, for hosts without Vue. |
+| `@dbml-designer/engine` | Everything: `createEngine`, `EngineDiagram`, `mount`, and all of `core`. Vue is the host's, a peer dependency. |
+| `@dbml-designer/engine/core` | No components and no DOM: the model, `fromModel`, layout and view state, placement and Arrange. |
+| `@dbml-designer/engine/standalone` | `mount` and all of `core`, with Vue bundled in, for hosts without Vue. |
+| `@dbml-designer/engine/model.schema.json` | The model's JSON Schema. |
+| `@dbml-designer/engine/api.json` | The public API of this version. |
 
-## Using it from another project
+## Install
 
-The package is not published yet. Build it from a clone of this repository and install the result:
+The package is not published. Build it from a clone and install the tarball:
 
 ```bash
 git clone https://github.com/MFornander/dbml-designer.git
@@ -151,9 +59,317 @@ cd packages/engine
 npm pack
 ```
 
-`npm pack` writes `dbml-designer-engine-0.1.0.tgz`; install it in the other project with `npm install /path/to/dbml-designer-engine-0.1.0.tgz`. Installing from the tarball keeps one copy of Vue: a Vue host's own Vue serves the engine too. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config so the engine and the app share one Vue. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.2.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
-`npm run build -w @dbml-designer/engine` writes `dist/`: `index.js` and `core.js` with Vue left to the host, `standalone/standalone.js` with it bundled, and type declarations under `types/`.
+## The model
+
+The input is a `Model`. Elements refer to each other by key: a table by `schema.name`, the schema `public` when it has none; a field by its name within its table; a group or an enum by `schema.name`; a sticky note by its name.
+
+```json
+{
+  "tables": [
+    { "schema": "spec", "name": "order_line", "fields": [
+      { "name": "line_id", "type": "int", "pk": true },
+      { "name": "quantity", "type": "int" }
+    ], "records": [{ "line_id": 1, "quantity": 4 }] },
+    { "schema": "money", "name": "line_price", "headerColor": "#24BAB1", "fields": [
+      { "name": "line_id", "type": "int", "pk": true },
+      { "name": "price", "type": "decimal(10,2)" }
+    ] }
+  ],
+  "refs": [
+    { "from": { "table": "money.line_price", "fields": ["line_id"], "cardinality": "1" },
+      "to": { "table": "spec.order_line", "fields": ["line_id"], "cardinality": "1" } }
+  ],
+  "deps": [
+    { "from": { "table": "spec.order_line", "fields": ["quantity"] },
+      "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" }
+  ],
+  "groups": [{ "name": "trace", "tables": ["spec.order_line", "money.line_price"] }],
+  "views": [{ "name": "prices", "tables": ["money.line_price"] }]
+}
+```
+
+Every element can carry a `source`: anything the host recognizes it by, handed back untouched with clicks and hovers. Colors are `#RGB` or `#RRGGBB`. Optional fields are marked `?`.
+
+**`Model`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tables` | `ModelTable[]` | The tables, in declaration order. |
+| `refs?` | `ModelRef[]` | Relationships. |
+| `deps?` | `ModelDep[]` | Lineage edges, upstream to downstream. |
+| `groups?` | `ModelGroup[]` | Table groups. |
+| `notes?` | `ModelNote[]` | Sticky notes. |
+| `views?` | `ModelView[]` | Named views. |
+| `enums?` | `ModelEnum[]` | Enums, whose values field tooltips list. |
+| `project?` | `ModelProject` | `name`, `databaseType`, `note`. |
+
+**`ModelTable`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | `string` | Table name. |
+| `schema?` | `string` | Absent for the default schema, `public`. |
+| `fields` | `ModelField[]` | The fields, in order. |
+| `alias?` | `string` | Shown in the tooltip. |
+| `headerColor?` | `string` | Header color; the palette's default when absent. |
+| `note?` | `string` | Markdown, shown in the tooltip. |
+| `metadata?` | `Record<string, string>` | Name and value pairs listed in the tooltip. |
+| `indexes?` | `ModelIndex[]` | `columns`, `unique?`, `pk?` (a composite key drawn as key fields), `type?`, `name?`, `note?`. |
+| `checks?` | `string[]` | Check constraints as shown. |
+| `partials?` | `ModelPartial[]` | Table partials the table injects: `name`, `keyColumns?`, `note?`. |
+| `records?` | `ModelRecord[]` | Rows of data. One record shows its values on the fields; several get a row-count badge that opens them as a table. |
+| `source?` | `unknown` | Handed back with events. |
+
+A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, or null. Dates and times are strings.
+
+**`ModelField`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | `string` | Field name. |
+| `type` | `string` | The type as shown, for example `varchar(64)`. |
+| `pk?`, `unique?`, `notNull?`, `increment?` | `boolean` | Key and constraint flags, drawn as icons and badges. |
+| `default?` | `string` | The default as shown. |
+| `note?` | `string` | Markdown, shown in the tooltip. |
+| `enum?` | `string` | `schema.name` of the enum the type is. |
+| `checks?` | `string[]` | Check constraints as shown. |
+| `metadata?` | `Record<string, string>` | Listed in the tooltip. |
+| `injectedFrom?` | `string` | The table partial the field came from. |
+| `source?` | `unknown` | Handed back with events. |
+
+**`ModelRef`** (a relationship) and **`ModelRefEnd`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `from`, `to` | `ModelRefEnd` | `table` (key), `fields?` (none for whole tables), `cardinality?`: `1`, `*` (one or more), `0..1`, `0..*`, `1..*`, or `m..n`; `1` when absent. |
+| `name?` | `string` | Shown on the line while highlighted. |
+| `color?` | `string` | Line color; otherwise the header color of the "one" side. |
+| `inactive?` | `boolean` | Drawn dashed. |
+| `onDelete?`, `onUpdate?` | `string` | Listed in the tooltip. |
+| `viaPartial?` | `string` | The table partial whose field declares the ref; drawn as a badge in the `from` table's header unless partial refs are drawn as lines. |
+| `source?` | `unknown` | Handed back with events. |
+
+**`ModelDep`** (a lineage edge) and **`ModelEdgeEnd`**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `from`, `to` | `ModelEdgeEnd` | `table` (key) and `fields?`. With fields at both ends it is a column mapping. Every dep between the same two tables is drawn as one edge. |
+| `kind?` | `string` | `value`: an operand of the downstream formula, drawn solid. `row`: it chose the row used, as a join key or a filter, drawn in short dashes. Anything else is listed in the tooltip. Kinds show when mappings are drawn (`lineageColumns`). |
+| `name?` | `string` | Shown while highlighted; names of deps between the same tables are joined. |
+| `color?` | `string` | Line color, whatever the kind. |
+| `note?`, `metadata?` | | Listed in the tooltip. |
+| `source?` | `unknown` | Handed back with events. |
+
+**`ModelGroup`, `ModelNote`, `ModelView`, `ModelEnum`**
+
+| Element | Fields |
+|---|---|
+| `ModelGroup` | `name`, `schema?`, `tables` (keys; a table belongs to the first group that lists it), `color?`, `note?`, `metadata?`, `source?` |
+| `ModelNote` | `name` (unique), `content` (Markdown), `color?`, `source?` |
+| `ModelView` | `name`, then what it shows: `tables?` (keys), `groups?` (`schema.name`), `schemas?`, `notes?` (names). Each list restricts only its own kind, and only when present. `source?` |
+| `ModelEnum` | `name`, `schema?`, `values` (each `name` and `note?`) |
+
+**Checking a model.** `checkModel(value)` lists every `ModelProblem` in JSON from a file or the network, each with a `path`, a `message`, and a `severity`: an `error` where the engine could not draw the model, a `warning` for what it ignores, such as an unknown property. `asModel(value)` returns the model when there is no error, else null. `MODEL_SCHEMA` is the same as `model.schema.json`, for editors and validators. An element that names a table, field, group, or note that is not there is left out and reported in the drawn model's `diagnostics` as a `ModelDiagnostic` with a `kind`, a `message`, and its `source`, so a mistake costs that element and not the diagram.
+
+## The engine
+
+`createEngine(options)` returns an `Engine`. Several can live on one page; they share nothing.
+
+**Options** (`EngineOptions`). Each of `model`, `loading`, `display`, and `bases` is a value or a getter (`Input`): a Vue host passes getters and the engine follows them, any other host passes values and calls the setters.
+
+| Option | Meaning |
+|---|---|
+| `model` | The `Model` to draw. |
+| `loading` | True while the model is behind what the host is loading: nothing is placed or dropped against it. |
+| `display` | Display options, any subset; the rest take `DEFAULT_DISPLAY`. |
+| `bases` | Layouts the diagram inherits, nearest first, each a `LayoutSnapshot`. |
+| `layout` | A layout to start from, as `snapshot()` returned it. |
+| `layoutState` | A ref to keep every layout layer in, for a host that persists them as they change. |
+| `activeView` | A ref to keep the active view's name in. |
+| `arrangeViews` | Arrange a named view the first time it is switched to while it has no arrangement of its own. Default true. |
+
+**Members.** Members that hold state are Vue refs: read `.value`.
+
+| Member | What it is or does |
+|---|---|
+| `model` | The model being shown, with what the methods below added. |
+| `diagram` | The drawn model, a `DiagramModel`: the model resolved and indexed, see [The drawn model](#the-drawn-model). |
+| `display` | The display options in effect. |
+| `loading` | Whether the model is behind. |
+| `marked` | Keys of what the last update added, while they are highlighted. |
+| `views` | The views, see below. |
+| `layout` | The layout, see below. |
+| `handle` | The mounted diagram's `DiagramHandle`, or null. |
+| `setModel(model)` | Show another model. The layout is kept, tables without a position are placed, and entries for what the model no longer has are dropped. |
+| `setLoading(flag)`, `setDisplay(partial)`, `setBases(snapshots)` | Change an input; `setDisplay` merges. |
+| `addTables(tables)` | Add tables, or replace those with the same key in place. |
+| `addEdges(deps)` | Add lineage edges. |
+| `setRows(table, rows)` | Replace a table's records, by table key. |
+| `addToView(name, tables)` | Add tables to a named view by key, creating the view. |
+| `markChanges()` | Highlight what the next model adds, compared with the current one. The four methods above do it themselves. |
+| `selectView(name)` | Switch to a view, or to the Default View with null, and fit it. A named view with no arrangement of its own is arranged first. |
+| `setView(name)` | The same as `selectView`. |
+| `snapshot()`, `restore(snapshot)` | The layout as plain data to keep wherever the host likes, and back. |
+| `arrange(onlyNew?)` | Lay out what the view shows by group and lineage, or only the tables placed automatically since the layout was loaded. False when nothing is mounted or there is nothing to do. |
+| `undoArrange()` | Take the last arrangement back while nothing has changed since. |
+| `fitToScreen()`, `zoomIn()`, `zoomOut()`, `resetZoom()` | The mounted diagram's viewport. |
+| `elementOf(key)` | The drawn element of a table, field, group, note, or edge, by key; null when it is not drawn. See [Keys and the DOM](#keys-and-the-dom). |
+| `attach(handle)` | Used by `EngineDiagram` to connect a mounted diagram. |
+| `dispose()` | Stop following the inputs. |
+
+**Display options** (`DisplayOptions`; `DEFAULT_DISPLAY` holds the defaults)
+
+| Option | Default | Meaning |
+|---|---|---|
+| `detailLevel` | `'all'` | `DetailLevel`: all fields, `'keys'` only, or table `'names'` only. |
+| `dark` | `false` | Dark theme. |
+| `showRefs` | `true` | Draw relationships. |
+| `showLineage` | `true` | Draw lineage edges. |
+| `lineageColumns` | `false` | Draw every column mapping field to field, styled by kind, with a legend, in place of one edge per pair of tables. |
+| `partialRefMode` | `'badges'` | `PartialRefMode`: refs from a table partial as a badge in the table header, or `'lines'`. |
+| `showValues` | `true` | Record values on fields, and the row-count badge. |
+| `lineageLayout` | `false` | Lay tables out by dependency order instead of their stored positions; nothing can be moved meanwhile. |
+| `highlightAll` | `false` | Highlight every edge. |
+| `pickColors` | `true` | Offer the color picker on hovered tables, groups, and notes and on a selected relationship. The picked color comes back as `set-color`; the host writes it into its model. |
+
+**Views** (`engine.views`, a `Views`)
+
+| Member | What it is or does |
+|---|---|
+| `activeView` | The active view's name, or null for the Default View. |
+| `views`, `view` | Every view of the drawn model, and the active one (`DiagramViewVM`). |
+| `hidden` | The tables and notes hidden now: the view's definition plus toggles not saved yet. |
+| `baseHidden`, `dirty` | What the definition hides, and whether `hidden` differs from it. |
+| `select(name)` | Switch views; what `selectView` calls. |
+| `toggle(key)`, `setHidden(keys, isHidden)`, `revert()` | Show or hide tables and notes in the working set, or drop those toggles. |
+| `adopt(name)` | The host saved the working set as view `name` in its model: it becomes that view's definition, and the view is not arranged or fitted. |
+| `sync(diagram)`, `model` | Follow a new drawn model, and the one last followed; the engine does this itself. |
+
+**Layout** (`engine.layout`, a `Layout`). The layout is kept in layers: the Default View's, and one per named view holding only what that view changes. Positions are by key; `XY` is `{ x, y, w?, h? }`, with `w` and `h` for sticky notes.
+
+| Member | What it is or does |
+|---|---|
+| `positions` | Where everything is drawn in the active view: layers and inherited layouts combined. |
+| `collapsedGroups` | Keys of the folded groups. |
+| `edgeRoutes` | Hand-drawn relationship routes by ref key. |
+| `state` | Every layer as kept, a `LayoutState`. |
+| `base` | What the active view's own layer sits on. |
+| `setPosition(key, xy)`, `toggleGroup(key)`, `setEdgeRoute(key, rails)` | Change the active view's layer; null rails go back to automatic routing. |
+| `applyPositionChanges(changes, origin?)` | Store several `PositionChange`s; `'auto'` marks tables placed automatically. |
+| `applyArrangement(changes, resetRoutes?)` | Store an arrangement as one step that `undoArrange` can take back. |
+| `undoArrange()`, `canUndoArrange`, `undoableArrangeTables` | Take the last arrangement back, whether that is still possible, and how many tables it placed. |
+| `newTables` | Tables placed automatically since the layout was loaded and not arranged since. |
+| `hasViewLayout(name)` | Whether a named view has an arrangement of its own. |
+| `snapshot()`, `replaceLayout(snapshot)`, `resetLayout()` | Save, replace, or empty the layers. |
+| `renameView(from, to)`, `copyView(from, to)` | Move or copy a view's layer when the host renames or copies the view. |
+| `prune(...)`, `pruneTo(keys)` | Drop entries for what the model no longer has; the engine does this itself. |
+
+A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroups?` (groups kept open over an inherited fold), `edgeRoutes`, and `views?`, a snapshot per named view.
+
+### The drawn model
+
+`engine.diagram.value` is a `DiagramModel`, the model resolved: `tables` and `tablesByKey` (`TableVM`, with `fields` as `FieldVM`, each with its `key` and, for a single record, its `value`), `refs` (`RefVM`), `deps` (`DepEdgeVM`, one per pair of tables, each with its column mappings in `columns` as `DepColumnVM`), `groups`, `notes`, `enums`, `views`, the indexes `refsByTable`, `refsByField`, `depsByTable`, `depsByField`, and `diagnostics`. Every element keeps its `source`. The type declarations document each field.
+
+## Drawing it
+
+**`EngineDiagram`** draws one engine and fills its container. Its one prop is `engine`. Its events:
+
+| Event | Payload | When |
+|---|---|---|
+| `table-click` | `TableLinkPayload`: `{ key, source }` | A table was clicked. |
+| `table-hover` | `TableLinkPayload` or null | The pointer entered a table, or left every table. |
+| `set-color` | `ColorChangePayload`: `{ kind, key, color }` | A color was picked for a table, group, note, or ref (`ColorTarget`); the host writes it into its model. |
+| `zoom-change` | the zoom factor | The zoom changed. |
+| `arrange` | `PositionChange[]`, reset route keys | An arrangement was stored. |
+
+**`mount(element, options)`** draws into any element and returns a `MountedDiagram`: `engine` and `unmount()`. Its `MountOptions` are those of `createEngine`, or an `engine` made elsewhere, plus the events as callbacks: `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, and `onArrange`. `unmount()` disposes an engine that `mount` created.
+
+`DiagramCanvas` is the component `EngineDiagram` wraps, for hosts that keep their own state; it takes the drawn model, positions, and display options as props.
+
+**Styles and fonts.** The first diagram to draw adds one `style` element to the page. It draws with Open Sans and Inconsolata; load them (for example `@fontsource/open-sans` and `@fontsource/inconsolata`) for the intended look, or the browser's fallbacks are used and measured alike. Give the container a size.
+
+## Keys and the DOM
+
+Everything drawn has a key, the same in the drawn model, the layout, `marked`, and the DOM.
+
+| Element | Key | Helper |
+|---|---|---|
+| Table | `schema.name`, for example `public.users` | `tableKey(schema, name)` |
+| Field | `schema.table.field` | `fieldKey(table, field)` |
+| Group | `group:schema.name` | `groupKey(schema, name)` |
+| Note | `note:name` | `noteKey(name)`, `isNoteKey(key)` |
+| Enum | `enum:schema.name` | `enumKey(schema, name)` |
+| Relationship | `name#from(fields)->to(fields)`, with `#2`, `#3` added to repeats | |
+| Lineage edge between two tables | `dep:from->to` | |
+| Column mapping | `dep:from(fields)->to(fields)` | |
+
+`DEFAULT_SCHEMA` is `'public'`, and `normalizeSchema` applies it. The key types (`TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`) are all strings.
+
+**DOM hooks.** These are part of the API; any other class or the SVG's structure may change in any version.
+
+- `data-key` on every drawn table (`.dg-table`), field row (`.dg-field`), group (`.dg-group`), note (`.dg-note`), and edge (`.dg-ref`, lineage edges also `.dg-dep`). `elementOf(key)` finds them.
+- `is-highlighted` on highlighted tables, fields, and edges; `is-kind-value` and `is-kind-row` on lineage mappings drawn by kind.
+- `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
+- The colors are `--dg-*` CSS variables on the diagram's root, `.dg-root`; `paletteToCssVars(LIGHT)` and `paletteToCssVars(DARK)` list them.
+
+## A diagram that grows
+
+A host can grow a model it gave as a value a little at a time with `addTables`, `addEdges`, `setRows`, and `addToView`. Each keeps the layout and is taken in at once; calls made in the same task are one change.
+
+Tables without a position are placed as they are drawn. One that a dep connects to a placed table goes beside it: an upstream table to the left of the table that reads it, else a downstream table to the right of the one it reads, level with it and pushed down past whatever is in the way, so several stack top to bottom. Tables placed this way anchor the next; tables already placed never move. The others are packed in columns at the right. Add a table and the edges that connect it in the same task, so they are placed together.
+
+What an update adds is highlighted for `MARK_MS` (two seconds); updates in quick succession light up together. The zoom and pan stay where they are, except to bring the tables an update added into view when they land off screen. `markChanges()` asks for the same for a model given another way; a request waits `MARK_WAIT_MS` for the next model.
+
+```ts
+engine.addTables([{ schema: 'input', name: 'item', fields: [{ name: 'unit_cost', type: 'double' }], records: [{ unit_cost: 12.5 }] }]);
+engine.addEdges([{ from: { table: 'input.item', fields: ['unit_cost'] }, to: { table: 'money.line_price', fields: ['price'] }, kind: 'value' }]);
+engine.addToView('trace_L1_price', ['input.item']);
+const row = engine.elementOf('money.line_price.price'); // the field's row, to anchor a tooltip of the host's own
+```
+
+## Limitations
+
+- Only table clicks and hovers reach the host. Field and edge hovers, clicks, and pins stay inside the diagram.
+- The viewport has fit and zoom methods and the `zoom-change` event, but no pan method and no way to read it.
+- A host without Vue cannot subscribe to changes in the engine's state; it reads `.value` after its own calls and listens to the events.
+- `addTables` and the other methods that grow the model replace a model given as a getter with a value.
+- Positions are stored by key, so a renamed table loses its position and is placed again.
+
+## All exports
+
+Every entry has all of `core`; `index` and `standalone` add the components and `mount`. `api.json` has each signature.
+
+- **Engine:** `createEngine`, `Engine`, `EngineOptions`, `Input`, `DisplayOptions`, `DEFAULT_DISPLAY`, `DiagramHandle`, `ENGINE_VERSION`, `MARK_MS`, `MARK_WAIT_MS`, `addedKeys` (what one drawn model adds to another).
+- **Model:** `Model`, `ModelProject`, `ModelTable`, `ModelField`, `ModelIndex`, `ModelPartial`, `ModelRecord`, `ModelValue`, `ModelRef`, `ModelRefEnd`, `ModelDep`, `ModelEdgeEnd`, `ModelGroup`, `ModelNote`, `ModelView`, `ModelEnum`, `Source`, `MODEL_SCHEMA`, `checkModel`, `asModel`, `ModelProblem`, and the pure edits the growing methods use: `withTables`, `withEdges`, `withRows`, `withViewTables`.
+- **Drawn model:** `fromModel` (model to `DiagramModel`), `emptyModel`, `DiagramModel`, `TableVM`, `FieldVM`, `IndexVM`, `RefVM`, `RefEndpointVM`, `EdgeEndpointVM`, `DepLineVM`, `DepEdgeVM`, `DepColumnVM`, `GroupVM`, `NoteVM`, `EnumVM`, `EnumValueVM`, `DiagramViewVM`, `PartialRefsVM`, `ModelDiagnostic`, `MarkerKind`, `AutoLod`, `DetailLevel`, `PartialRefMode`, `TooltipContent` with `buildTooltipContent`, and `HoverTarget`.
+- **Keys:** `TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`, `DEFAULT_SCHEMA`, `normalizeSchema`, `tableKey`, `fieldKey`, `groupKey`, `noteKey`, `enumKey`, `isNoteKey`.
+- **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
+- **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.
+- **Placing and arranging:** `placeByLineage`, `placeNewItems`, `LineageLink`, `PlacementItem`, `PlacementOptions`, `arrangeByGroup`, `arrangePending`, `ArrangeInput`, `ArrangeOptions`, `ArrangeResult`, `PendingInput`, `createMeasurer`, `Measurer`, `computeTableSize`, `TableSize`, `visibleFields`, `Point`, `Size`, `Rect`.
+- **Events:** `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`.
+- **Look:** `LIGHT`, `DARK`, `Palette`, `paletteToCssVars`, `normalizeHexColor`, `normalizeHex`, `isValidRails`, `isTypingTarget`.
+- **Components and mounting** (`index`, `standalone`): `EngineDiagram`, `DiagramCanvas`, `renderNoteMarkdown`, `mount`, `MountOptions`, `MountedDiagram`.
+
+## Versioning
+
+The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number.
+
+The public API is everything the entries export, as `api.json` lists it, plus the model schema, the DOM hooks above, and the behavior this README describes. Four things tell a host which version it has and what changed:
+
+| File | What it says |
+|---|---|
+| `package.json` and `ENGINE_VERSION` | The version, at install time and at run time. |
+| `CHANGELOG.md` | What each version changed, and what a host has to do. |
+| `api.json` | Every export with its signature, every member of every exported type, and the components' props and events. Comparing two versions' files shows exactly what changed. |
+| `model.schema.json` | The model as a JSON Schema. |
+
+For developers of the engine, a test keeps these in step. When the API differs from `api.json`, the tests fail with the list of changes until it is recorded:
+
+1. Set a new version in `packages/engine/package.json` and `src/version.ts`. Something removed or changed, or a new member a host must fill in, needs a breaking step.
+2. Run `npm run api -w @dbml-designer/engine`. It writes `api.json` and `model.schema.json`, and refuses a version that is not newer, or not a breaking step when one is needed. For a change it counts as breaking but that cannot break a host, such as a new optional parameter, run it with `ENGINE_API_COMPATIBLE=1`.
+3. Add a section for the version to `CHANGELOG.md`, and name anything new in this README. The tests check both, and that this README names the version it documents.
 
 ## Development
 
