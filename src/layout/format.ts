@@ -17,6 +17,7 @@
 import { Document, isScalar, visit } from 'yaml';
 import type { XY } from '@/types/diagram';
 import { DEFAULT_SCHEMA, isNoteKey } from '@/diagram/keys';
+import type { LayoutSnapshot } from '@/diagram/engine/layers';
 
 /** Version of the layout format this build writes and reads. */
 export const SIDECAR_VERSION = 1;
@@ -31,25 +32,11 @@ export const DEFAULT_VIEW = 'default';
 export const SECTION_ORDER = ['tables', 'notes', 'groups', 'refs'] as const;
 
 /**
- * The view state that travels in the layout comment, in the layout store's key space. The
- * fields at the top are the Default View (`views.default` in the file); `views` holds each named
+ * The view state that travels in the layout comment is the engine's layout snapshot. The fields
+ * at the top are the Default View (`views.default` in the file); `views` holds each named
  * `DiagramView`'s own entry.
  */
-export interface LayoutSnapshot {
-  /** Table keys (`schema.table`) and note keys (`note:name`) to positions; notes carry a size. */
-  positions: Record<string, XY>;
-  /** Group keys (`group:schema.name`). */
-  collapsedGroups: string[];
-  /** Groups kept open although an imported layout collapses them (`collapsed: false`). */
-  expandedGroups?: string[];
-  /** Ref keys (`name#from->to`) to rails (see routing.ts); an empty list undoes an inherited route. */
-  edgeRoutes: Record<string, number[]>;
-  /**
-   * Named `DiagramView`s' own arrangements, by view name: what each changes against the Default
-   * View. The nested snapshots carry no `views` of their own.
-   */
-  views?: Record<string, LayoutSnapshot>;
-}
+export type { LayoutSnapshot } from '@/diagram/engine/layers';
 
 export class SidecarError extends Error {}
 

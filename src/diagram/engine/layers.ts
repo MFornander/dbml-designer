@@ -1,11 +1,30 @@
 /**
- * Layout inheritance along `use` imports. A diagram starts from the layouts written in the
- * footers of the files it imports, nearest import first, and its own footer records only what it
- * adds or changes: its own elements, moved imported ones, and explicit undoings of an inherited
- * collapse (`collapsed: false`) or hand-drawn route (`rails: []`).
+ * Layouts as plain data, and how they stack. A diagram can start from layouts it inherits, such
+ * as those in the footers of the DBML files it imports, nearest first, and records for itself
+ * only what it adds or changes: its own elements, moved inherited ones, and explicit undoings of
+ * an inherited collapse or hand-drawn route.
  */
 import type { XY } from '@/types/diagram';
-import type { LayoutSnapshot } from './format';
+
+/**
+ * A layout, in the key space of the diagram model. The fields at the top are the Default View;
+ * `views` holds each named view's own entry.
+ */
+export interface LayoutSnapshot {
+  /** Table keys (`schema.table`) and note keys (`note:name`) to positions; notes carry a size. */
+  positions: Record<string, XY>;
+  /** Group keys (`group:schema.name`). */
+  collapsedGroups: string[];
+  /** Groups kept open although an inherited layout collapses them. */
+  expandedGroups?: string[];
+  /** Ref keys (`name#from->to`) to rails (see routing.ts); an empty list undoes an inherited route. */
+  edgeRoutes: Record<string, number[]>;
+  /**
+   * Named views' own arrangements, by view name: what each changes against the Default View. The
+   * nested snapshots carry no `views` of their own.
+   */
+  views?: Record<string, LayoutSnapshot>;
+}
 
 /** The layout state a diagram keeps for itself, before it is minimized against what it inherits. */
 export interface LayoutLayer {
@@ -23,8 +42,8 @@ const sameRails = (a: readonly number[] | undefined, b: readonly number[] | unde
   && a.length === b.length && a.every((v, i) => v === b[i]);
 
 /**
- * What a diagram inherits from the footers of its imports, in import order: for each element the
- * first footer that says anything wins, and an explicit undoing there counts as saying "default".
+ * What a diagram inherits from a stack of layouts, nearest first: for each element the first
+ * layout that says anything wins, and an explicit undoing there counts as saying "default".
  */
 export function baseLayoutFrom (snapshots: ReadonlyArray<LayoutSnapshot>): LayoutSnapshot {
   const positions: Record<string, XY> = {};
@@ -69,7 +88,7 @@ export function isEmptyLayout (s: LayoutSnapshot): boolean {
     && (s.expandedGroups?.length ?? 0) === 0 && Object.keys(s.edgeRoutes).length === 0;
 }
 
-/** The diagram's own footer: the layer without anything the base already says. */
+/** What a layer adds to its base: the layer without anything the base already says. */
 export function minimizeLayout (layer: LayoutLayer, base: LayoutSnapshot): LayoutSnapshot {
   const positions: Record<string, XY> = {};
   for (const [key, p] of Object.entries(layer.positions)) {

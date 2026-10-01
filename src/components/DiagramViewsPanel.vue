@@ -269,7 +269,7 @@ import {
   PhCaretDown, PhEye, PhEyeSlash, PhInfo, PhNote, PhSquaresFour, PhStack, PhTable, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import type { DiagramModel, TableVM } from '@/diagram/types';
-import { visibleEntities } from '@/diagram/adapter/views';
+import { visibleEntities } from '@/diagram/engine/views';
 import { diagramViewText, renameDiagramView, upsertDiagramView } from '@/editor/viewText';
 import { useTextEdits } from '@/editor/useTextEdits';
 import { MENU_ITEM, MENU_PANEL } from '@/components/common/menuStyles';

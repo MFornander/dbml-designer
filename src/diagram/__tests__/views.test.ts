@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
-import { hiddenForView, sameHidden, visibleEntities } from '@/diagram/adapter/views';
+import { hiddenForView, sameHidden, visibleEntities } from '@/diagram/engine/views';
 import { compile } from './testUtils';
 
 const model = buildDiagramModel(compile(`

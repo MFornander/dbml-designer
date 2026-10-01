@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
 import type { TokenRange } from '@/types/diagram';
-import { hiddenForView, visibleEntities } from '@/diagram/adapter/views';
+import { hiddenForView, visibleEntities } from '@/diagram/engine/views';
 import { compile } from '@/diagram/__tests__/testUtils';
 import { applyTextEdits, offsetAt } from '@/editor/colorEdit';
 import {

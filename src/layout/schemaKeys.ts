@@ -2,21 +2,11 @@ import type { Database } from '@dbml/parse';
 import { groupKey, noteKey, tableKey } from '@/diagram/keys';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { groupDisplayName } from '@/dbml/toModel';
+import type { LayoutKeys } from '@/diagram/engine/layout';
 
-/** Every key a layout may refer to, taken from an error-free parse. */
-export interface LayoutKeys {
-  /** `schema.table` */
-  tables: ReadonlySet<string>;
-  /** `note:name` */
-  notes: ReadonlySet<string>;
-  /** `group:schema.name` */
-  groups: ReadonlySet<string>;
-  /** `name#from->to`, the diagram model's ref keys. */
-  refs: ReadonlySet<string>;
-  /** Names of the `DiagramView` blocks. */
-  views: ReadonlySet<string>;
-}
+export type { LayoutKeys } from '@/diagram/engine/layout';
 
+/** Every key a layout of this database may refer to; take it from an error-free parse. */
 export function layoutKeysOf (db: Database): LayoutKeys {
   const tables = new Set<string>();
   for (const t of db.tables) tables.add(tableKey(t.schemaName, t.name));
