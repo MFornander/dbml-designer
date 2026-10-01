@@ -223,24 +223,34 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
           ...(metadata ? { metadata } : {}),
           ...(dep.note ? { note: dep.note } : {}),
           ...(dep.columns.length
-            ? { columns: dep.columns.map((c) => `${fields(c.upstream)} → ${fields(c.downstream)}${c.kind ? ` (${c.kind})` : ''}`) }
+            ? {
+                columns: dep.columns.map((c) => {
+                  const kinds = c.mappings.flatMap((m) => (m.kind ? [m.kind] : []));
+                  return `${fields(c.upstream)} → ${fields(c.downstream)}${kinds.length ? ` (${kinds.join(', ')})` : ''}`;
+                }),
+              }
             : {}),
         };
       }
-      // A column-level mapping, with what its own dep says: its name, kind, note, and metadata.
+      // A column pair, or one of its mappings, with what their own deps say: names, kinds, notes, and metadata.
       for (const d of model.deps) {
-        const col = d.columns.find((c) => c.key === target.key);
-        if (!col) continue;
-        const metadata = metadataEntries(col.metadata);
-        return {
-          kind: 'dep',
-          title: describe(col.upstream),
-          target: describe(col.downstream),
-          ...(col.label ? { subtitle: col.label } : {}),
-          ...(col.kind ? { lines: [`kind: ${col.kind}`] } : {}),
-          ...(metadata ? { metadata } : {}),
-          ...(col.note ? { note: col.note } : {}),
-        };
+        for (const col of d.columns) {
+          const mappings = col.key === target.key ? col.mappings : col.mappings.filter((m) => m.key === target.key);
+          if (!mappings.length) continue;
+          const names = [...new Set(mappings.map((m) => m.label).filter((n): n is string => !!n))];
+          const kinds = mappings.flatMap((m) => (m.kind ? [m.kind] : []));
+          const metadata = metadataEntries(Object.assign({}, ...mappings.map((m) => m.metadata ?? {})));
+          const notes = [...new Set(mappings.map((m) => m.note).filter((n): n is string => !!n))];
+          return {
+            kind: 'dep',
+            title: describe(col.upstream),
+            target: describe(col.downstream),
+            ...(names.length ? { subtitle: names.join(', ') } : {}),
+            ...(kinds.length ? { lines: [`${kinds.length > 1 ? 'kinds' : 'kind'}: ${kinds.join(', ')}`] } : {}),
+            ...(metadata ? { metadata } : {}),
+            ...(notes.length ? { note: notes.join('\n') } : {}),
+          };
+        }
       }
       return null;
     }

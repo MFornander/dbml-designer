@@ -182,16 +182,33 @@ export interface DepLineVM {
 }
 
 /**
- * One column-level mapping (`a.x -> b.y`) folded into a table-level lineage edge. Listed in the
- * edge's tooltip, and drawn on its own while one of its fields is hovered or pinned, or always
- * when the diagram draws lineage column by column.
+ * One dep's mapping between two sets of columns, of one kind. A value mapping and a row mapping
+ * between the same columns are two mappings of one column pair.
  */
-export interface DepColumnVM extends DepLineVM {
-  /** The table-level edge this mapping belongs to. */
-  edgeKey: DepKey;
+export interface DepMappingVM {
+  /** `dep:from(fields)->to(fields)#kind`, or the column pair's own key for a dep without a kind. */
+  key: DepKey;
+  kind?: string;
+  /** The dep's name, or null when anonymous. */
+  label: string | null;
   /** The note and metadata of the dep the mapping came from, not merged with the others. */
   note?: string;
   metadata?: Record<string, string>;
+  source?: Source;
+}
+
+/**
+ * The column pair `a.x -> b.y` of a table-level lineage edge, with every mapping between those
+ * columns. Listed in the edge's tooltip, and drawn as one curve while one of its fields is hovered
+ * or pinned, or always when the diagram draws lineage column by column. Its `kind` is the
+ * strongest of its mappings' kinds (`value`, then `row`, then any other), which styles the curve;
+ * its `label` joins their names, and its `source` is the strongest mapping's.
+ */
+export interface DepColumnVM extends DepLineVM {
+  /** The table-level edge this column pair belongs to. */
+  edgeKey: DepKey;
+  /** Its mappings, strongest kind first. */
+  mappings: DepMappingVM[];
 }
 
 /**

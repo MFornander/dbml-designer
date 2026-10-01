@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.2.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.3.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.2.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.3.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -270,7 +270,7 @@ A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroup
 
 ### The drawn model
 
-`engine.diagram.value` is a `DiagramModel`, the model resolved: `tables` and `tablesByKey` (`TableVM`, with `fields` as `FieldVM`, each with its `key` and, for a single record, its `value`), `refs` (`RefVM`), `deps` (`DepEdgeVM`, one per pair of tables, each with its column mappings in `columns` as `DepColumnVM`), `groups`, `notes`, `enums`, `views`, the indexes `refsByTable`, `refsByField`, `depsByTable`, `depsByField`, and `diagnostics`. Every element keeps its `source`. The type declarations document each field.
+`engine.diagram.value` is a `DiagramModel`, the model resolved: `tables` and `tablesByKey` (`TableVM`, with `fields` as `FieldVM`, each with its `key` and, for a single record, its `value`), `refs` (`RefVM`), `deps` (`DepEdgeVM`, one per pair of tables, each with its column pairs in `columns` as `DepColumnVM`, and each pair's mappings by kind in `mappings` as `DepMappingVM`), `groups`, `notes`, `enums`, `views`, the indexes `refsByTable`, `refsByField`, `depsByTable`, `depsByField`, and `diagnostics`. Every element keeps its `source`. The type declarations document each field.
 
 ## Drawing it
 
@@ -303,14 +303,15 @@ Everything drawn has a key, the same in the drawn model, the layout, `marked`, a
 | Enum | `enum:schema.name` | `enumKey(schema, name)` |
 | Relationship | `name#from(fields)->to(fields)`, with `#2`, `#3` added to repeats | |
 | Lineage edge between two tables | `dep:from->to` | |
-| Column mapping | `dep:from(fields)->to(fields)` | |
+| Column pair, drawn as one curve | `dep:from(fields)->to(fields)` | |
+| Column mapping of one kind | `dep:from(fields)->to(fields)#kind`; a dep without a kind has the column pair's key | |
 
 `DEFAULT_SCHEMA` is `'public'`, and `normalizeSchema` applies it. The key types (`TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`) are all strings.
 
 **DOM hooks.** These are part of the API; any other class or the SVG's structure may change in any version.
 
 - `data-key` on every drawn table (`.dg-table`), field row (`.dg-field`), group (`.dg-group`), note (`.dg-note`), and edge (`.dg-ref`, lineage edges also `.dg-dep`). `elementOf(key)` finds them.
-- `is-highlighted` on highlighted tables, fields, and edges; `is-kind-value` and `is-kind-row` on lineage mappings drawn by kind.
+- `is-highlighted` on highlighted tables, fields, and edges; `is-kind-value` and `is-kind-row` on column pairs drawn by kind, after the strongest kind among their mappings (`value`, then `row`).
 - `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
 - The colors are `--dg-*` CSS variables on the diagram's root, `.dg-root`; `paletteToCssVars(LIGHT)` and `paletteToCssVars(DARK)` list them.
 
@@ -343,7 +344,7 @@ Every entry has all of `core`; `index` and `standalone` add the components and `
 
 - **Engine:** `createEngine`, `Engine`, `EngineOptions`, `Input`, `DisplayOptions`, `DEFAULT_DISPLAY`, `DiagramHandle`, `ENGINE_VERSION`, `MARK_MS`, `MARK_WAIT_MS`, `addedKeys` (what one drawn model adds to another).
 - **Model:** `Model`, `ModelProject`, `ModelTable`, `ModelField`, `ModelIndex`, `ModelPartial`, `ModelRecord`, `ModelValue`, `ModelRef`, `ModelRefEnd`, `ModelDep`, `ModelEdgeEnd`, `ModelGroup`, `ModelNote`, `ModelView`, `ModelEnum`, `Source`, `MODEL_SCHEMA`, `checkModel`, `asModel`, `ModelProblem`, and the pure edits the growing methods use: `withTables`, `withEdges`, `withRows`, `withViewTables`.
-- **Drawn model:** `fromModel` (model to `DiagramModel`), `emptyModel`, `DiagramModel`, `TableVM`, `FieldVM`, `IndexVM`, `RefVM`, `RefEndpointVM`, `EdgeEndpointVM`, `DepLineVM`, `DepEdgeVM`, `DepColumnVM`, `GroupVM`, `NoteVM`, `EnumVM`, `EnumValueVM`, `DiagramViewVM`, `PartialRefsVM`, `ModelDiagnostic`, `MarkerKind`, `AutoLod`, `DetailLevel`, `PartialRefMode`, `TooltipContent` with `buildTooltipContent`, and `HoverTarget`.
+- **Drawn model:** `fromModel` (model to `DiagramModel`), `emptyModel`, `DiagramModel`, `TableVM`, `FieldVM`, `IndexVM`, `RefVM`, `RefEndpointVM`, `EdgeEndpointVM`, `DepLineVM`, `DepEdgeVM`, `DepColumnVM`, `DepMappingVM`, `GroupVM`, `NoteVM`, `EnumVM`, `EnumValueVM`, `DiagramViewVM`, `PartialRefsVM`, `ModelDiagnostic`, `MarkerKind`, `AutoLod`, `DetailLevel`, `PartialRefMode`, `TooltipContent` with `buildTooltipContent`, and `HoverTarget`.
 - **Keys:** `TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`, `DEFAULT_SCHEMA`, `normalizeSchema`, `tableKey`, `fieldKey`, `groupKey`, `noteKey`, `enumKey`, `isNoteKey`.
 - **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
 - **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.

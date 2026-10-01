@@ -7,7 +7,7 @@ import type {
 } from './model';
 import {
   emptyModel,
-  type DepColumnVM, type DepEdgeVM, type DiagramModel, type DiagramViewVM, type EdgeEndpointVM, type FieldVM, type GroupVM,
+  type DepColumnVM, type DepEdgeVM, type DepMappingVM, type DiagramModel, type DiagramViewVM, type EdgeEndpointVM, type FieldVM, type GroupVM,
   type IndexVM, type ModelDiagnostic, type RefEndpointVM, type RefVM, type TableVM,
 } from './types';
 import { normalizeHexColor } from './geometry/color';
@@ -19,6 +19,19 @@ const DEFAULT_CARDINALITY = '1';
 
 function endpointKeyPart (tk: TableKey, fieldNames: readonly string[]): string {
   return `${tk}(${fieldNames.join(',')})`;
+}
+
+/** A mapping's key: its column pair's key, with `#kind` when the dep has a kind. */
+function mappingKey (columnKey: DepKey, kind: string | undefined): DepKey {
+  return kind ? `${columnKey}#${kind}` : columnKey;
+}
+
+/** Kinds from strongest to weakest: the strongest of a column pair's mappings styles its curve. */
+const KIND_ORDER = ['value', 'row'];
+function kindRank (kind: string | undefined): number {
+  if (kind === undefined) return KIND_ORDER.length + 1;
+  const i = KIND_ORDER.indexOf(kind);
+  return i < 0 ? KIND_ORDER.length : i;
 }
 
 /** Effective header color of a table: its own, else its group's. */
@@ -324,7 +337,7 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
   // their fields is hovered, or all the time when the diagram draws lineage by column.
   const depEdgeByPair = new Map<string, DepEdgeVM>();
   const depNotes = new Map<DepKey, Set<string>>();
-  const seenColumns = new Set<string>();
+  const columnByPair = new Map<string, DepColumnVM>();
   const tableEndpoint = (tk: TableKey): EdgeEndpointVM => ({
     tableKey: tk,
     fieldNames: [],
@@ -387,30 +400,49 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
     // A table-level edge adds nothing beyond the pair itself.
     if (up.fieldNames.length === 0 && down.fieldNames.length === 0) return;
     const directed = `${endpointKeyPart(up.tableKey, up.fieldNames)}->${endpointKeyPart(down.tableKey, down.fieldNames)}`;
-    if (seenColumns.has(directed)) return;
-    seenColumns.add(directed);
-    const column: DepColumnVM = {
-      key: `dep:${directed}`,
-      edgeKey: vm.key,
+    const mapping: DepMappingVM = {
+      key: mappingKey(`dep:${directed}`, dep.kind),
       label: name,
-      upstream: up,
-      downstream: down,
-      color,
-      isSelf: vm.isSelf,
       ...(dep.kind ? { kind: dep.kind } : {}),
       ...(dep.note ? { note: dep.note } : {}),
       ...(dep.metadata && Object.keys(dep.metadata).length > 0 ? { metadata: { ...dep.metadata } } : {}),
       ...sourced,
     };
-    vm.columns.push(column);
-    for (const ep of [up, down]) {
-      const table = model.tablesByKey.get(ep.tableKey)!;
-      for (const idx of ep.fieldIndices) {
-        const field = table.fields[idx]!;
-        field.hasDep = true;
-        pushIndex(model.depsByField, field.key, column.key);
+    let column = columnByPair.get(directed);
+    if (!column) {
+      column = {
+        key: `dep:${directed}`,
+        edgeKey: vm.key,
+        label: null,
+        upstream: up,
+        downstream: down,
+        color,
+        isSelf: vm.isSelf,
+        mappings: [],
+      };
+      columnByPair.set(directed, column);
+      vm.columns.push(column);
+      for (const ep of [up, down]) {
+        const table = model.tablesByKey.get(ep.tableKey)!;
+        for (const idx of ep.fieldIndices) {
+          const field = table.fields[idx]!;
+          field.hasDep = true;
+          pushIndex(model.depsByField, field.key, column.key);
+        }
       }
     }
+    // A second dep of the same kind between the same columns adds nothing; the first one stands.
+    if (column.mappings.some((m) => m.key === mapping.key)) return;
+    column.mappings.push(mapping);
+    column.mappings.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
+    column.color ??= color;
+    const strongest = column.mappings[0]!;
+    const names = [...new Set(column.mappings.map((m) => m.label).filter((n): n is string => !!n))];
+    column.label = names.length ? names.join(', ') : null;
+    if (strongest.kind) column.kind = strongest.kind;
+    else delete column.kind;
+    if (strongest.source !== undefined) column.source = strongest.source;
+    else delete column.source;
   }
   // Mappings without a color of their own borrow the color of their edge.
   for (const vm of model.deps) {

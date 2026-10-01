@@ -118,6 +118,8 @@ const positions = {
 };
 
 const PAIR = 'dep:spec.order_line->money.line_price';
+const COLUMN_QTY = 'dep:spec.order_line(quantity)->money.line_price(price)';
+const COLUMN_ITEM = 'dep:spec.order_line(item_id)->money.line_price(price)';
 
 function mountCanvas (lineageColumns: boolean) {
   return mount(DiagramCanvas, {
@@ -136,9 +138,9 @@ describe('column-level deps', () => {
   it('keep their own dep\'s kind, note, and metadata, while the table pair keeps the merged view', () => {
     const m = fromModel(MODEL);
     const pair = m.deps.find((d) => d.key === PAIR)!;
-    expect(pair.columns.map((c) => [c.upstream.fieldNames[0], c.kind, c.note, c.metadata])).toEqual([
-      ['quantity', 'value', 'an operand', { formula: 'quantity × unit_cost' }],
-      ['item_id', 'row', 'picks the item', undefined],
+    expect(pair.columns.map((c) => [c.upstream.fieldNames[0], c.kind, c.mappings.map((x) => [x.key, x.kind, x.note, x.metadata])])).toEqual([
+      ['quantity', 'value', [[`${COLUMN_QTY}#value`, 'value', 'an operand', { formula: 'quantity × unit_cost' }]]],
+      ['item_id', 'row', [[`${COLUMN_ITEM}#row`, 'row', 'picks the item', undefined]]],
     ]);
     expect(pair.kind).toBeUndefined();
     expect(pair.note).toBe('an operand\npicks the item');
@@ -233,6 +235,112 @@ describe('column-level deps', () => {
     await wrapper.setProps({ lineageColumns: false });
     expect(wrapper.findAll('.dg-dep')).toHaveLength(3);
     expect(wrapper.find('.dg-legend').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+describe('a value and a row mapping between the same two columns', () => {
+  const BOTH: Model = {
+    ...MODEL,
+    deps: [
+      ...MODEL.deps!,
+      {
+        from: {
+          table: 'spec.order_line',
+          fields: ['quantity'],
+        },
+        to: {
+          table: 'money.line_price',
+          fields: ['price'],
+        },
+        name: 'join',
+        kind: 'row',
+        note: 'joined on',
+      },
+    ],
+  };
+
+  it('stay two mappings of one column pair, under their own keys, strongest kind first', () => {
+    const m = fromModel(BOTH);
+    const column = m.deps.find((d) => d.key === PAIR)!.columns.find((c) => c.key === COLUMN_QTY)!;
+    expect(column.mappings.map((x) => [x.key, x.kind, x.label])).toEqual([
+      [`${COLUMN_QTY}#value`, 'value', 'qty'],
+      [`${COLUMN_QTY}#row`, 'row', 'join'],
+    ]);
+    expect(column.kind).toBe('value');
+    expect(column.label).toBe('qty, join');
+    expect(m.depsByField.get('spec.order_line.quantity')).toEqual([COLUMN_QTY]);
+  });
+
+  it('keep a dep without a kind under the column pair\'s own key, and drop a repeat of the same kind', () => {
+    const m = fromModel({
+      ...BOTH,
+      deps: [
+        ...BOTH.deps!,
+        {
+          from: { table: 'spec.order_line', fields: ['quantity'] },
+          to: { table: 'money.line_price', fields: ['price'] },
+        },
+        {
+          from: { table: 'spec.order_line', fields: ['quantity'] },
+          to: { table: 'money.line_price', fields: ['price'] },
+          kind: 'value',
+          name: 'again',
+        },
+      ],
+    });
+    const column = m.deps.find((d) => d.key === PAIR)!.columns.find((c) => c.key === COLUMN_QTY)!;
+    expect(column.mappings.map((x) => x.key)).toEqual([`${COLUMN_QTY}#value`, `${COLUMN_QTY}#row`, COLUMN_QTY]);
+    expect(column.label).toBe('qty, join');
+  });
+
+  it('list both kinds in the column pair\'s tooltip, and each one\'s own in the mapping\'s', () => {
+    const m = fromModel(BOTH);
+    expect(buildTooltipContent(m, {
+      kind: 'dep',
+      key: COLUMN_QTY,
+    })).toEqual({
+      kind: 'dep',
+      title: 'spec.order_line.quantity',
+      target: 'money.line_price.price',
+      subtitle: 'qty, join',
+      lines: ['kinds: value, row'],
+      metadata: [['formula', 'quantity × unit_cost']],
+      note: 'an operand\njoined on',
+    });
+    expect(buildTooltipContent(m, {
+      kind: 'dep',
+      key: `${COLUMN_QTY}#row`,
+    })).toEqual({
+      kind: 'dep',
+      title: 'spec.order_line.quantity',
+      target: 'money.line_price.price',
+      subtitle: 'join',
+      lines: ['kind: row'],
+      note: 'joined on',
+    });
+    expect(buildTooltipContent(m, {
+      kind: 'dep',
+      key: PAIR,
+    })?.columns).toEqual(['quantity → price (value, row)', 'item_id → price (row)']);
+  });
+
+  it('draw as one curve per column pair, styled by the strongest kind', async () => {
+    const wrapper = mount(DiagramCanvas, {
+      props: {
+        model: fromModel(BOTH),
+        positions,
+        detailLevel: 'all',
+        dark: false,
+        lineageColumns: true,
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+    const curves = wrapper.findAll(`.dg-dep[data-key="${COLUMN_QTY}"]`);
+    expect(curves).toHaveLength(1);
+    expect(curves[0]!.classes()).toContain('is-kind-value');
+    expect(wrapper.findAll('.dg-dep')).toHaveLength(4);
     wrapper.unmount();
   });
 });

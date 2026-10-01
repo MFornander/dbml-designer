@@ -4,6 +4,20 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.3.0 - 2026-10-01
+
+Column mappings keep their kind. Before, a second dep between the same two columns was dropped whatever its kind, so a column that is both projected (`value`) and joined on (`row`) lost one of the two.
+
+### Changed (breaking)
+
+- `DepColumnVM` is now a column pair: every mapping between the same columns, in `mappings` as `DepMappingVM`s, strongest kind first (`value`, then `row`, then any other, then none). It is still drawn as one curve with the same key, `dep:from(fields)->to(fields)`; its `kind` is the strongest mapping's, its `label` joins their names, and its `source` is the strongest mapping's. `note` and `metadata` moved from `DepColumnVM` to each `DepMappingVM`. A host that read `columns[i].note` or `.metadata` reads them from `columns[i].mappings` instead.
+- A mapping of a kind has its own key, `dep:from(fields)->to(fields)#kind`; a dep without a kind keeps the column pair's key. `addedKeys` and `markChanges` list a new mapping's key along with its column pair and edge.
+
+### Added
+
+- `DepMappingVM`: a mapping's `key`, `kind`, `label` (the dep's name), `note`, `metadata`, and `source`.
+- A column pair's tooltip lists all of its kinds, names, and notes; a mapping key's tooltip shows that mapping alone. The table pair's tooltip lists each column pair once, with its kinds.
+
 ## 0.2.0 - 2026-10-01
 
 The first version handed to other projects.

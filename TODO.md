@@ -137,6 +137,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Faster dev startup: `@phosphor-icons/vue` exposes only its barrel, so Vite pre-bundled all ~1,500 icons into one 7.2 MB dependency (20.8 MB served with its inlined source map) that the browser fetched and compiled on every load. The editor's dev server now runs `plugins/phosphorIcons.ts`, which rewrites each named icon import in the editor's and the engine's sources to the icon's own file and keeps the barrel out of pre-bundling; what the page loads at startup fell from 57 MB to 38 MB. Builds tree-shake the barrel and are unchanged. Most of what remains is Monaco's editor core and the source maps Vite inlines into served dependencies.
 
+- [x] Column mappings keep their kind (engine 0.3.0, breaking): a value and a row dep between the same two columns used to collapse into one mapping, dropping the second. Now the column pair (`DepColumnVM`, key `dep:a(c)->b(c)`) holds every mapping between those columns in `mappings` (`DepMappingVM`, key `dep:a(c)->b(c)#kind`, or the pair's key for a dep without a kind), strongest kind first, each with its own name, note, and metadata. The pair is still drawn as one curve, styled by its strongest kind (`value`, then `row`), so a key column that is both projected and joined on does not draw twice; its tooltip lists every kind.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

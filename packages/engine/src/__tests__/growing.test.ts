@@ -131,13 +131,31 @@ describe('addedKeys', () => {
     });
     expect([...addedKeys(before, after)].sort()).toEqual([
       'dep:input.item(unit_cost)->money.line_price(price)',
+      'dep:input.item(unit_cost)->money.line_price(price)#value',
       'dep:input.item->money.line_price',
       'dep:spec.order_line(quantity)->money.line_price(price)',
+      'dep:spec.order_line(quantity)->money.line_price(price)#value',
       'dep:spec.order_line->money.line_price',
       'input.item',
       'spec.order_line.discount',
     ]);
     expect(addedKeys(before, before).size).toBe(0);
+  });
+
+  it('lists a new kind between columns already mapped, with the column pair and edge that draw it', () => {
+    const before = fromModel({ ...START, deps: [...START.deps!, feeds('spec.order_line', 'quantity')] });
+    const after = fromModel({
+      ...START,
+      deps: [...START.deps!, feeds('spec.order_line', 'quantity'), {
+        ...feeds('spec.order_line', 'quantity'),
+        kind: 'row',
+      }],
+    });
+    expect([...addedKeys(before, after)].sort()).toEqual([
+      'dep:spec.order_line(quantity)->money.line_price(price)',
+      'dep:spec.order_line(quantity)->money.line_price(price)#row',
+      'dep:spec.order_line->money.line_price',
+    ]);
   });
 });
 
