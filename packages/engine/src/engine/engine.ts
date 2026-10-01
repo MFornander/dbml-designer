@@ -25,6 +25,11 @@ export interface DisplayOptions {
   showRefs: boolean;
   /** Draw lineage edges. */
   showLineage: boolean;
+  /**
+   * Draw every column-level lineage mapping field to field, styled by its kind, in place of the one
+   * edge between two tables. Pairs of tables with no column mappings keep their edge.
+   */
+  lineageColumns: boolean;
   /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
   partialRefMode: PartialRefMode;
   /** Record values on their fields, and the count of a table's records in its header, which opens them. */
@@ -40,6 +45,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   dark: false,
   showRefs: true,
   showLineage: true,
+  lineageColumns: false,
   partialRefMode: 'badges',
   showValues: true,
   lineageLayout: false,

@@ -7,7 +7,7 @@ import { usePersistedRef } from '@/utils/persistedRef';
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
 interface UiState {
-  version: 11;
+  version: 12;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -30,10 +30,12 @@ interface UiState {
   partialRefMode: PartialRefMode;
   /** Record values on their fields, and the count of a table's records in its header. */
   showValues: boolean;
+  /** Lineage drawn mapping by mapping, field to field and styled by kind, instead of one edge per pair of tables. */
+  lineageColumns: boolean;
 }
 
 /** The shape before version 11, which all older ones migrate to first. */
-type V10State = Omit<UiState, 'version' | 'showValues'> & { version: 10 };
+type V10State = Omit<UiState, 'version' | 'showValues' | 'lineageColumns'> & { version: 10 };
 
 /** The layout panel's share of the editor pane until the user drags its handle. */
 export const DEFAULT_LAYOUT_SIZE = 40;
@@ -46,7 +48,7 @@ const PARTIAL_REF_MODES: readonly PartialRefMode[] = ['badges', 'lines'];
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 11
+  return s.version === 12
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -60,7 +62,8 @@ function isUiState (v: unknown): v is UiState {
     && typeof s.editorCollapsed === 'boolean'
     && typeof s.viewsOpen === 'boolean'
     && PARTIAL_REF_MODES.includes(s.partialRefMode as PartialRefMode)
-    && typeof s.showValues === 'boolean';
+    && typeof s.showValues === 'boolean'
+    && typeof s.lineageColumns === 'boolean';
 }
 
 /**
@@ -71,15 +74,25 @@ function isUiState (v: unknown): v is UiState {
  * the collapsed-editor flag; version 7 replaced the editor view with the
  * collapsible layout panel's open flag; version 8 added that panel's height; version 9 added
  * the Diagram Views panel's open flag; version 10 added how partial refs are drawn, badges by
- * default; version 11 adds the Values toggle, on by default.
+ * default; version 11 added the Values toggle, on by default; version 12 adds drawing lineage by
+ * column, off by default.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
-  if ((parsed.version as number) >= 11) return parsed as unknown as UiState;
+  const version = parsed.version as number;
+  if (version >= 12) return parsed as unknown as UiState;
+  if (version === 11) {
+    return {
+      ...(parsed as unknown as Omit<UiState, 'version' | 'lineageColumns'>),
+      version: 12,
+      lineageColumns: false,
+    };
+  }
   return {
     ...migrateToV10(parsed),
-    version: 11,
+    version: 12,
     showValues: true,
+    lineageColumns: false,
   };
 }
 
@@ -174,7 +187,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 11,
+    version: 12,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -188,6 +201,7 @@ export const useUiStore = defineStore('ui', () => {
     viewsOpen: false,
     partialRefMode: 'badges',
     showValues: true,
+    lineageColumns: false,
   }), {
     validate: isUiState,
     deserialize: migrateUiState,
@@ -208,6 +222,7 @@ export const useUiStore = defineStore('ui', () => {
   const viewsOpen = computed(() => state.value.viewsOpen);
   const partialRefMode = computed(() => state.value.partialRefMode);
   const showValues = computed(() => state.value.showValues);
+  const lineageColumns = computed(() => state.value.lineageColumns);
 
   const splitSizes = computed<number[]>({
     get: () => [...state.value.splitSizes],
@@ -288,6 +303,11 @@ export const useUiStore = defineStore('ui', () => {
     state.value.showValues = !state.value.showValues;
   }
 
+  /** Draw lineage mapping by mapping, field to field, or as one edge per pair of tables. */
+  function toggleLineageColumns (): void {
+    state.value.lineageColumns = !state.value.lineageColumns;
+  }
+
   watch(theme, (t) => {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', t === 'dark');
@@ -330,5 +350,7 @@ export const useUiStore = defineStore('ui', () => {
     togglePartialRefMode,
     showValues,
     toggleShowValues,
+    lineageColumns,
+    toggleLineageColumns,
   };
 });

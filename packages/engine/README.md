@@ -27,7 +27,7 @@ The input is a `Model` (`src/model.ts`). Elements refer to each other by key: a 
   ],
   "deps": [
     { "from": { "table": "spec.order_line", "fields": ["quantity"] },
-      "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" }
+      "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" }
   ],
   "groups": [{ "name": "trace", "tables": ["spec.order_line", "money.line_price"] }],
   "views": [{ "name": "prices", "tables": ["money.line_price"] }]
@@ -37,7 +37,7 @@ The input is a `Model` (`src/model.ts`). Elements refer to each other by key: a 
 - **Tables** carry fields (type as shown, keys, default, note, enum, metadata), indexes, checks, a header color, a note, and metadata.
 - **Records** are a table's rows, each an object from field name to a string, number, boolean, or null. With one record, each field it names shows its value at the right of the row; with several, a row-count badge in the header opens them as a table. The `showValues` display option hides both.
 - **Refs** have two ends, each a table with optional fields and a cardinality (`1`, `*` for one or more, `0..1`, `0..*`, `1..*`, `m..n`; `1` when left out). A ref is colored after its "one" side unless it has a color of its own.
-- **Deps** are lineage edges from an upstream end to a downstream one, column-level when both ends name fields. Every dep between the same two tables is drawn as one edge; its column mappings show when a mapped field is hovered.
+- **Deps** are lineage edges from an upstream end to a downstream one, column-level when both ends name fields. Every dep between the same two tables is drawn as one edge; its column mappings show when a mapped field is hovered. With the `lineageColumns` display option, every column mapping is drawn field to field all the time instead, styled by its dep's `kind`: `value` (an operand of the downstream formula) solid, `row` (it chose the row used, as a join key or a filter) in short dashes, anything else in the usual lineage dashes, with a legend in the corner. An explicit `color` sets the line's color whatever its kind. A mapping keeps its own dep's name, kind, note, and metadata for its tooltip.
 - **Groups** list their tables; a table belongs to the first group that lists it.
 - **Views** say what they show: tables, groups, schemas, notes. Each list restricts only its own kind, and only when it is there.
 - **Partials**: a table can list the partials it injects, and a ref with `viaPartial` naming one of them is drawn as a badge in that table's header instead of a line.
@@ -72,7 +72,7 @@ const engine = createEngine({
 | `diagram` | The view model being drawn, computed from the model |
 | `setModel(model)` | Show another model. The layout is kept, tables without a position are placed, and what the model no longer has is dropped from the layout |
 | `setLoading(flag)` | While true, the model is taken to be behind what the host is loading: nothing is placed or dropped against it |
-| `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all |
+| `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), lineage by column (`lineageColumns`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all |
 | `views` | The views: `activeView`, `select`, the hidden set, and toggles that can be saved back into a view |
 | `selectView(name)` | Switch to a view, or to the Default View with `null` |
 | `layout` | Positions, folded groups, hand-drawn routes, kept as layers: the Default View's, and one per named view on top |

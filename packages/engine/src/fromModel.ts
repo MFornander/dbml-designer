@@ -319,8 +319,9 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
   }
 
   // Data lineage. Every dep between the same two tables collapses into one table-level edge drawn
-  // between the headers, like dbdiagram. Column-level mappings stay on the edge for its tooltip
-  // and are drawn on their own only while one of their fields is hovered.
+  // between the headers, like dbdiagram. Column-level mappings stay on the edge for its tooltip,
+  // each with its own dep's kind, note, and metadata, and are drawn on their own while one of
+  // their fields is hovered, or all the time when the diagram draws lineage by column.
   const depEdgeByPair = new Map<string, DepEdgeVM>();
   const depNotes = new Map<DepKey, Set<string>>();
   const seenColumns = new Set<string>();
@@ -396,6 +397,9 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
       downstream: down,
       color,
       isSelf: vm.isSelf,
+      ...(dep.kind ? { kind: dep.kind } : {}),
+      ...(dep.note ? { note: dep.note } : {}),
+      ...(dep.metadata && Object.keys(dep.metadata).length > 0 ? { metadata: { ...dep.metadata } } : {}),
       ...sourced,
     };
     vm.columns.push(column);

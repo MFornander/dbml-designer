@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-ref"
-    :class="{ 'is-highlighted': highlighted, 'is-inactive': inactive, 'dg-dep': kind === 'dep', 'is-colored': !!lineColor }"
+    :class="[{ 'is-highlighted': highlighted, 'is-inactive': inactive, 'dg-dep': kind === 'dep', 'is-colored': !!lineColor }, kindClass]"
     :data-key="edge.key"
     :style="colorVars"
   >
@@ -97,6 +97,12 @@ const colorVars = computed(() => (lineColor.value
   : undefined));
 
 const inactive = computed(() => props.kind === 'ref' && (props.edge as RefVM).inactive);
+
+/** A lineage mapping's kind with a style of its own: `value` solid, `row` in short dashes. */
+const kindClass = computed(() => {
+  const k = props.kind === 'dep' ? (props.edge as DepLineVM).kind : undefined;
+  return k === 'value' || k === 'row' ? `is-kind-${k}` : '';
+});
 const label = computed(() => (props.kind === 'ref' ? (props.edge as RefVM).name : (props.edge as DepLineVM).label));
 
 // Marker paths are drawn with the line running toward +x; mirror them for left-side anchors.

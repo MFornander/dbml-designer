@@ -175,17 +175,23 @@ export interface DepLineVM {
   downstream: EdgeEndpointVM;
   /** Explicit `[color: ...]` of the Dep block, or null for the palette default. */
   color: string | null;
+  /** The dep's kind (`value` draws solid, `row` in short dashes); unset on table-level edges. */
+  kind?: string;
   isSelf: boolean;
   source?: Source;
 }
 
 /**
  * One column-level mapping (`a.x -> b.y`) folded into a table-level lineage edge. Listed in the
- * edge's tooltip, and drawn on its own only while one of its fields is hovered or pinned.
+ * edge's tooltip, and drawn on its own while one of its fields is hovered or pinned, or always
+ * when the diagram draws lineage column by column.
  */
 export interface DepColumnVM extends DepLineVM {
   /** The table-level edge this mapping belongs to. */
   edgeKey: DepKey;
+  /** The note and metadata of the dep the mapping came from, not merged with the others. */
+  note?: string;
+  metadata?: Record<string, string>;
 }
 
 /**

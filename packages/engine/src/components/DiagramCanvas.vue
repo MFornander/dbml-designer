@@ -183,6 +183,30 @@
       :view-size="pz.viewSize.value"
       @close="recordsKey = null"
     />
+    <div
+      v-if="legendKinds.length"
+      class="dg-legend"
+      aria-label="Lineage kinds"
+    >
+      <span
+        v-for="k in legendKinds"
+        :key="k"
+        class="dg-legend-item"
+      >
+        <svg
+          width="28"
+          height="8"
+          aria-hidden="true"
+        >
+          <path
+            class="dg-legend-line"
+            :class="`is-kind-${k}`"
+            d="M1 4 H27"
+          />
+        </svg>
+        {{ k }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -239,6 +263,8 @@ const props = withDefaults(defineProps<{
   collapsedGroups?: ReadonlySet<string>;
   showRefs?: boolean;
   showLineage?: boolean;
+  /** Every column-level lineage mapping drawn field to field, by kind, in place of its table-level edge. */
+  lineageColumns?: boolean;
   /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
   partialRefMode?: PartialRefMode;
   /** Record values on their fields, and the count of a table's records in its header, which opens them. */
@@ -259,6 +285,7 @@ const props = withDefaults(defineProps<{
   collapsedGroups: () => new Set<string>(),
   showRefs: true,
   showLineage: true,
+  lineageColumns: false,
   partialRefMode: 'badges',
   showValues: true,
   lineageLayout: false,
@@ -940,6 +967,8 @@ interface RenderEdge {
   kind: 'ref' | 'dep';
   geo: RefGeometry;
   highlighted: boolean;
+  /** Lit by the hover or pin itself, not only by highlight-all: drawn on top, and animated past the cap. */
+  hot: boolean;
   /** Whether the walking-ants overlay is mounted (capped when everything is highlighted). */
   animated: boolean;
   /** A partial ref drawn only while its badge reveals it: the pointer passes through it. */
@@ -953,55 +982,55 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   const hl = hover.highlight.value;
   const all = props.highlightAll;
   const list: RenderEdge[] = [];
+  const push = (edge: RefVM | DepLineVM, kind: 'ref' | 'dep', g: RefGeometry | undefined, hot: boolean, passive?: boolean) => {
+    if (!g) return;
+    list.push({
+      edge,
+      kind,
+      geo: g,
+      highlighted: all || hot,
+      hot,
+      animated: true,
+      ...(passive !== undefined ? { passive } : {}),
+    });
+  };
   // Partial refs standing as badges are left out, from highlight-all too, unless their badge reveals them.
   for (const r of geo.drawnRefs.value) {
-    const g = geo.routes.value.get(r.key);
-    if (g) {
-      list.push({
-        edge: r,
-        kind: 'ref',
-        geo: g,
-        highlighted: all || hl.refKeys.has(r.key),
-        animated: true,
-        passive: isBadged(r),
-      });
-    }
+    push(r, 'ref', geo.routes.value.get(r.key), hl.refKeys.has(r.key), isBadged(r));
   }
   if (props.showLineage) {
+    // A hovered table lights up its mappings too when they stand in for its table-level edges.
+    const tableHover = hl.source?.kind === 'table';
     for (const d of model.value.deps) {
-      const g = geo.routes.value.get(d.key);
-      if (g) {
-        list.push({
-          edge: d,
-          kind: 'dep',
-          geo: g,
-          highlighted: all || hl.depKeys.has(d.key),
-          animated: true,
-        });
+      if (props.lineageColumns && d.columns.length) {
+        for (const c of d.columns) {
+          push(c, 'dep', geo.routes.value.get(c.key), hl.depColumnKeys.has(c.key) || (tableHover && hl.depKeys.has(d.key)));
+        }
+        continue;
       }
+      push(d, 'dep', geo.routes.value.get(d.key), hl.depKeys.has(d.key));
       // Column-level mappings show only while one of their fields is hovered or pinned.
       for (const c of d.columns) {
-        const cg = hl.depColumnKeys.has(c.key) ? geo.routes.value.get(c.key) : undefined;
-        if (cg) {
-          list.push({
-            edge: c,
-            kind: 'dep',
-            geo: cg,
-            highlighted: true,
-            animated: true,
-          });
-        }
+        if (hl.depColumnKeys.has(c.key)) push(c, 'dep', geo.routes.value.get(c.key), true);
       }
     }
   }
-  const hovered = (e: RenderEdge) => (e.kind === 'ref'
-    ? hl.refKeys.has(e.edge.key)
-    : hl.depKeys.has(e.edge.key) || hl.depColumnKeys.has(e.edge.key));
   if (all && list.length > MAX_ANIMATED_EDGES) {
-    for (const e of list) e.animated = hovered(e);
+    for (const e of list) e.animated = e.hot;
   }
   // Hovered edges draw last so they sit above their neighbours.
-  return [...list.filter((e) => !hovered(e)), ...list.filter(hovered)];
+  return [...list.filter((e) => !e.hot), ...list.filter((e) => e.hot)];
+});
+
+/** The kinds the drawn column mappings have, in legend order, while lineage is drawn by column. */
+const legendKinds = computed<('value' | 'row')[]>(() => {
+  if (!props.showLineage || !props.lineageColumns) return [];
+  const kinds = new Set<string>();
+  for (const e of edgesInRenderOrder.value) {
+    const k = e.kind === 'dep' ? (e.edge as DepLineVM).kind : undefined;
+    if (k) kinds.add(k);
+  }
+  return (['value', 'row'] as const).filter((k) => kinds.has(k));
 });
 
 const notesInRenderOrder = computed(() => model.value.notes

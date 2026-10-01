@@ -124,6 +124,17 @@
         </button>
         <span :class="DIVIDER" />
         <EdgeModeSelect />
+        <!-- Pressed while lineage is drawn mapping by mapping, field to field -->
+        <button
+          :class="[BUTTON, ui.lineageColumns ? ACTIVE : '', 'disabled:opacity-40 disabled:pointer-events-none']"
+          :title="ui.lineageColumns ? 'Draw lineage as one edge per pair of tables' : 'Draw lineage field to field, by kind'"
+          aria-label="Lineage by column"
+          :aria-pressed="ui.lineageColumns"
+          :disabled="!ui.showLineage"
+          @click="ui.toggleLineageColumns"
+        >
+          <PhArrowsMerge class="w-4 h-4" />
+        </button>
         <span :class="DIVIDER" />
         <button
           :class="[BUTTON, ui.highlightAll ? ACTIVE : '']"
@@ -152,7 +163,7 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue';
 import {
-  PhCornersOut, PhHash, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
+  PhArrowsMerge, PhCornersOut, PhHash, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { EngineDiagram, type ColorChangePayload, type TableLinkPayload } from '@dbml-designer/engine';
 import { tokenOf } from '@/dbml/token';

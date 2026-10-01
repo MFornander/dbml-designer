@@ -38,7 +38,7 @@ export interface TooltipContent {
   checks?: string[];
   metadata?: [string, string][];
   note?: string;
-  /** Column-level lineage mappings of a table-level Dep edge, as `a → b`. */
+  /** Column-level lineage mappings of a table-level Dep edge, as `a → b`, with the kind in parentheses. */
   columns?: string[];
   /** A partial's primary key columns, `a` or `(a, b)`. */
   primaryKey?: string;
@@ -223,19 +223,23 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
           ...(metadata ? { metadata } : {}),
           ...(dep.note ? { note: dep.note } : {}),
           ...(dep.columns.length
-            ? { columns: dep.columns.map((c) => `${fields(c.upstream)} → ${fields(c.downstream)}`) }
+            ? { columns: dep.columns.map((c) => `${fields(c.upstream)} → ${fields(c.downstream)}${c.kind ? ` (${c.kind})` : ''}`) }
             : {}),
         };
       }
-      // A column-level mapping, visible while one of its fields is hovered or pinned.
+      // A column-level mapping, with what its own dep says: its name, kind, note, and metadata.
       for (const d of model.deps) {
         const col = d.columns.find((c) => c.key === target.key);
         if (!col) continue;
+        const metadata = metadataEntries(col.metadata);
         return {
           kind: 'dep',
           title: describe(col.upstream),
           target: describe(col.downstream),
-          ...(d.note ? { note: d.note } : {}),
+          ...(col.label ? { subtitle: col.label } : {}),
+          ...(col.kind ? { lines: [`kind: ${col.kind}`] } : {}),
+          ...(metadata ? { metadata } : {}),
+          ...(col.note ? { note: col.note } : {}),
         };
       }
       return null;

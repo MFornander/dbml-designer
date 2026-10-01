@@ -61,10 +61,10 @@
       }
     ],
     "deps": [
-      { "from": { "table": "spec.order_line", "fields": ["quantity"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
-      { "from": { "table": "input.item", "fields": ["unit_cost"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
-      { "from": { "table": "input.markup", "fields": ["rate"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "value" },
-      { "from": { "table": "spec.order_line", "fields": ["item_id"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "name": "row" }
+      { "from": { "table": "spec.order_line", "fields": ["quantity"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" },
+      { "from": { "table": "input.item", "fields": ["unit_cost"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" },
+      { "from": { "table": "input.markup", "fields": ["rate"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "value" },
+      { "from": { "table": "spec.order_line", "fields": ["item_id"] }, "to": { "table": "money.line_price", "fields": ["price"] }, "kind": "row" }
     ],
     "groups": [
       { "name": "inputs", "color": "#24BAB1", "tables": ["input.item", "input.markup"] }

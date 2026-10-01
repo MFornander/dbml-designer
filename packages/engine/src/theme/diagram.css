@@ -304,6 +304,42 @@
   border-top: 1px solid var(--dg-tooltip-border);
 }
 
+/* Legend of the lineage kinds, while mappings are drawn by column */
+
+.dg-legend {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 400 12px/1.4 "Open Sans", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.dg-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Drawn like the mappings: see .dg-dep.is-kind-* below. */
+.dg-legend-line {
+  fill: none;
+  stroke: var(--dg-dep-color);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+.dg-legend-line.is-kind-row {
+  stroke-dasharray: 2 4;
+}
+
 /* Relationship and lineage edges */
 
 /*
@@ -339,6 +375,15 @@
 
 .dg-dep .dg-ref-line {
   stroke-dasharray: 6 4;
+}
+
+/* Column mappings by kind: an operand solid, a row selector in short dashes. */
+.dg-dep.is-kind-value .dg-ref-line {
+  stroke-dasharray: none;
+}
+
+.dg-dep.is-kind-row .dg-ref-line {
+  stroke-dasharray: 2 4;
 }
 
 .dg-ref.is-inactive .dg-ref-line {

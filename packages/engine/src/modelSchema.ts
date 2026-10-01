@@ -185,7 +185,11 @@ export const MODEL_SCHEMA = {
         from: ref('edgeEnd'),
         to: ref('edgeEnd'),
         name: text('Shown on the edge while it is highlighted; the names of every dep between two tables are joined.'),
-        color: color('Edge color.'),
+        kind: {
+          ...text('What the upstream end does for the downstream one: `value`, an operand of the formula, drawn solid; `row`, it chose the row used, drawn in short dashes. Any other kind is listed in the tooltip.'),
+          examples: ['value', 'row'],
+        },
+        color: color('Edge color, whatever its kind.'),
         note: text('Note, listed in the edge\'s tooltip.'),
         metadata: METADATA,
         source: SOURCE,

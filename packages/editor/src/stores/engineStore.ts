@@ -78,6 +78,7 @@ export const useEngineStore = defineStore('engine', () => {
       dark: ui.isDark,
       showRefs: ui.showRefs,
       showLineage: ui.showLineage,
+      lineageColumns: ui.lineageColumns,
       partialRefMode: ui.partialRefMode,
       showValues: ui.showValues,
       lineageLayout: ui.lineageLayout,

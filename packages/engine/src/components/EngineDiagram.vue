@@ -8,6 +8,7 @@
     :collapsed-groups="collapsedGroups"
     :show-refs="display.showRefs"
     :show-lineage="display.showLineage"
+    :lineage-columns="display.lineageColumns"
     :partial-ref-mode="display.partialRefMode"
     :show-values="display.showValues"
     :lineage-layout="display.lineageLayout"

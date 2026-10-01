@@ -263,7 +263,7 @@ export function formatModelText (model: Model): string {
   lines.push('DEPS');
   for (const d of m.deps) {
     lines.push(`  ${d.upstream.tableKey} -> ${d.downstream.tableKey}${d.names.length ? `  [${d.names.join(', ')}]` : ''}${d.note ? `  # ${d.note}` : ''}`);
-    for (const c of d.columns) lines.push(`    ${column(c.upstream)} -> ${column(c.downstream)}`);
+    for (const c of d.columns) lines.push(`    ${column(c.upstream)} -> ${column(c.downstream)}${c.kind ? `  (${c.kind})` : ''}`);
   }
   if (m.views.length) {
     lines.push('VIEWS');

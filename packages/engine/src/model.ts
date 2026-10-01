@@ -134,6 +134,13 @@ export interface ModelDep {
   to: ModelEdgeEnd;
   /** Shown on the edge while it is highlighted; the names of every dep between two tables are joined. */
   name?: string;
+  /**
+   * What the upstream end does for the downstream one, drawn when column mappings are: `value`, an
+   * operand of the formula, solid; `row`, it chose the row used (a join key or a filter), in short
+   * dashes. Any other kind is listed in the tooltip and drawn like a dep without one.
+   */
+  kind?: string;
+  /** `#RGB` or `#RRGGBB`; the line's color whatever its kind. */
   color?: string;
   note?: string;
   metadata?: Record<string, string>;

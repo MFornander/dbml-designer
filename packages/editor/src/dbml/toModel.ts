@@ -316,9 +316,11 @@ export function toModel (raw: Database | undefined): DbmlModel {
     (model.refs ??= []).push(ref);
   }
 
-  // Data lineage: one dep per edge of a Dep block, carrying the block's name, color, note, and metadata.
+  // Data lineage: one dep per edge of a Dep block, carrying the block's name, color, note, and
+  // metadata. A `kind` setting is the model's kind, which the diagram draws by, not metadata.
   for (const dep of raw.deps ?? []) {
-    const meta = stringifyMetadata(dep.metadata as Record<string, unknown> | undefined);
+    const { kind, ...rest } = stringifyMetadata(dep.metadata as Record<string, unknown> | undefined) ?? {};
+    const meta = Object.keys(rest).length ? rest : undefined;
     for (const edge of dep.edges ?? []) {
       const source = toTokenRange(edge.token ?? dep.token);
       const up = resolveEndpoint(edge.upstream);
@@ -336,6 +338,7 @@ export function toModel (raw: Database | undefined): DbmlModel {
         to: down,
       };
       if (dep.name) d.name = dep.name;
+      if (kind) d.kind = kind;
       if (dep.color) d.color = dep.color;
       if (dep.note?.value) d.note = dep.note.value;
       if (meta) d.metadata = meta;
