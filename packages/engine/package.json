@@ -4,9 +4,7 @@
   "description": "A diagram engine for database schemas and their lineage: draws tables, relationships, lineage edges, groups, notes, and views from a plain JSON model, with the layout kept per instance.",
   "license": "Apache-2.0",
   "type": "module",
-  "sideEffects": [
-    "**/*.css"
-  ],
+  "sideEffects": false,
   "files": [
     "dist",
     "README.md"
@@ -19,9 +17,14 @@
     "./core": {
       "types": "./dist/types/core.d.ts",
       "import": "./dist/core.js"
+    },
+    "./standalone": {
+      "types": "./dist/types/standalone.d.ts",
+      "import": "./dist/standalone/standalone.js"
     }
   },
   "scripts": {
+    "build": "vite build && vite build --config vite.standalone.config.ts && vue-tsc -p tsconfig.build.json",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

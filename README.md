@@ -109,7 +109,7 @@ Other scripts:
 | `npm test` | Unit and component tests with Vitest, for both packages |
 | `npm run type-check` | `vue-tsc` for the engine and the app, `tsc` for the command line |
 | `npm run lint` | ESLint over both packages, including the rules that keep the engine free of DBML and each package to the dependencies it declares |
-| `npm run build` | Type-check and produce a production build of the editor in `packages/editor/dist/` |
+| `npm run build` | Build the engine library in `packages/engine/dist/` (ES modules for Vue hosts and Node, a standalone bundle with Vue for other hosts, type declarations), then type-check and build the editor in `packages/editor/dist/` |
 | `npm run preview` | Serve the production build locally |
 
 ## Following files

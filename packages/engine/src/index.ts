@@ -9,3 +9,4 @@ export * from './core';
 export { default as EngineDiagram } from './components/EngineDiagram.vue';
 export { default as DiagramCanvas } from './components/DiagramCanvas.vue';
 export { renderNoteMarkdown } from './util/markdown';
+export { mount, type MountOptions, type MountedDiagram } from './mount';

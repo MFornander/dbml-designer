@@ -217,7 +217,9 @@ import StickyNoteNode from './StickyNoteNode.vue';
 import DiagramTooltip from './DiagramTooltip.vue';
 import ColorPickerPopover from './ColorPickerPopover.vue';
 import RefEdgeControls from './RefEdgeControls.vue';
-import '../theme/diagram.css';
+import { installStyles } from '../theme/styles';
+
+installStyles();
 
 const props = withDefaults(defineProps<{
   model: DiagramModel;
@@ -461,12 +463,10 @@ function onElementClick (key: string) {
         kind: 'table',
         key,
       });
-  if (table.source !== undefined) {
-    emit('table-click', {
-      key,
-      source: table.source,
-    });
-  }
+  emit('table-click', {
+    key,
+    source: table.source,
+  });
 }
 
 function changesFor (target: DragTarget, pos: Point): PositionChange[] {
@@ -547,7 +547,7 @@ watch(hover.hover, (target, prev) => {
     return;
   }
   const table = model.value.tablesByKey.get(key);
-  if (table && table.source !== undefined) {
+  if (table) {
     emit('table-hover', {
       key,
       source: table.source,

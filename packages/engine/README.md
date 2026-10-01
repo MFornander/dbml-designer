@@ -62,7 +62,7 @@ const engine = createEngine({
 <EngineDiagram :engine="engine" @table-click="({ key, source }) => open(key)" />
 ```
 
-`EngineDiagram` fills its container. Its events are `table-click` and `table-hover` (`{ key, source }`), `set-color` (a color picked for a table, group, note, or ref; the host decides where it goes), `zoom-change`, and `arrange` (an arrangement was stored).
+`EngineDiagram` fills its container. Its events are `table-click` and `table-hover` (`{ key, source }`, the source undefined for a table that has none), `set-color` (a color picked for a table, group, note, or ref; the host decides where it goes), `zoom-change`, and `arrange` (an arrangement was stored).
 
 ### The engine
 
@@ -84,9 +84,57 @@ Each input of `createEngine` (`model`, `loading`, `display`, `bases`) is a value
 
 Engines share nothing: several can live on one page, each with its own model, layout, and views.
 
+### Hosts without Vue
+
+`mount(element, options)` draws a diagram into any element and returns `{ engine, unmount }`. The options are those of `createEngine`, or an `engine` made elsewhere, plus callbacks: `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, and `onArrange`. `@dbml-designer/engine/standalone` has `mount` and everything in `core` with Vue bundled in, for hosts that have no Vue of their own, React for example:
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { mount, type MountedDiagram, type Model } from '@dbml-designer/engine/standalone';
+
+export function Diagram ({ model }: { model: Model }) {
+  const element = useRef<HTMLDivElement>(null);
+  const diagram = useRef<MountedDiagram | null>(null);
+  useEffect(() => {
+    diagram.current = mount(element.current!, { model, onTableClick: ({ key, source }) => console.log(key, source) });
+    return () => diagram.current?.unmount();
+  }, []);
+  // A new model keeps the layout; tables without a position are placed.
+  useEffect(() => diagram.current?.engine.setModel(model), [model]);
+  return <div ref={element} style={{ width: '100%', height: 600 }} />;
+}
+```
+
+The diagram fills its element, so give the element a size. It brings its styles: the first diagram to draw adds one `style` element to the page. It draws with Open Sans and Inconsolata; load them (for example from `@fontsource/open-sans` and `@fontsource/inconsolata`) for the intended look, or the browser's fallbacks are used and measured alike.
+
 ### Without components
 
 `@dbml-designer/engine/core` has everything but the components, and loads without a DOM or a Vue compiler, in Node too: the model and its types, `fromModel`, the layout and view state, and Arrange with its table sizing, which estimates text widths when no canvas can measure them.
+
+## Entry points
+
+| Import | What it is |
+|---|---|
+| `@dbml-designer/engine` | Everything: `createEngine`, `EngineDiagram`, `mount`, and all of `core`. Vue is the host's (a peer dependency). |
+| `@dbml-designer/engine/core` | No components, no DOM: models, `fromModel`, layout and view state, Arrange. |
+| `@dbml-designer/engine/standalone` | `mount` and all of `core` with Vue bundled in, for hosts without Vue. |
+
+## Using it from another project
+
+The package is not published yet. Build it from a clone of this repository and install the result:
+
+```bash
+git clone https://github.com/MFornander/dbml-designer.git
+cd dbml-designer
+npm install
+npm run build -w @dbml-designer/engine
+cd packages/engine
+npm pack
+```
+
+`npm pack` writes `dbml-designer-engine-0.1.0.tgz`; install it in the other project with `npm install /path/to/dbml-designer-engine-0.1.0.tgz`. Installing from the tarball keeps one copy of Vue: a Vue host's own Vue serves the engine too. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config so the engine and the app share one Vue. The standalone entry bundles its own Vue and needs neither.
+
+`npm run build -w @dbml-designer/engine` writes `dist/`: `index.js` and `core.js` with Vue left to the host, `standalone/standalone.js` with it bundled, and type declarations under `types/`.
 
 ## Development
 

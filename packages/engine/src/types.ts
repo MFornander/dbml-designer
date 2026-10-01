@@ -26,7 +26,7 @@ export interface PositionChange {
   h?: number;
 }
 
-/** A table clicked or hovered, with the `source` the host gave it. */
+/** A table clicked or hovered, with the `source` the host gave it, if any. */
 export interface TableLinkPayload {
   key: TableKey;
   source: unknown;

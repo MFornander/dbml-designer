@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @dbml-designer/editor",
-    "build": "npm run build -w @dbml-designer/editor",
+    "build": "npm run build -w @dbml-designer/engine && npm run build -w @dbml-designer/editor",
     "preview": "npm run preview -w @dbml-designer/editor",
     "test": "vitest run",
     "test:watch": "vitest",
