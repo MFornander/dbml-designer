@@ -15,6 +15,8 @@ export interface DiagramContext {
   highlight: ComputedRef<HighlightSet>;
   /** The host's highlight: what is lit, accented, and kept from dimming. */
   focus: ComputedRef<Focus>;
+  /** Companion tables shown beside their owner. */
+  unfolded: Ref<ReadonlySet<string>>;
   dark: Ref<boolean>;
   dragging: ShallowRef<DragTarget | null>;
   setHover (target: HoverTarget | null): void;

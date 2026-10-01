@@ -229,7 +229,7 @@ import {
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import {
-  collapsedGroupSize, placeByLineage, placeNewItems, placeNewNotes,
+  collapsedGroupSize, placeBelow, placeByLineage, placeNewItems, placeNewNotes,
 } from '../geometry/layout';
 import { arrangeByGroup, arrangePending } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
@@ -307,7 +307,10 @@ const props = withDefaults(defineProps<{
   gridRows?: number;
   /** The zooms at or below which less is drawn, so a diagram zoomed out stays readable. */
   zoomDetail?: ZoomDetail;
+  /** Companion tables shown beside their owner; the rest are folded into its header, and not drawn. */
+  unfolded?: ReadonlySet<string>;
 }>(), {
+  unfolded: () => new Set<string>(),
   zoomDetail: () => ({ ...DEFAULT_ZOOM_DETAIL }),
   gridRows: GRID_ROWS,
   chips: null,
@@ -342,6 +345,8 @@ const emit = defineEmits<{
   'element-click': [event: ElementClickEvent];
   /** The pointer moved onto an element, or off every element (null). */
   'element-hover': [event: ElementEvent | null];
+  /** A companion's badge was clicked: show the companion beside its owner (true), or fold it back (false). */
+  'toggle-companion': [key: string, open: boolean];
   /** A color was chosen in the picker; the host writes it into the DBML text. */
   'set-color': [payload: ColorChangePayload];
   /** A relationship's route was hand-drawn (rails) or reset (null). */
@@ -395,6 +400,12 @@ const revealedRefs = computed<ReadonlySet<string>>((prev) => {
     : [];
   return prev && prev.size === keys.length && keys.every((k) => prev.has(k)) ? prev : new Set(keys);
 });
+/** What is not drawn: what the view hides, and companion tables folded into their owner. */
+const hidden = computed<ReadonlySet<string>>(() => {
+  const folded = model.value.tables.filter((t) => t.companionOf && !props.unfolded.has(t.key)).map((t) => t.key);
+  return folded.length ? new Set([...props.hidden, ...folded]) : props.hidden;
+});
+
 const geo = useDiagramGeometry({
   model,
   positions: toRef(props, 'positions'),
@@ -409,7 +420,7 @@ const geo = useDiagramGeometry({
   dragOverride,
   edgeRoutes: toRef(props, 'edgeRoutes'),
   routeDragOverride,
-  hidden: toRef(props, 'hidden'),
+  hidden,
   chips: toRef(props, 'chips'),
   chipWidth: toRef(props, 'chipWidth'),
   gridRows: toRef(props, 'gridRows'),
@@ -552,7 +563,7 @@ function onElementClick (key: string) {
   const over = hover.hover.value;
   // On a table, what is under the pointer: one of its fields or partial badges, or the table itself.
   const target: HoverTarget = table
-    ? ((over?.kind === 'field' || over?.kind === 'partial' || over?.kind === 'chip') && over.tableKey === key
+    ? ((over?.kind === 'field' || over?.kind === 'partial' || over?.kind === 'chip' || over?.kind === 'companion') && over.tableKey === key
         ? over
         : {
             kind: 'table',
@@ -563,6 +574,11 @@ function onElementClick (key: string) {
         key,
       };
   const prevented = clicked(target);
+  // A companion's badge shows or folds the companion, and leaves the selection and pins alone.
+  if (target.kind === 'companion') {
+    if (!prevented) emit('toggle-companion', target.companion, !props.unfolded.has(target.companion));
+    return;
+  }
   if (!prevented) {
     const next = new Set(dragAdditive ? selection.value : []);
     if (dragAdditive && next.has(key)) next.delete(key);
@@ -611,7 +627,7 @@ function elementEvent (target: HoverTarget): ElementEvent {
   return {
     target,
     ...(source !== undefined ? { source } : {}),
-    rect: target.kind === 'chip' ? chipRect(target.tableKey, target.chip) : rectOf(targetKey(target)),
+    rect: target.kind === 'chip' || target.kind === 'companion' ? badgeRect(target) : rectOf(targetKey(target)),
     point: lastPointer ? { ...lastPointer } : null,
   };
 }
@@ -623,6 +639,7 @@ function targetKey (target: HoverTarget): string {
       return target.row !== undefined ? cellKey(target.fieldKey, target.row) : target.fieldKey;
     case 'partial':
     case 'chip':
+    case 'companion':
       return target.tableKey;
     default:
       return target.key;
@@ -637,6 +654,8 @@ function sourceOf (target: HoverTarget): Source | undefined {
     case 'partial':
     case 'chip':
       return m.tablesByKey.get(target.tableKey)?.source;
+    case 'companion':
+      return m.tablesByKey.get(target.companion)?.source;
     case 'field':
       return m.tablesByKey.get(target.tableKey)?.fields.find((f) => f.key === target.fieldKey)?.source;
     case 'ref':
@@ -1071,6 +1090,7 @@ const ctx: DiagramContext = {
   clearHover: hover.clearHover,
   clickEdge: onEdgeClick,
   focus,
+  unfolded: toRef(props, 'unfolded'),
   beginDrag: (e: PointerEvent, target: DragTarget, origin: Point) => {
     // Lineage-layout positions are derived from the dependency order, so nothing is movable there.
     if (props.lineageLayout) return;
@@ -1271,15 +1291,30 @@ watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading
         h: item.h,
       });
     };
-    // Next to a placed table lineage connects them to; the rest packed in columns at the right.
     const placed = new Map([...geo.boxes.value].filter(([k]) => model.value.tablesByKey.has(k)));
+    // A companion shown for the first time goes below its owner, inside the owner's group: past
+    // tables, notes, and other groups, but not the owner's own group, which grows around it.
+    const besideOwner = new Set<string>();
+    for (const item of items) {
+      const ownerKey = model.value.tablesByKey.get(item.key)?.companionOf;
+      const owner = ownerKey ? placed.get(ownerKey) : undefined;
+      if (!ownerKey || !owner) continue;
+      const ownerGroup = model.value.tablesByKey.get(ownerKey)?.groupKey;
+      const avoid = [
+        ...occupied.filter((r) => !geo.groupBoxes.value.some((g) => g.box === r && g.group.key === ownerGroup)),
+      ];
+      take(item.key, placeBelow(item, owner, avoid));
+      besideOwner.add(item.key);
+    }
+    // Next to a placed table lineage connects them to; the rest packed in columns at the right.
+    const rest = items.filter((i) => !besideOwner.has(i.key));
     const links = model.value.deps.map((d) => ({
       upstream: d.upstream.tableKey,
       downstream: d.downstream.tableKey,
     }));
-    const byLineage = placeByLineage(items, links, placed, occupied);
+    const byLineage = placeByLineage(rest, links, placed, occupied);
     for (const [key, pos] of byLineage) take(key, pos);
-    for (const [key, pos] of placeNewItems(items.filter((i) => !byLineage.has(i.key)), occupied)) take(key, pos);
+    for (const [key, pos] of placeNewItems(rest.filter((i) => !byLineage.has(i.key)), occupied)) take(key, pos);
   }
   if (notes.length > 0) {
     for (const [key, pos] of placeNewNotes(notes, occupied)) {
@@ -1304,8 +1339,8 @@ watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading
  */
 function arrange (only?: ReadonlySet<string>): boolean {
   const m = model.value;
-  const tables = m.tables.filter((t) => !props.hidden.has(t.key));
-  const notes = m.notes.filter((n) => !props.hidden.has(n.key)).map((n) => ({
+  const tables = m.tables.filter((t) => !hidden.value.has(t.key));
+  const notes = m.notes.filter((n) => !hidden.value.has(n.key)).map((n) => ({
     key: n.key,
     w: props.positions[n.key]?.w ?? NOTE_W,
     h: props.positions[n.key]?.h ?? NOTE_H,
@@ -1380,7 +1415,7 @@ watch(() => props.marked, (marked, before) => {
   stopAutoFit();
   if (props.revealAdded === 'none') return;
   // The tables this update added, not those still lit from the one before.
-  const tables = [...marked].filter((k) => !before?.has(k) && model.value.tablesByKey.has(k) && !props.hidden.has(k));
+  const tables = [...marked].filter((k) => !before?.has(k) && model.value.tablesByKey.has(k) && !hidden.value.has(k));
   toShow = tables.length > 0 ? new Set(tables) : null;
 });
 watch([() => props.marked, geo.boxes], () => {
@@ -1446,10 +1481,13 @@ function worldRectOf (key: string): Rect | null {
   return null;
 }
 
-/** Where a host's chip is drawn, in client coordinates; null when it is not drawn. */
-function chipRect (tableKey: string, id: string): Rect | null {
-  const box = geo.boxes.value.get(tableKey);
-  const chip = geo.sizes.value.get(tableKey)?.chips.find((c) => c.chip.id === id);
+/** Where a host's chip or a companion's badge is drawn, in client coordinates; null when it is not drawn. */
+function badgeRect (target: Extract<HoverTarget, { kind: 'chip' | 'companion' }>): Rect | null {
+  const box = geo.boxes.value.get(target.tableKey);
+  const size = geo.sizes.value.get(target.tableKey);
+  const chip = target.kind === 'chip'
+    ? size?.chips.find((c) => c.chip.id === target.chip)
+    : size?.companions.find((c) => c.key === target.companion);
   if (!box || !chip) return null;
   return toClient({
     x: box.x + chip.x,

@@ -59,6 +59,15 @@ export interface HeaderBadge {
   w: number;
 }
 
+/** A companion's badge in its owner's header: the companion, its label, and where the badge sits. */
+export interface HeaderCompanion {
+  key: string;
+  label: string;
+  /** Left edge, from the table's left edge. */
+  x: number;
+  w: number;
+}
+
 /** A host's chip in the header: where it sits and its label, cut to its fixed width. */
 export interface HeaderChip {
   chip: TableChip;
@@ -80,6 +89,8 @@ export interface TableSize {
   schemaW: number;
   /** The host's chips after the name and its icon, in order. */
   chips: HeaderChip[];
+  /** A badge per companion folded into the table (see `ModelTable.companionOf`), after the chips. */
+  companions: HeaderCompanion[];
   /** Partial badges after the chips, in order; empty unless partial refs are drawn as badges. */
   badges: HeaderBadge[];
   /** The count of a table's records, after the partial badges, when it has several and values show; it opens them. */
@@ -201,6 +212,18 @@ export function computeTableSize (
     badgesW += chipWidth;
     return placed;
   });
+  const headerCompanions = (t.companions ?? []).map((c): HeaderCompanion => {
+    const w = Math.ceil(m.measure(c.label, FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
+    badgesW += PARTIAL_BADGE_GAP;
+    const badge = {
+      key: c.key,
+      label: c.label,
+      x: PAD_X + nameW + iconW + badgesW,
+      w,
+    };
+    badgesW += w;
+    return badge;
+  });
   const headerBadges = badges.map((partial): HeaderBadge => {
     const w = Math.ceil(m.measure(partialBadgeLabel(partial), FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
     badgesW += PARTIAL_BADGE_GAP;
@@ -254,6 +277,7 @@ export function computeTableSize (
     nameW,
     schemaW,
     chips: headerChips,
+    companions: headerCompanions,
     badges: headerBadges,
     ...(recordsBadge ? { recordsBadge } : {}),
     valueW,

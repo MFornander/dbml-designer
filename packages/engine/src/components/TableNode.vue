@@ -146,6 +146,33 @@
             text-anchor="middle"
           >{{ c.text }}</text>
         </g>
+        <!-- A badge per companion folded into this table: dashed while folded, solid while it is shown; a click toggles it -->
+        <g
+          v-for="c in size.companions"
+          :key="c.key"
+          class="dg-companion-badge"
+          :class="{ 'is-open': ctx.unfolded.value.has(c.key) }"
+          :data-companion="c.key"
+          :transform="`translate(${c.x} ${(ROW_H - PARTIAL_BADGE_H) / 2})`"
+          :style="{ color: headerTextColor }"
+          @pointerenter="onCompanionEnter(c.key)"
+          @pointerleave="onBadgeLeave"
+        >
+          <rect
+            class="dg-partial-badge-bg"
+            x="0.5"
+            y="0.5"
+            :width="c.w - 1"
+            :height="PARTIAL_BADGE_H - 1"
+            rx="4"
+          />
+          <text
+            class="dg-partial-badge-text"
+            :x="c.w / 2"
+            :y="PARTIAL_BADGE_H / 2"
+            text-anchor="middle"
+          >{{ c.label }}</text>
+        </g>
         <!-- One badge per partial whose refs are not drawn as lines; hovering it draws them and lights up what they reach -->
         <g
           v-for="b in size.badges"
@@ -475,7 +502,7 @@ const showGear = computed(() => {
   const s = ctx.highlight.value.source;
   if (!s) return false;
   if (s.kind === 'table') return s.key === props.table.key;
-  return (s.kind === 'field' || s.kind === 'partial' || s.kind === 'chip') && s.tableKey === props.table.key;
+  return (s.kind === 'field' || s.kind === 'partial' || s.kind === 'chip' || s.kind === 'companion') && s.tableKey === props.table.key;
 });
 
 /**
@@ -538,6 +565,14 @@ function onFieldEnter (f: FieldVM) {
     kind: 'field',
     tableKey: props.table.key,
     fieldKey: f.key,
+  });
+}
+
+function onCompanionEnter (companion: string) {
+  ctx.setHover({
+    kind: 'companion',
+    tableKey: props.table.key,
+    companion,
   });
 }
 

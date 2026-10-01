@@ -17,6 +17,10 @@ export interface LayoutSnapshot {
   collapsedGroups: string[];
   /** Groups kept open although an inherited layout collapses them. */
   expandedGroups?: string[];
+  /** Companion tables shown beside their owner (`ModelTable.companionOf`); the rest are folded into it. */
+  unfoldedCompanions?: string[];
+  /** Companions kept folded although an inherited layout unfolds them. */
+  foldedCompanions?: string[];
   /** Ref keys (`name#from->to`) to rails (see routing.ts); an empty list undoes an inherited route. */
   edgeRoutes: Record<string, number[]>;
   /**
@@ -32,6 +36,10 @@ export interface LayoutLayer {
   collapsedGroups: readonly string[];
   /** Groups kept open although an imported layout collapses them. */
   expandedGroups: readonly string[];
+  /** Companion tables shown beside their owner. */
+  unfoldedCompanions?: readonly string[];
+  /** Companions kept folded although an imported layout unfolds them. */
+  foldedCompanions?: readonly string[];
   /** Routes; an empty list undoes an inherited hand-drawn route. */
   edgeRoutes: Readonly<Record<string, readonly number[]>>;
 }
@@ -51,6 +59,8 @@ export function baseLayoutFrom (snapshots: ReadonlyArray<LayoutSnapshot>): Layou
   const edgeRoutes: Record<string, number[]> = {};
   const seenGroups = new Set<string>();
   const seenRoutes = new Set<string>();
+  const unfolded: string[] = [];
+  const seenCompanions = new Set<string>();
   for (const s of snapshots) {
     for (const [key, p] of Object.entries(s.positions)) {
       if (!(key in positions)) positions[key] = { ...p };
@@ -61,6 +71,12 @@ export function baseLayoutFrom (snapshots: ReadonlyArray<LayoutSnapshot>): Layou
       collapsed.push(key);
     }
     for (const key of s.expandedGroups ?? []) seenGroups.add(key);
+    for (const key of s.unfoldedCompanions ?? []) {
+      if (seenCompanions.has(key)) continue;
+      seenCompanions.add(key);
+      unfolded.push(key);
+    }
+    for (const key of s.foldedCompanions ?? []) seenCompanions.add(key);
     for (const [key, rails] of Object.entries(s.edgeRoutes)) {
       if (seenRoutes.has(key)) continue;
       seenRoutes.add(key);
@@ -70,6 +86,7 @@ export function baseLayoutFrom (snapshots: ReadonlyArray<LayoutSnapshot>): Layou
   return {
     positions,
     collapsedGroups: collapsed,
+    ...(unfolded.length ? { unfoldedCompanions: unfolded } : {}),
     edgeRoutes,
   };
 }
@@ -85,7 +102,8 @@ export function emptyLayout (): LayoutSnapshot {
 
 export function isEmptyLayout (s: LayoutSnapshot): boolean {
   return Object.keys(s.positions).length === 0 && s.collapsedGroups.length === 0
-    && (s.expandedGroups?.length ?? 0) === 0 && Object.keys(s.edgeRoutes).length === 0;
+    && (s.expandedGroups?.length ?? 0) === 0 && (s.unfoldedCompanions?.length ?? 0) === 0
+    && (s.foldedCompanions?.length ?? 0) === 0 && Object.keys(s.edgeRoutes).length === 0;
 }
 
 /** What a layer adds to its base: the layer without anything the base already says. */
@@ -97,6 +115,9 @@ export function minimizeLayout (layer: LayoutLayer, base: LayoutSnapshot): Layou
   const baseCollapsed = new Set(base.collapsedGroups);
   const collapsedGroups = layer.collapsedGroups.filter((k) => !baseCollapsed.has(k));
   const expandedGroups = layer.expandedGroups.filter((k) => baseCollapsed.has(k));
+  const baseUnfolded = new Set(base.unfoldedCompanions ?? []);
+  const unfoldedCompanions = (layer.unfoldedCompanions ?? []).filter((k) => !baseUnfolded.has(k));
+  const foldedCompanions = (layer.foldedCompanions ?? []).filter((k) => baseUnfolded.has(k));
   const edgeRoutes: Record<string, number[]> = {};
   for (const [key, rails] of Object.entries(layer.edgeRoutes)) {
     if (rails.length === 0) {
@@ -109,6 +130,8 @@ export function minimizeLayout (layer: LayoutLayer, base: LayoutSnapshot): Layou
     positions,
     collapsedGroups,
     ...(expandedGroups.length ? { expandedGroups } : {}),
+    ...(unfoldedCompanions.length ? { unfoldedCompanions } : {}),
+    ...(foldedCompanions.length ? { foldedCompanions } : {}),
     edgeRoutes,
   };
 }

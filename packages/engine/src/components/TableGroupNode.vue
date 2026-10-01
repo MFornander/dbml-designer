@@ -79,14 +79,16 @@
       :y="GROUP_HEADER_H + (box.h - GROUP_HEADER_H) / 2"
       text-anchor="middle"
     >{{ memberCount }} {{ memberCount === 1 ? 'table' : 'tables' }}</text>
-    <!-- Zoomed out: the title above the group, at a size that stays readable -->
-    <text
-      v-if="ctx.lod.value !== 'full'"
-      class="dg-overview-group"
-      :font-size="OVERVIEW_GROUP_PX / ctx.viewport.value.k"
-      x="0"
-      :y="-6 / ctx.viewport.value.k"
-    >{{ group.name }}</text>
+    <!-- Zoomed out: the title above the group, at a size that stays readable, cut to the group's width -->
+    <g v-if="overviewTitle">
+      <title>{{ group.name }}</title>
+      <text
+        class="dg-overview-group"
+        :font-size="OVERVIEW_GROUP_PX / ctx.viewport.value.k"
+        x="0"
+        :y="-6 / ctx.viewport.value.k"
+      >{{ overviewTitle }}</text>
+    </g>
   </g>
 </template>
 
@@ -98,7 +100,7 @@ import {
   GEAR_SIZE, GROUP_HEADER_H, GROUP_NAME_X, GROUP_RADIUS, GROUP_TOGGLE_X, ICON_GAP, ICON_W,
 } from '../geometry/constants';
 import { roundedTopRectPath } from '../geometry/pathBuilder';
-import { OVERVIEW_GROUP_PX } from '../geometry/lod';
+import { OVERVIEW_GROUP_PX, wrapName } from '../geometry/lod';
 import { groupBodyFill, textColorFor } from '../geometry/color';
 import { DARK, LIGHT } from '../theme/palette';
 import { useDiagramContext } from '../state/context';
@@ -117,6 +119,15 @@ const props = defineProps<{
 }>();
 
 const ctx = useDiagramContext();
+/** Zoomed out, the title on one line no wider than the group, so it never runs into the next group's. */
+const overviewTitle = computed(() => {
+  if (ctx.lod.value === 'full') return '';
+  const charW = 0.6 * OVERVIEW_GROUP_PX / ctx.viewport.value.k;
+  const name = props.group.name;
+  const fits = Math.floor(props.box.w / charW);
+  if (name.length <= fits) return name;
+  return wrapName(name.replace(/\s+/g, ' '), fits, 1)[0] ?? '';
+});
 const dimmed = computed(() => isDimmed(ctx.focus.value, props.group.key));
 
 const headerPath = computed(() => roundedTopRectPath(props.box.w, GROUP_HEADER_H, GROUP_RADIUS));

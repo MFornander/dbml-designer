@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.6.1. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.7.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.6.1.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.7.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -120,6 +120,8 @@ Every element can carry a `source`: anything the host recognizes it by, handed b
 | `checks?` | `string[]` | Check constraints as shown. |
 | `partials?` | `ModelPartial[]` | Table partials the table injects: `name`, `keyColumns?`, `note?`. |
 | `records?` | `ModelRecord[]` | Rows of data. One record shows its values on the fields; several show as a grid, a value column per record on the field rows, headed by the record's label (the values of its key fields that differ among the records, else 1, 2, 3), up to `gridRows`, then a "+N" column that opens them all as a table. |
+| `companionOf?` | `string` | The table this one accompanies, by key, such as a provenance twin or an explain view of it: folded into that owner's header as a badge until unfolded, then placed below it, inside its group. One owner each; an owner is no companion itself. A folded companion is not drawn, nor is its lineage. |
+| `companionLabel?` | `string` | The companion's badge; its name when absent. |
 | `source?` | `unknown` | Handed back with events. |
 
 A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, or null. Dates and times are strings.
@@ -267,10 +269,12 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 |---|---|
 | `positions` | Where everything is drawn in the active view: layers and inherited layouts combined. |
 | `collapsedGroups` | Keys of the folded groups. |
+| `unfoldedCompanions` | Keys of the companion tables shown beside their owner; the rest are folded into it. |
 | `edgeRoutes` | Hand-drawn relationship routes by ref key. |
 | `state` | Every layer as kept, a `LayoutState`. |
 | `base` | What the active view's own layer sits on. |
 | `setPosition(key, xy)`, `toggleGroup(key)`, `setEdgeRoute(key, rails)` | Change the active view's layer; null rails go back to automatic routing. |
+| `setUnfolded(keys, open)` | Show companion tables beside their owners, or fold them back, in the active view's layer, all at once; a click on a companion's badge does it for one. |
 | `applyPositionChanges(changes, origin?)` | Store several `PositionChange`s; `'auto'` marks tables placed automatically. |
 | `applyArrangement(changes, resetRoutes?)` | Store an arrangement as one step that `undoArrange` can take back. |
 | `undoArrange()`, `canUndoArrange`, `undoableArrangeTables` | Take the last arrangement back, whether that is still possible, and how many tables it placed. |
@@ -292,7 +296,7 @@ A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroup
 
 | Event | Payload | When |
 |---|---|---|
-| `element-click` | `ElementClickEvent`: `{ target, source, rect, point, preventDefault() }` | A table, field, partial badge, chip, ref, lineage edge or column pair, group, or note was clicked. `target` is a `HoverTarget`; `rect` is where it is drawn and `point` where the pointer was, both in client coordinates. `preventDefault()` keeps the engine from pinning and selecting it. |
+| `element-click` | `ElementClickEvent`: `{ target, source, rect, point, preventDefault() }` | A table, field, partial badge, chip, companion's badge, ref, lineage edge or column pair, group, or note was clicked. `target` is a `HoverTarget`; `rect` is where it is drawn and `point` where the pointer was, both in client coordinates. `preventDefault()` keeps the engine from pinning and selecting it. |
 | `element-hover` | `ElementEvent`: `{ target, source, rect, point }`, or null | The pointer moved onto an element, or off every element. |
 | `table-click` | `TableLinkPayload`: `{ key, source }` | A table was clicked; `element-click` says the same and more. |
 | `table-hover` | `TableLinkPayload` or null | The pointer entered a table, or left every table. |
@@ -330,7 +334,7 @@ Everything drawn has a key, the same in the drawn model, the layout, `marked`, a
 
 - `data-key` on every drawn table (`.dg-table`), field row (`.dg-field`), group (`.dg-group`), note (`.dg-note`), and edge (`.dg-ref`, lineage edges also `.dg-dep`). `elementOf(key)` finds them.
 - `is-highlighted` on highlighted tables, fields, and edges; `is-dimmed` on what a host's `highlight` dims and `is-accent` on its accent; `--dg-dim-opacity` on the page sets how faint dimmed elements are (0.15); `is-kind-value` and `is-kind-row` on column pairs drawn by kind, after the strongest kind among their mappings (`value`, then `row`).
-- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-cell` (a cell of a grid, with its cell key in `data-key`), `.dg-grid-heading`, `.dg-grid-more` (the "+N" that opens the rest), and zoomed out `is-overview` on `.dg-root`, `.dg-overview-name`, `.dg-overview-group`, `.dg-chip-dot`, `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
+- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-companion-badge` (a companion's badge in its owner's header, with its key in `data-companion` and `is-open` while it is shown), `.dg-cell` (a cell of a grid, with its cell key in `data-key`), `.dg-grid-heading`, `.dg-grid-more` (the "+N" that opens the rest), and zoomed out `is-overview` on `.dg-root`, `.dg-overview-name`, `.dg-overview-group`, `.dg-chip-dot`, `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
 - The colors are `--dg-*` CSS variables on the diagram's root, `.dg-root`; `paletteToCssVars(LIGHT)` and `paletteToCssVars(DARK)` list them.
 
 ## A diagram that grows

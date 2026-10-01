@@ -14,6 +14,8 @@ export type HoverTarget =
   | { kind: 'partial'; tableKey: TableKey; partial: string }
   /** A chip the host put in a table header (see `Engine.setChips`), by its id. */
   | { kind: 'chip'; tableKey: TableKey; chip: string }
+  /** A companion's badge in its owner's header (see `ModelTable.companionOf`): the owner and the companion, by key. */
+  | { kind: 'companion'; tableKey: TableKey; companion: TableKey }
   | { kind: 'ref'; key: RefKey }
   | { kind: 'dep'; key: DepKey }
   | { kind: 'group'; key: GroupKey }
@@ -71,6 +73,11 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
       tableKeys.add(target.tableKey);
       refList = model.refsByTable.get(target.tableKey) ?? [];
       depList = model.depsByTable.get(target.tableKey) ?? [];
+      break;
+    // A companion's badge lights up its owner, and the companion while it is shown.
+    case 'companion':
+      tableKeys.add(target.tableKey);
+      tableKeys.add(target.companion);
       break;
     case 'field':
       tableKeys.add(target.tableKey);
@@ -165,6 +172,7 @@ export function sameTarget (a: HoverTarget | null, b: HoverTarget | null): boole
   if (a.kind === 'field' && b.kind === 'field') return a.fieldKey === b.fieldKey && a.row === b.row;
   if (a.kind === 'partial' && b.kind === 'partial') return a.tableKey === b.tableKey && a.partial === b.partial;
   if (a.kind === 'chip' && b.kind === 'chip') return a.tableKey === b.tableKey && a.chip === b.chip;
+  if (a.kind === 'companion' && b.kind === 'companion') return a.companion === b.companion;
   if ('key' in a && 'key' in b) return a.key === b.key;
   return false;
 }
@@ -180,6 +188,8 @@ export function targetExists (model: DiagramModel, t: HoverTarget): boolean {
       return model.tablesByKey.get(t.tableKey)?.partialRefs?.some((p) => p.partial === t.partial) ?? false;
     case 'chip':
       return model.tablesByKey.has(t.tableKey);
+    case 'companion':
+      return model.tablesByKey.get(t.companion)?.companionOf === t.tableKey;
     case 'ref':
       return model.refs.some((r) => r.key === t.key);
     case 'dep':

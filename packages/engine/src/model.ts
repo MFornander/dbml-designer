@@ -60,9 +60,17 @@ export interface ModelTable {
   partials?: ModelPartial[];
   /**
    * Rows of data, such as sample rows or the rows a trace touched. With one, each field it names
-   * shows its value; with several, the header shows their count, which opens them as a table.
+   * shows its value; several show as a grid (see `DisplayOptions.gridRows`).
    */
   records?: ModelRecord[];
+  /**
+   * The table this one accompanies, by key: a companion, such as a provenance twin or an explain
+   * view, is folded into its owner's header as a badge until unfolded, and placed below it. One
+   * owner each; an owner is no companion itself.
+   */
+  companionOf?: string;
+  /** The companion's badge in its owner's header; its name when absent. */
+  companionLabel?: string;
   source?: Source;
 }
 

@@ -185,6 +185,18 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
         ...(values.length ? { values } : {}),
       };
     }
+    // A companion's badge: what it stands for, and whether clicking shows or folds it.
+    case 'companion': {
+      const companion = model.tablesByKey.get(target.companion);
+      if (!companion) return null;
+      return {
+        kind: 'companion',
+        title: companion.name,
+        ...(companion.schema !== DEFAULT_SCHEMA ? { titlePrefix: `${companion.schema}.` } : {}),
+        subtitle: 'companion table',
+        ...(companion.note ? { note: companion.note } : {}),
+      };
+    }
     case 'partial': {
       const entry = model.tablesByKey.get(target.tableKey)?.partialRefs?.find((p) => p.partial === target.partial);
       if (!entry) return null;
@@ -349,7 +361,8 @@ export function useTooltip (input: UseTooltipInputs) {
       // A partial badge or a chip opens its tooltip beside the header it sits in, like the table's own.
       case 'table':
       case 'partial':
-      case 'chip': {
+      case 'chip':
+      case 'companion': {
         const b = input.boxes.value.get(target.kind === 'table' ? target.key : target.tableKey);
         return b
           ? {

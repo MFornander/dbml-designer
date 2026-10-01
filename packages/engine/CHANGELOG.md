@@ -4,6 +4,24 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.7.0 - 2026-10-01
+
+Companion tables folded into their owners.
+
+### Added
+
+- `ModelTable.companionOf` and `companionLabel`: a table that accompanies another, such as a provenance twin or an explain view, is folded into its owner's header as a badge (dashed while folded) until unfolded. Shown, it is placed below its owner, inside its group, without moving anything placed; folded again, it keeps its place for next time. A folded companion is not drawn, nor is its lineage. `TableVM.companionOf` and `TableVM.companions` (each with its badge's label) resolve them; an owner that is not there, or is a companion itself, is reported as `unresolved-companion`.
+- The fold state is the layout's, per view, like collapsed groups: `layout.unfoldedCompanions`, and `layout.setUnfolded(keys, open)` to show or fold any number at once. A badge click arrives as `{ kind: 'companion', tableKey, companion }`, whose default shows or folds it; `preventDefault()` leaves it as it is.
+- `LayoutSnapshot.unfoldedCompanions` and `foldedCompanions`, the latter undoing an unfold a layout underneath records. DOM hook `.dg-companion-badge`, with `data-companion` and `is-open`.
+
+### Changed (breaking)
+
+- `HoverTarget` and `TooltipContent.kind` have `companion`; `ModelDiagnosticKind` has `unresolved-companion`. `LayerState` has `unfoldedCompanions` and `foldedCompanions` (optional in `LayoutLayer`); `TableSize` has `companions`.
+
+### Fixed
+
+- Zoomed out, a group's title is cut to the group's width with an ellipsis, the whole title on hover, so it no longer runs into the next group's.
+
 ## 0.6.1 - 2026-10-01
 
 A diagram of many tables stays readable when fitted.

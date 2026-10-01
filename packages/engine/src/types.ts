@@ -185,6 +185,10 @@ export interface TableVM {
   recordLabels?: string[];
   /** The records in the order the grid shows them: those a lineage edge's row names first, then the rest as given. Set with `records`. */
   recordOrder?: number[];
+  /** The table this one accompanies; set only when that table is there and is no companion itself. */
+  companionOf?: TableKey;
+  /** This table's companions with the label of each one's badge, in model order; set only when there are some. */
+  companions?: { key: TableKey; label: string }[];
   /** Declaration order. */
   order: number;
   source?: Source;
@@ -336,7 +340,7 @@ export interface EnumVM {
 
 /** What a model diagnostic is about: something an element names that is not there, or a duplicate. */
 export type ModelDiagnosticKind = 'unresolved-ref' | 'unresolved-dep' | 'unresolved-group-member' | 'unresolved-partial'
-  | 'duplicate-ref' | 'duplicate-table' | 'unresolved-view-entity' | 'unresolved-row';
+  | 'duplicate-ref' | 'duplicate-table' | 'unresolved-view-entity' | 'unresolved-row' | 'unresolved-companion';
 
 export interface ModelDiagnostic {
   kind: ModelDiagnosticKind;

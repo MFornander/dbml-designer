@@ -44,6 +44,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     clearHover: () => hovers.push(null),
     clickEdge: (t) => pins.push(t),
     focus: computed(() => NO_FOCUS),
+    unfolded: ref(new Set<string>()),
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
     pickColors: ref(true),

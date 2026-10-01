@@ -24,6 +24,10 @@ export interface LayerState {
   collapsedGroups: string[];
   /** Groups kept open although a layer underneath collapses them. */
   expandedGroups: string[];
+  /** Companion tables shown beside their owner; the rest stay folded into it. */
+  unfoldedCompanions: string[];
+  /** Companions kept folded although a layer underneath unfolds them. */
+  foldedCompanions: string[];
   /** Hand-routed relationships: alternating x/y rail coordinates by ref key (see routing.ts); `[]` undoes a route from underneath. */
   edgeRoutes: Record<string, number[]>;
 }
@@ -81,6 +85,8 @@ function isLayerState (v: unknown): v is LayerState {
   if (!Object.values(s.positions).every(isXY)) return false;
   if (s.collapsedGroups !== undefined && !isKeyList(s.collapsedGroups)) return false;
   if (s.expandedGroups !== undefined && !isKeyList(s.expandedGroups)) return false;
+  if (s.unfoldedCompanions !== undefined && !isKeyList(s.unfoldedCompanions)) return false;
+  if (s.foldedCompanions !== undefined && !isKeyList(s.foldedCompanions)) return false;
   return s.edgeRoutes === undefined
     || (typeof s.edgeRoutes === 'object' && s.edgeRoutes !== null && Object.values(s.edgeRoutes).every(isRails));
 }
@@ -98,6 +104,8 @@ export function emptyLayer (): LayerState {
     positions: {},
     collapsedGroups: [],
     expandedGroups: [],
+    unfoldedCompanions: [],
+    foldedCompanions: [],
     edgeRoutes: {},
   };
 }
@@ -108,6 +116,8 @@ export function layerFrom (raw: Partial<LayoutSnapshot> | Partial<LayerState> | 
     positions: Object.fromEntries(Object.entries(raw?.positions ?? {}).map(([k, p]) => [k, { ...p }])),
     collapsedGroups: [...(raw?.collapsedGroups ?? [])],
     expandedGroups: [...(raw?.expandedGroups ?? [])],
+    unfoldedCompanions: [...(raw?.unfoldedCompanions ?? [])],
+    foldedCompanions: [...(raw?.foldedCompanions ?? [])],
     edgeRoutes: Object.fromEntries(Object.entries(raw?.edgeRoutes ?? {}).map(([k, v]) => [k, [...v]])),
   };
 }
@@ -132,6 +142,8 @@ const layerOf = (s: LayerState): LayerState => ({
   positions: s.positions,
   collapsedGroups: s.collapsedGroups,
   expandedGroups: s.expandedGroups,
+  unfoldedCompanions: s.unfoldedCompanions,
+  foldedCompanions: s.foldedCompanions,
   edgeRoutes: s.edgeRoutes,
 });
 
@@ -140,6 +152,8 @@ const asSnapshot = (layer: LayerState): LayoutSnapshot => ({
   positions: layer.positions,
   collapsedGroups: layer.collapsedGroups,
   expandedGroups: layer.expandedGroups,
+  unfoldedCompanions: layer.unfoldedCompanions,
+  foldedCompanions: layer.foldedCompanions,
   edgeRoutes: layer.edgeRoutes,
 });
 
@@ -206,6 +220,7 @@ export function createLayout (options: LayoutOptions) {
 
   const positions = computed<PositionsMap>(() => effective.value.positions);
   const collapsedGroups = computed<ReadonlySet<string>>(() => new Set(effective.value.collapsedGroups));
+  const unfoldedCompanions = computed<ReadonlySet<string>>(() => new Set(effective.value.unfoldedCompanions ?? []));
   const edgeRoutes = computed<Readonly<Record<string, number[]>>>(() => effective.value.edgeRoutes);
 
   /** A view's own layer: the Default View's (null), else that view's. */
@@ -315,7 +330,9 @@ export function createLayout (options: LayoutOptions) {
   /** The objects a view's own layer is made of, unwrapped. Every edit replaces at least one of them. */
   function layerParts (name: string | null): unknown[] {
     const layer = name === null ? toRaw(state.value) : toRaw(toRaw(state.value).views)[name];
-    return layer ? [layer.positions, layer.collapsedGroups, layer.expandedGroups, layer.edgeRoutes].map((part) => toRaw(part)) : [];
+    return layer
+      ? [layer.positions, layer.collapsedGroups, layer.expandedGroups, layer.unfoldedCompanions, layer.foldedCompanions, layer.edgeRoutes].map((part) => toRaw(part))
+      : [];
   }
 
   /**
@@ -402,12 +419,39 @@ export function createLayout (options: LayoutOptions) {
     });
   }
 
+  /**
+   * Unfold companion tables beside their owners, or fold them back into them; folding one a layer
+   * underneath unfolds is recorded as an undoing.
+   */
+  function setUnfolded (keys: Iterable<string>, open: boolean): void {
+    const list = [...keys];
+    editLayer((layer) => {
+      let own = layer.unfoldedCompanions;
+      let undone = layer.foldedCompanions;
+      for (const key of list) {
+        const inheritedOpen = base.value.unfoldedCompanions?.includes(key) ?? false;
+        own = own.filter((k) => k !== key);
+        undone = undone.filter((k) => k !== key);
+        if (open && !inheritedOpen) own = [...own, key];
+        if (!open && inheritedOpen) undone = [...undone, key];
+      }
+      const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
+      if (same(own, layer.unfoldedCompanions) && same(undone, layer.foldedCompanions)) return layer;
+      return {
+        ...layer,
+        unfoldedCompanions: own,
+        foldedCompanions: undone,
+      };
+    });
+  }
+
   /** The layer without entries for elements that are gone, or null when nothing was. */
   function pruneLayer (layer: LayerState, validKeys: ReadonlySet<string>, validGroups: ReadonlySet<string>, validRefs?: ReadonlySet<string>): LayerState | null {
     const orphaned = Object.keys(layer.positions).filter((k) => !validKeys.has(k));
     const staleGroups = [...layer.collapsedGroups, ...layer.expandedGroups].filter((k) => !validGroups.has(k));
     const staleRoutes = validRefs ? Object.keys(layer.edgeRoutes).filter((k) => !validRefs.has(k)) : [];
-    if (orphaned.length === 0 && staleGroups.length === 0 && staleRoutes.length === 0) return null;
+    const staleCompanions = [...layer.unfoldedCompanions, ...layer.foldedCompanions].filter((k) => !validKeys.has(k));
+    if (orphaned.length === 0 && staleGroups.length === 0 && staleRoutes.length === 0 && staleCompanions.length === 0) return null;
     const nextPositions = { ...layer.positions };
     for (const k of orphaned) delete nextPositions[k];
     const routes = { ...layer.edgeRoutes };
@@ -416,6 +460,8 @@ export function createLayout (options: LayoutOptions) {
       positions: nextPositions,
       collapsedGroups: layer.collapsedGroups.filter((k) => validGroups.has(k)),
       expandedGroups: layer.expandedGroups.filter((k) => validGroups.has(k)),
+      unfoldedCompanions: layer.unfoldedCompanions.filter((k) => validKeys.has(k)),
+      foldedCompanions: layer.foldedCompanions.filter((k) => validKeys.has(k)),
       edgeRoutes: routes,
     };
   }
@@ -524,6 +570,8 @@ export function createLayout (options: LayoutOptions) {
     state,
     positions,
     collapsedGroups,
+    /** Companion tables the active view shows beside their owner; the rest are folded into it. */
+    unfoldedCompanions,
     edgeRoutes,
     base,
     newTables,
@@ -534,6 +582,7 @@ export function createLayout (options: LayoutOptions) {
     undoArrange,
     setPosition,
     toggleGroup,
+    setUnfolded,
     setEdgeRoute,
     prune,
     pruneTo,

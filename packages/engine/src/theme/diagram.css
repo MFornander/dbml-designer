@@ -183,6 +183,20 @@
   transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
 }
 
+.dg-companion-badge {
+  cursor: pointer;
+}
+
+.dg-companion-badge:not(.is-open) .dg-partial-badge-bg {
+  fill-opacity: 0;
+  stroke-dasharray: 3 2;
+}
+
+.dg-companion-badge.is-open .dg-partial-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
 .dg-partial-badge.is-highlighted .dg-partial-badge-bg {
   fill-opacity: 0.3;
   stroke-opacity: 1;

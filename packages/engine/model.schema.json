@@ -149,7 +149,15 @@
           "items": {
             "$ref": "#/definitions/record"
           },
-          "description": "Rows of data by field name. One shows its values on the fields; several show their count in the header, which opens them."
+          "description": "Rows of data by field name. One shows its values on the fields; several show as a grid of a value column per record."
+        },
+        "companionOf": {
+          "type": "string",
+          "description": "The table this one accompanies, by key: folded into that table's header as a badge until unfolded, and placed below it."
+        },
+        "companionLabel": {
+          "type": "string",
+          "description": "The badge in the owner's header; the table's name when absent."
         },
         "source": {
           "description": "Anything the host recognizes the element by; handed back with clicks and hovers."

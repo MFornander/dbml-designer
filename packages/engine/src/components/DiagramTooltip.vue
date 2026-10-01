@@ -136,7 +136,7 @@ import {
   computed, nextTick, ref, useTemplateRef, watch, type Component, type CSSProperties,
 } from 'vue';
 import {
-  PhArrowElbowDownRight, PhArrowsLeftRight, PhBookOpen, PhColumns, PhFlowArrow, PhNote, PhPuzzlePiece, PhSquaresFour, PhTable, PhTag,
+  PhArrowElbowDownRight, PhArrowsLeftRight, PhBookOpen, PhColumns, PhFlowArrow, PhNote, PhPuzzlePiece, PhSquaresFour, PhStack, PhTable, PhTag,
 } from '@phosphor-icons/vue';
 import { renderNoteMarkdown } from '../util/markdown';
 import type { Rect, Size } from '../geometry/rect';
@@ -159,6 +159,7 @@ const ICONS: Record<TooltipContent['kind'], Component> = {
   group: PhSquaresFour,
   note: PhNote,
   chip: PhTag,
+  companion: PhStack,
 };
 
 /** Space kept between the tooltip and the pane's top and bottom when capping its height. */

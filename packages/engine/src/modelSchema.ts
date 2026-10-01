@@ -83,8 +83,10 @@ export const MODEL_SCHEMA = {
         records: {
           type: 'array',
           items: ref('record'),
-          description: 'Rows of data by field name. One shows its values on the fields; several show their count in the header, which opens them.',
+          description: 'Rows of data by field name. One shows its values on the fields; several show as a grid of a value column per record.',
         },
+        companionOf: text('The table this one accompanies, by key: folded into that table\'s header as a badge until unfolded, and placed below it.'),
+        companionLabel: text('The badge in the owner\'s header; the table\'s name when absent.'),
         source: SOURCE,
       },
     },

@@ -251,6 +251,37 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
     model.groups.push(vm);
   });
 
+  // Companions: each folded into its owner, which is no companion itself, and in its owner's group
+  // unless it has one of its own, so it unfolds inside it.
+  const owners = new Map<TableKey, string>();
+  for (const t of input.tables) if (t.companionOf) owners.set(tableKey(t.schema, t.name), t.companionOf);
+  for (const t of input.tables) {
+    if (!t.companionOf) continue;
+    const companion = model.tablesByKey.get(tableKey(t.schema, t.name));
+    const owner = model.tablesByKey.get(t.companionOf);
+    if (!companion) continue;
+    if (!owner || owners.has(owner.key) || owner === companion) {
+      diagnostics.push({
+        kind: 'unresolved-companion',
+        message: owner
+          ? `Table "${companion.displayName}" accompanies "${owner.displayName}", which is a companion itself or the same table`
+          : `Table "${t.companionOf}" that "${companion.displayName}" accompanies not found`,
+        ...(t.source !== undefined ? { source: t.source } : {}),
+      });
+      continue;
+    }
+    companion.companionOf = owner.key;
+    (owner.companions ??= []).push({
+      key: companion.key,
+      label: t.companionLabel || companion.name,
+    });
+    if (!companion.groupKey && owner.groupKey) {
+      companion.groupKey = owner.groupKey;
+      companion.groupColor = owner.groupColor ?? null;
+      model.groups.find((g) => g.key === owner.groupKey)?.tableKeys.push(companion.key);
+    }
+  }
+
   // Refs
   const seenPairs = new Set<string>();
   const usedKeys = new Set<RefKey>();

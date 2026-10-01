@@ -150,6 +150,32 @@ export function placeByLineage (
   return result;
 }
 
+/**
+ * Where a table goes below another, such as a companion below its owner: left-aligned with it,
+ * below it, and pushed down past whatever in `occupied` is in the way. Nothing placed moves.
+ */
+export function placeBelow (item: Pick<PlacementItem, 'w' | 'h'>, owner: Rect, occupied: readonly Rect[], opts: Partial<PlacementOptions> = {}): Point {
+  const o = {
+    ...DEFAULTS,
+    ...opts,
+  };
+  const r: Rect = {
+    x: snap8(owner.x),
+    y: snap8(bottom(owner) + o.rowGap),
+    w: item.w,
+    h: item.h,
+  };
+  for (let guard = 0; guard < 10_000; guard++) {
+    const hit = occupied.find((t) => intersects(inflate(r, o.rowGap / 2), t));
+    if (!hit) break;
+    r.y = snap8(bottom(hit) + o.rowGap);
+  }
+  return {
+    x: r.x,
+    y: r.y,
+  };
+}
+
 /** Stack new sticky notes in a column to the right of the current content. */
 export function placeNewNotes (keys: readonly string[], occupied: readonly Rect[]): Map<string, Point> {
   const result = new Map<string, Point>();

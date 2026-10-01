@@ -153,6 +153,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Readable when zoomed out (engine 0.6.1): below `zoomDetail.minimal` (0.4) each table shows its name wrapped to its box at a constant 12px on screen in place of its fields, chips become dots, group titles show above their groups at 16px, lines keep their width, and lineage is drawn table to table; below `structure` (0.1) tables are boxes under their group titles. `engine.lod` tells the level.
 
+- [x] Companion tables (engine 0.7.0): `ModelTable.companionOf` folds a table, such as a provenance twin or an explain view, into its owner's header as a badge; a click on it, or `layout.setUnfolded(keys, open)` for any number at once, shows it below its owner inside its group, and folds it back. The fold state is the layout's, per view, like collapsed groups; a folded companion and its lineage are not drawn. Zoomed out, group titles are cut to their group's width.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).
