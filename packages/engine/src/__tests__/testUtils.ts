@@ -6,6 +6,7 @@ import { IDENTITY_VIEWPORT } from '../geometry/viewport';
 import type {
   AutoLod, ColorTarget, FieldVM, TableVM,
 } from '../types';
+import { NO_FOCUS } from '../state/focus';
 
 export interface TestContext extends DiagramContext {
   hovers: (HoverTarget | null)[];
@@ -41,6 +42,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     setHover: (t) => hovers.push(t),
     clearHover: () => hovers.push(null),
     clickEdge: (t) => pins.push(t),
+    focus: computed(() => NO_FOCUS),
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
     pickColors: ref(true),

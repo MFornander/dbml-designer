@@ -60,6 +60,19 @@ export interface DiagramViewport {
   zoom: number;
 }
 
+/**
+ * What the host highlights, on top of the engine's own hover and pin: tables, fields, edges, groups,
+ * and notes by key. Nothing moves and nothing is stored; see `Engine.highlight`.
+ */
+export interface Highlight {
+  /** Drawn highlighted; a mapping key (`…#kind`) highlights its column pair, drawn even while lineage is drawn by table pair. */
+  keys: ReadonlySet<string>;
+  /** Those drawn more strongly still, such as the column the host is focused on within its lineage. */
+  accent: ReadonlySet<string>;
+  /** Fade everything the highlight does not keep: the keys, the tables of their fields and at the ends of their edges, and their groups. */
+  dim: boolean;
+}
+
 /** What the view does when an update adds tables: pan to bring them into view, keep the whole diagram fitted until the user pans or zooms, or nothing. */
 export type RevealAdded = 'pan' | 'fit' | 'none';
 

@@ -11,7 +11,7 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  DetailLevel, DiagramModel, DiagramViewport, PartialRefMode, RevealAdded,
+  DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded,
 } from '../types';
 import type { Rect } from '../geometry/rect';
 import { fromModel } from '../fromModel';
@@ -218,6 +218,7 @@ export function createEngine (options: EngineOptions = {}) {
     if (options.layout) layout.replaceLayout(options.layout);
 
     const handle = shallowRef<DiagramHandle | null>(null);
+    const highlighted = shallowRef<Highlight | null>(null);
 
     // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
     // has no arrangement yet (which fits it), else fit it. Waits a tick for the diagram to take the
@@ -302,6 +303,23 @@ export function createEngine (options: EngineOptions = {}) {
       fit (keys?: readonly string[]): void {
         handle.value?.fit(keys);
       },
+      /**
+       * Highlight tables, fields, edges, groups, and notes by key, on top of the engine's own hover
+       * and pin, until the next call; null clears it. `dim` fades what the highlight does not keep,
+       * and `accent` draws some of the keys more strongly. Nothing moves and nothing is stored, and
+       * dimmed elements still take hovers and clicks.
+       */
+      highlight (keys: Iterable<string> | null, options: { dim?: boolean; accent?: Iterable<string> } = {}): void {
+        highlighted.value = keys === null
+          ? null
+          : {
+              keys: new Set(keys),
+              accent: new Set(options.accent ?? []),
+              dim: options.dim ?? false,
+            };
+      },
+      /** What `highlight` last set, or null. */
+      highlighted: computed(() => highlighted.value),
       /**
        * Switch to a view by name, or to the Default View (null), and fit it; a named view with no
        * arrangement of its own is arranged first (see `arrangeViews`).

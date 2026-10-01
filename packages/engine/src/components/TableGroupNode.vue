@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-group"
-    :class="{ 'is-collapsed': collapsed, 'is-dragging': isDragging }"
+    :class="{ 'is-collapsed': collapsed, 'is-dragging': isDragging, 'is-dimmed': dimmed }"
     :data-key="group.key"
     :transform="`translate(${box.x} ${box.y})`"
   >
@@ -93,6 +93,7 @@ import { roundedTopRectPath } from '../geometry/pathBuilder';
 import { groupBodyFill, textColorFor } from '../geometry/color';
 import { DARK, LIGHT } from '../theme/palette';
 import { useDiagramContext } from '../state/context';
+import { isDimmed } from '../state/focus';
 import SettingsGear from './SettingsGear.vue';
 
 const props = defineProps<{
@@ -107,6 +108,7 @@ const props = defineProps<{
 }>();
 
 const ctx = useDiagramContext();
+const dimmed = computed(() => isDimmed(ctx.focus.value, props.group.key));
 
 const headerPath = computed(() => roundedTopRectPath(props.box.w, GROUP_HEADER_H, GROUP_RADIUS));
 

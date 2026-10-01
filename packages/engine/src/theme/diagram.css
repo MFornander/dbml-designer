@@ -396,6 +396,30 @@
   stroke-width: 2;
 }
 
+/* The host's highlight: what it does not keep fades unless the pointer lights it; its accent stands out. */
+
+.dg-table.is-dimmed:not(.is-highlighted),
+.dg-ref.is-dimmed:not(.is-highlighted),
+.dg-group.is-dimmed,
+.dg-note.is-dimmed {
+  opacity: var(--dg-dim-opacity, 0.15);
+}
+
+.dg-table.is-accent .dg-table-border {
+  stroke: var(--dg-table-highlight);
+  stroke-width: 3;
+}
+
+.dg-field.is-accent .dg-field-name {
+  font-weight: 700;
+  fill: var(--dg-table-highlight);
+}
+
+.dg-ref.is-accent .dg-ref-line,
+.dg-ref.is-accent .dg-ref-marker {
+  stroke-width: 3;
+}
+
 .dg-ref-overlay {
   fill: none;
   stroke: var(--dg-edge-hl, var(--dg-ref-highlight));

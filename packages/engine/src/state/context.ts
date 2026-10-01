@@ -6,12 +6,15 @@ import type { Viewport } from '../geometry/viewport';
 import type { Point } from '../geometry/rect';
 import type { AutoLod } from '../types';
 import type { HighlightSet, HoverTarget } from './useHover';
+import type { Focus } from './focus';
 import type { DragTarget } from './useDrag';
 
 export interface DiagramContext {
   viewport: Ref<Viewport>;
   lod: ComputedRef<AutoLod>;
   highlight: ComputedRef<HighlightSet>;
+  /** The host's highlight: what is lit, accented, and kept from dimming. */
+  focus: ComputedRef<Focus>;
   dark: Ref<boolean>;
   dragging: ShallowRef<DragTarget | null>;
   setHover (target: HoverTarget | null): void;

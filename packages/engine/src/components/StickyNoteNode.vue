@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-note"
-    :class="{ 'is-dragging': isDragging, 'is-selected': selected }"
+    :class="{ 'is-dragging': isDragging, 'is-selected': selected, 'is-dimmed': dimmed }"
     :data-key="note.key"
     :transform="`translate(${box.x} ${box.y})`"
     @pointerenter="onEnter"
@@ -70,6 +70,7 @@ import { textColorFor } from '../geometry/color';
 import { LIGHT } from '../theme/palette';
 import { renderNoteMarkdown } from '../util/markdown';
 import { useDiagramContext } from '../state/context';
+import { isDimmed } from '../state/focus';
 import SettingsGear from './SettingsGear.vue';
 
 /** Inset of the gear from the note's top-right corner. */
@@ -84,6 +85,7 @@ const props = defineProps<{
 }>();
 
 const ctx = useDiagramContext();
+const dimmed = computed(() => isDimmed(ctx.focus.value, props.note.key));
 
 const html = computed(() => renderNoteMarkdown(props.note.content));
 const paperStyle = computed(() => (props.note.color ? { fill: props.note.color } : undefined));

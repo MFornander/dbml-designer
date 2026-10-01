@@ -141,6 +141,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Element events and the viewport (engine 0.4.0): `element-click` and `element-hover` (`onElementClick`, `onElementHover` for `mount`) report every table, field, partial badge, ref, lineage edge or column pair, group, and note, as the existing `HoverTarget`, with its `source` and its rectangle in client coordinates; a click's `preventDefault()` keeps the engine from pinning and selecting. `engine.rectOf(key)` works the rectangle out from the layout, so it stays right through pan, zoom, and redraws. `engine.viewport`, `setViewport`, `fit(keys?)`, and `viewport-change` read and set the pan and zoom. Display option `revealAdded` (`pan`, `fit`, `none`) says what the view does when an update adds tables; `fit` keeps a growing walk fitted until the user pans or zooms. Pressing a table without moving it no longer ends the automatic fit.
 
+- [x] Host highlight and dim (engine 0.4.1): `engine.highlight(keys, { dim, accent })` lights tables, fields, edges, groups, and notes by key on top of hover and pin, as an overlay that moves and stores nothing. A mapping key lights its column pair, drawn even while lineage is drawn by table pair; `dim` fades what the highlight does not keep (the keys, the tables of their fields and at their edges' ends, a column pair's table pair, their groups), and `accent` draws some keys more strongly. Dimmed elements still take hovers and clicks, and a hover lights them through the dim; host-lit edges get no walking ants.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

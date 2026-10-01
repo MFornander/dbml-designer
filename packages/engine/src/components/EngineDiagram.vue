@@ -15,6 +15,7 @@
     :lineage-layout="display.lineageLayout"
     :highlight-all="display.highlightAll"
     :reveal-added="display.revealAdded"
+    :highlighted="engine.highlighted.value"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

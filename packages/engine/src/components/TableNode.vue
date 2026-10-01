@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-table"
-    :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging }"
+    :class="{ 'is-highlighted': highlighted, 'is-selected': selected, 'is-dragging': isDragging, 'is-dimmed': dimmed, 'is-accent': accent }"
     :data-key="table.key"
     :transform="`translate(${box.x} ${box.y})`"
     :style="headerTextVars"
@@ -143,7 +143,7 @@
       :key="f.key"
       class="dg-field"
       :data-key="f.key"
-      :class="{ 'is-pk': isKeyField(f), 'is-highlighted': highlightedFields.has(f.key) }"
+      :class="{ 'is-pk': isKeyField(f), 'is-highlighted': highlightedFields.has(f.key), 'is-accent': accentFields.has(f.key) }"
       :transform="`translate(0 ${ROW_H * (i + 1)})`"
       @pointerenter="onFieldEnter(f)"
       @pointerleave="onFieldLeave"
@@ -267,6 +267,7 @@ import {
 import { roundedTopRectPath } from '../geometry/pathBuilder';
 import { textColorFor } from '../geometry/color';
 import { useDiagramContext } from '../state/context';
+import { isDimmed } from '../state/focus';
 import { sameSet } from '../state/share';
 import SettingsGear from './SettingsGear.vue';
 
@@ -282,8 +283,19 @@ const props = defineProps<{
   isDragging: boolean;
 }>();
 
+const NO_KEYS: ReadonlySet<string> = new Set();
+
 const ctx = useDiagramContext();
 const lod = ctx.lod;
+const dimmed = computed(() => isDimmed(ctx.focus.value, props.table.key));
+const accent = computed(() => ctx.focus.value.accent.has(props.table.key));
+/** The accented fields of this table, the same empty set for most tables so they leave the rest alone. */
+const accentFields = computed<ReadonlySet<string>>(() => {
+  const accented = ctx.focus.value.accent;
+  if (accented.size === 0) return NO_KEYS;
+  const own = props.table.fields.filter((f) => accented.has(f.key)).map((f) => f.key);
+  return own.length ? new Set(own) : NO_KEYS;
+});
 
 const w = computed(() => props.box.w);
 const h = computed(() => props.box.h);

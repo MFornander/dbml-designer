@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-ref"
-    :class="[{ 'is-highlighted': highlighted, 'is-inactive': inactive, 'dg-dep': kind === 'dep', 'is-colored': !!lineColor }, kindClass]"
+    :class="[{ 'is-highlighted': highlighted, 'is-inactive': inactive, 'dg-dep': kind === 'dep', 'is-colored': !!lineColor, 'is-dimmed': dimmed, 'is-accent': accent }, kindClass]"
     :data-key="edge.key"
     :style="colorVars"
   >
@@ -66,6 +66,7 @@ import type { DepLineVM, RefVM } from '../types';
 import type { AnchorPoint } from '../geometry/anchors';
 import type { RefGeometry } from '../state/useDiagramGeometry';
 import { useDiagramContext } from '../state/context';
+import { isDimmed } from '../state/focus';
 
 const props = withDefaults(defineProps<{
   edge: RefVM | DepLineVM;
@@ -82,6 +83,8 @@ const props = withDefaults(defineProps<{
 });
 
 const ctx = useDiagramContext();
+const dimmed = computed(() => isDimmed(ctx.focus.value, props.edge.key));
+const accent = computed(() => ctx.focus.value.accent.has(props.edge.key));
 
 /** Explicit or inherited color; null means the palette default for this edge kind. */
 const lineColor = computed<string | null>(() => (props.kind === 'ref'

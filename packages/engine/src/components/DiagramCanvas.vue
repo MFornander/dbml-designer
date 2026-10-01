@@ -216,9 +216,10 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, toRef, useTemplateRef, watch,
 } from 'vue';
 import type {
-  ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, PartialRefMode, PositionChange,
-  PositionsMap, RevealAdded, TableLinkPayload,
+  ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
+  PositionChange, PositionsMap, RevealAdded, TableLinkPayload,
 } from '../types';
+import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
 import type { FieldKey, TableKey } from '../keys';
@@ -291,8 +292,11 @@ const props = withDefaults(defineProps<{
   pickColors?: boolean;
   /** What the view does when an update adds tables (see `RevealAdded`). */
   revealAdded?: RevealAdded;
+  /** The host's highlight: keys lit, an accent among them, and the rest dimmed if asked. */
+  highlighted?: Highlight | null;
 }>(), {
   revealAdded: 'pan',
+  highlighted: null,
   loading: false,
   pickColors: true,
   marked: () => new Set<string>(),
@@ -657,6 +661,8 @@ function changesFor (target: DragTarget, pos: Point): PositionChange[] {
 // Hover and highlight
 const suppressed = computed(() => drag.dragging.value !== null || pz.isPanning.value || marquee.value !== null);
 const hover = useHover(model, suppressed);
+/** The host's highlight, resolved to what is drawn. */
+const focus = computed(() => resolveFocus(model.value, props.highlighted));
 
 /** The highlighted fields of every table with none; one shared set, so a hover leaves those tables alone. */
 const NO_FIELDS: ReadonlySet<FieldKey> = new Set();
@@ -668,18 +674,19 @@ const NO_FIELDS: ReadonlySet<FieldKey> = new Set();
 const highlightedFieldsByTable = computed<Map<TableKey, ReadonlySet<FieldKey>>>((prev) => {
   const keys = hover.highlight.value.fieldKeys;
   const marked = props.marked;
+  const lit = focus.value.lit;
   const next = new Map<TableKey, ReadonlySet<FieldKey>>();
-  if (keys.size > 0 || marked.size > 0) {
+  if (keys.size > 0 || marked.size > 0 || lit.size > 0) {
     for (const t of model.value.tables) {
-      const own = t.fields.filter((f) => keys.has(f.key) || marked.has(f.key)).map((f) => f.key);
+      const own = t.fields.filter((f) => keys.has(f.key) || marked.has(f.key) || lit.has(f.key)).map((f) => f.key);
       if (own.length > 0) next.set(t.key, new Set(own));
     }
   }
   return shareMap(prev, next, sameSet);
 });
 
-/** A table lights up while hovered or connected to what is, and for a moment after an update added it. */
-const isTableHighlighted = (key: TableKey) => hover.highlight.value.tableKeys.has(key) || props.marked.has(key);
+/** A table lights up while hovered or connected to what is, for a moment after an update added it, and while the host highlights it. */
+const isTableHighlighted = (key: TableKey) => hover.highlight.value.tableKeys.has(key) || props.marked.has(key) || focus.value.lit.has(key);
 
 function highlightedFieldsOf (key: TableKey): ReadonlySet<FieldKey> {
   return highlightedFieldsByTable.value.get(key) ?? NO_FIELDS;
@@ -1026,6 +1033,7 @@ const ctx: DiagramContext = {
   setHover: hover.setHover,
   clearHover: hover.clearHover,
   clickEdge: onEdgeClick,
+  focus,
   beginDrag: (e: PointerEvent, target: DragTarget, origin: Point) => {
     // Lineage-layout positions are derived from the dependency order, so nothing is movable there.
     if (props.lineageLayout) return;
@@ -1111,17 +1119,20 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   const hl = hover.highlight.value;
   const all = props.highlightAll;
   const list: RenderEdge[] = [];
+  const hostLit = focus.value.lit;
   const push = (edge: RefVM | DepLineVM, kind: 'ref' | 'dep', g: RefGeometry | undefined, lit: boolean, passive?: boolean) => {
     if (!g) return;
     // What an update just added walks with the ants for a moment, like a hovered edge.
     const hot = lit || props.marked.has(edge.key);
+    // The host's highlight lights an edge without the ants, which stay for the pointer and for updates.
+    const held = hostLit.has(edge.key);
     list.push({
       edge,
       kind,
       geo: g,
-      highlighted: all || hot,
+      highlighted: all || hot || held,
       hot,
-      animated: true,
+      animated: hot || !held,
       ...(passive !== undefined ? { passive } : {}),
     });
   };
@@ -1140,17 +1151,18 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
         continue;
       }
       push(d, 'dep', geo.routes.value.get(d.key), hl.depKeys.has(d.key));
-      // Column-level mappings show only while one of their fields is hovered or pinned.
+      // Column-level mappings show only while one of their fields is hovered or pinned, or the host highlights them.
       for (const c of d.columns) {
         if (hl.depColumnKeys.has(c.key)) push(c, 'dep', geo.routes.value.get(c.key), true);
+        else if (hostLit.has(c.key)) push(c, 'dep', geo.routes.value.get(c.key), false);
       }
     }
   }
   if (all && list.length > MAX_ANIMATED_EDGES) {
     for (const e of list) e.animated = e.hot;
   }
-  // Hovered edges draw last so they sit above their neighbours.
-  return [...list.filter((e) => !e.hot), ...list.filter((e) => e.hot)];
+  // Highlighted edges draw above the rest, hovered ones last so they sit above their neighbours.
+  return [...list.filter((e) => !e.hot && !e.highlighted), ...list.filter((e) => !e.hot && e.highlighted), ...list.filter((e) => e.hot)];
 });
 
 /** The kinds the drawn column mappings have, in legend order, while lineage is drawn by column. */
