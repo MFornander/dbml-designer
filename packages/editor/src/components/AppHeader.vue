@@ -90,6 +90,13 @@
           <span>DBML docs</span>
           <PhArrowSquareOut class="ml-auto w-3.5 h-3.5 text-gray-400" />
         </a>
+        <div :class="MENU_DIVIDER" />
+        <div
+          class="px-3 pt-1 pb-0.5 text-[11px] text-gray-400 select-text dark:text-gray-500"
+          role="none"
+        >
+          editor v{{ APP_VERSION }} engine v{{ ENGINE_VERSION }}
+        </div>
       </div>
     </div>
     <span class="text-white font-semibold text-sm tracking-tight">DBML Designer</span>
@@ -122,6 +129,8 @@ import {
 import {
   PhArrowSquareOut, PhBookOpen, PhDownloadSimple, PhFileText, PhFloppyDisk, PhList, PhMoon, PhSun, PhUploadSimple,
 } from '@phosphor-icons/vue';
+import { ENGINE_VERSION } from '@dbml-designer/engine';
+import { version as APP_VERSION } from '../../package.json';
 import FileMenu from '@/components/FileMenu.vue';
 import ViewMenu from '@/components/ViewMenu.vue';
 import { useFileIO } from '@/layout/useFileIO';

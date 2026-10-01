@@ -2,7 +2,7 @@
   "name": "dbml-designer",
   "private": true,
   "version": "0.1.0",
-  "description": "A diagram engine for database DAGs and the DBML editor built on it.",
+  "description": "DBML Designer: a browser editor for DBML with a live diagram you arrange, and the schema and lineage diagram engine it is built on.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

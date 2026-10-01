@@ -2,7 +2,7 @@
   "name": "@dbml-designer/editor",
   "private": true,
   "version": "0.1.0",
-  "description": "DBML Designer: write DBML in one pane and see and arrange the diagram in the other, on top of the diagram engine.",
+  "description": "DBML Designer, the app: a Monaco DBML editor beside a live diagram you arrange, with the layout kept in the .dbml file, files on disk followed through the dev server, an iframe embedding API, and check and graph commands for scripts and agents.",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {

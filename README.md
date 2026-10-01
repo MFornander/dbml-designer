@@ -51,7 +51,7 @@ The repository holds two npm workspace packages: the diagram engine (`packages/e
 ### Toolbar and menu
 
 - Bottom toolbar: zoom and fit on the left; the Table menu, the record values toggle, the partial refs toggle (badges or lines), the Lineage menu, lineage by column, Highlight Relationships, and Lineage Layout, whose tooltip marks it (WIP) while it settles, on the right. Every menu in the app, from the hamburger to these two pickers, shares one look.
-- The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs. Export downloads `<project>.dbml` with the layout in a comment at the end, or `<project>.json` for a model file. Import reads any `.dbml` or model `.json`; the layout it carries is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
+- The menu at the top left holds Export, Import, Load Example, the light/dark switch, and a link to the DBML docs, and ends with the editor's and the engine's versions. Export downloads `<project>.dbml` with the layout in a comment at the end, or `<project>.json` for a model file. Import reads any `.dbml` or model `.json`; the layout it carries is lifted out and applied to the diagram. Load Example replaces the text and layout with the starter blog schema, arranged.
 
 ## Model files
 
@@ -156,7 +156,7 @@ A program can point the reader at what it wrote: a link with `?view=name`, such 
 
 A followed file can `use` others. DBML's [module system](https://dbml.dbdiagram.io/syntax/module-system) resolves `use * from './schema'` relative to the followed file, so a `pipeline.dbml` can import a `schema.dbml` next to it: the imported tables appear in the diagram, refs and `Dep` blocks may cross files, and changes to the imported files are picked up too. Imported elements are shown but not edited from here; problems in them are listed with the file's name. Without a followed file the text has no folder, so imports cannot resolve and the Errors list says so.
 
-Following works through the dev server only; without `DBML_ROOTS` it reaches the files in this repo. The bridge reads and writes only `.dbml` and `.json` files directly under the roots, from the same origin, and reports changes to every followed and imported file over a single event stream, so a file with many imports does not run the browser out of connections. Remember the dev server listens on the network, so keep the roots to what you mean to share.
+Following works through the dev server only; without `DBML_ROOTS` it reaches the sample files in `packages/editor/src/sample/`. The bridge reads and writes only `.dbml` and `.json` files directly under the roots, from the same origin, and reports changes to every followed and imported file over a single event stream, so a file with many imports does not run the browser out of connections. Remember the dev server listens on the network, so keep the roots to what you mean to share.
 
 ## Embedding
 

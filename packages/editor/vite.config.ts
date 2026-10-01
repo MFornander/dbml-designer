@@ -9,10 +9,11 @@ import { phosphorIcons } from './plugins/phosphorIcons.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const engineSrc = fileURLToPath(new URL('../engine/src', import.meta.url));
+const samplesDir = fileURLToPath(new URL('./src/sample', import.meta.url));
 
 export default defineConfig(({ mode }) => {
   // Folders whose .dbml files the app may follow and save, colon-separated (DBML_ROOTS in the
-  // environment or in .env.local at the repository root). Without it, only this repo's files are reachable.
+  // environment or in .env.local at the repository root). Without it, only the sample files are reachable.
   const env = {
     ...loadEnv(mode, repoRoot, ''),
     ...process.env,
@@ -20,7 +21,7 @@ export default defineConfig(({ mode }) => {
   const roots = (env.DBML_ROOTS ?? '').split(path.delimiter).map((s) => s.trim()).filter(Boolean);
 
   return {
-    plugins: [vue(), tailwindcss(), phosphorIcons(), fileBridge({ roots: roots.length ? roots : [repoRoot] })],
+    plugins: [vue(), tailwindcss(), phosphorIcons(), fileBridge({ roots: roots.length ? roots : [samplesDir] })],
     envDir: repoRoot,
     resolve: {
       // The editor uses the engine's source, so changes to it reload without a rebuild.
