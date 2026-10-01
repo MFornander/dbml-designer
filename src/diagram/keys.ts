@@ -25,11 +25,6 @@ export function groupKey (schemaName: string | null | undefined, name: string): 
   return `group:${normalizeSchema(schemaName)}.${name}`;
 }
 
-/** Anonymous table groups get a stable name from their declaration order. */
-export function groupDisplayName (name: string | null | undefined, order: number): string {
-  return name && name.length > 0 ? name : `group_${order + 1}`;
-}
-
 export function noteKey (name: string): NoteKey {
   return `note:${name}`;
 }

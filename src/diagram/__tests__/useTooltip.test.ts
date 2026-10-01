@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { buildTooltipContent } from '@/diagram/state/useTooltip';
 import { compile } from './testUtils';
 import GRAIN from './fixtures/partialGrain.dbml?raw';

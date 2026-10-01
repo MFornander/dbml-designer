@@ -185,7 +185,8 @@ npm run graph -- path/to/schema.dbml --text
 - `src/stores/` holds Pinia stores for the editor text, the compiler state, saved positions, and UI preferences.
 - `src/components/` is the app shell: header, split panes, the Errors list, the Diagram Views panel, the shared menu pieces under `common/`, and the diagram pane.
 - `src/sample/` holds the starter schema and the Load Example schema, plus two models to try things on: `grain.dbml` (8 tables keyed by shared `TablePartial`s, the example from the partial-badge and arrange issues) and `synthetic.dbml` (150 tables in 8 groups joined by 400 `Dep` edges, for checking speed).
-- `src/diagram/` is the renderer. `adapter/` turns the raw parser output into a view model, `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.
+- `src/diagram/` is the renderer, on its way to becoming a standalone engine (issue #8) that knows no DBML. `model.ts` is its input, a diagram's content as plain JSON, and `fromModel.ts` indexes that into the view model it draws. `geometry/` holds framework-free layout, routing, and marker math, `state/` holds the Vue composables for pan, zoom, drag, hover, and tooltips, and `components/` are the SVG nodes.
+- `src/dbml/` converts DBML to the engine's model: `toModel.ts` resolves names and aliases, splices in `TablePartial`s, and keeps each element's place in the text as its `source`, and `buildModel.ts` hands the result to the engine.
 
 ## Licensing
 

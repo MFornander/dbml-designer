@@ -8,7 +8,7 @@ import {
 } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { ARRANGE_NOTICE_MS, useArrange, type ArrangeCanvas } from '@/components/useArrange';
-import { buildDiagramModel } from '@/diagram';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { useEditorStore } from '@/stores/editorStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';

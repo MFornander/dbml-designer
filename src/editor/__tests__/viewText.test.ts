@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
+import type { TokenRange } from '@/types/diagram';
 import { hiddenForView, visibleEntities } from '@/diagram/adapter/views';
 import { compile } from '@/diagram/__tests__/testUtils';
 import { applyTextEdits, offsetAt } from '@/editor/colorEdit';
@@ -61,18 +63,18 @@ describe('upsertDiagramView and deleteDiagramView', () => {
     expect([...hiddenForView(m, v)]).toEqual(['public.comments']);
 
     // Replace: hide todo too.
-    const rangeOf = (source: string, tok: NonNullable<typeof v.token>) => ({
+    const rangeOf = (source: string, tok: TokenRange) => ({
       start: offsetAt(source, tok.start.line, tok.start.column),
       end: offsetAt(source, tok.end.line, tok.end.column),
     });
     const hidden2 = new Set(['public.comments', 'note:todo']);
-    const replaced = applyTextEdits(withView, upsertDiagramView(withView, rangeOf(withView, v.token!), diagramViewText('focus', visibleEntities(m, hidden2), totals)));
+    const replaced = applyTextEdits(withView, upsertDiagramView(withView, rangeOf(withView, tokenOf(v.source)!), diagramViewText('focus', visibleEntities(m, hidden2), totals)));
     m = buildDiagramModel(compile(replaced));
     expect(m.views).toHaveLength(1);
     expect([...hiddenForView(m, m.views[0]!)].sort()).toEqual(['note:todo', 'public.comments']);
 
     // Delete: the text is back to where it started.
-    const removed = applyTextEdits(replaced, deleteDiagramView(replaced, rangeOf(replaced, m.views[0]!.token!)));
+    const removed = applyTextEdits(replaced, deleteDiagramView(replaced, rangeOf(replaced, tokenOf(m.views[0]!.source)!)));
     expect(removed).toBe(text);
   });
 

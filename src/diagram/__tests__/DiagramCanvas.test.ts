@@ -5,7 +5,7 @@ import {
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import DiagramCanvas from '@/diagram/components/DiagramCanvas.vue';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { snap8 } from '@/diagram/geometry/rect';
 import type { PartialRefMode, PositionChange } from '@/types/diagram';
 import { compile } from './testUtils';

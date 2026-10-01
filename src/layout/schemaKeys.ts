@@ -1,8 +1,7 @@
 import type { Database } from '@dbml/parse';
-import {
-  groupDisplayName, groupKey, noteKey, tableKey,
-} from '@/diagram/keys';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { groupKey, noteKey, tableKey } from '@/diagram/keys';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { groupDisplayName } from '@/dbml/toModel';
 
 /** Every key a layout may refer to, taken from an error-free parse. */
 export interface LayoutKeys {

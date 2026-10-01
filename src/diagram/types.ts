@@ -1,10 +1,9 @@
-import type { RelationCardinality } from '@dbml/parse';
-import type { TokenRange } from '@/types/diagram';
+import type { Source } from './model';
 import type {
   DepKey, EnumKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
 } from './keys';
 
-export type { DetailLevel, PartialRefMode, TokenRange } from '@/types/diagram';
+export type { DetailLevel, PartialRefMode } from '@/types/diagram';
 
 /**
  * How an edge end is drawn: bar, bar+circle, crow's foot, crow's foot+circle for
@@ -37,7 +36,7 @@ export interface FieldVM {
   metadata?: Record<string, string>;
   /** Name of the TablePartial this field was injected from. */
   injectedFrom?: string;
-  token?: TokenRange;
+  source?: Source;
 }
 
 export interface IndexVM {
@@ -72,7 +71,7 @@ export interface TableVM {
   partialRefs?: PartialRefsVM[];
   /** Declaration order. */
   order: number;
-  token?: TokenRange;
+  source?: Source;
 }
 
 /** The refs one injected TablePartial gives a table: a badge in the table header while partial refs are drawn as badges. */
@@ -96,7 +95,8 @@ export interface EdgeEndpointVM {
 }
 
 export interface RefEndpointVM extends EdgeEndpointVM {
-  cardinality: RelationCardinality;
+  /** As given: `1`, `*`, `0..1`, ... */
+  cardinality: string;
   marker: MarkerKind;
 }
 
@@ -120,7 +120,7 @@ export interface RefVM {
    * then the injecting table. Unset for refs declared on a table itself or in a `Ref:` block.
    */
   viaPartial?: string;
-  token?: TokenRange;
+  source?: Source;
 }
 
 /** What the renderer needs from any lineage line, table-level or column-level. */
@@ -133,7 +133,7 @@ export interface DepLineVM {
   /** Explicit `[color: ...]` of the Dep block, or null for the palette default. */
   color: string | null;
   isSelf: boolean;
-  token?: TokenRange;
+  source?: Source;
 }
 
 /**
@@ -166,7 +166,7 @@ export interface GroupVM {
   note?: string;
   metadata?: Record<string, string>;
   order: number;
-  token?: TokenRange;
+  source?: Source;
 }
 
 export interface NoteVM {
@@ -175,7 +175,7 @@ export interface NoteVM {
   content: string;
   color: string | null;
   order: number;
-  token?: TokenRange;
+  source?: Source;
 }
 
 export interface EnumValueVM {
@@ -190,9 +190,9 @@ export interface EnumVM {
 }
 
 export interface ModelDiagnostic {
-  kind: 'unresolved-ref' | 'unresolved-dep' | 'unresolved-group-member' | 'unresolved-partial' | 'duplicate-ref' | 'unresolved-view-entity';
+  kind: 'unresolved-ref' | 'unresolved-dep' | 'unresolved-group-member' | 'unresolved-partial' | 'duplicate-ref' | 'duplicate-table' | 'unresolved-view-entity';
   message: string;
-  token?: TokenRange;
+  source?: Source;
 }
 
 /**
@@ -214,7 +214,7 @@ export interface DiagramViewVM {
   filtersTables: boolean;
   /** The view has a `notes` section and so restricts notes. */
   filtersNotes: boolean;
-  token?: TokenRange;
+  source?: Source;
 }
 
 export interface DiagramModel {

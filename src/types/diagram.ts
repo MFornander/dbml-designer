@@ -40,9 +40,10 @@ export interface PositionChange {
   h?: number;
 }
 
+/** A table clicked or hovered, with the `source` the host gave it. */
 export interface TableLinkPayload {
   key: TableKey;
-  token: TokenRange;
+  source: unknown;
 }
 
 /** What the color picker is editing: a table header, a group header, a sticky note, or a relationship line. */

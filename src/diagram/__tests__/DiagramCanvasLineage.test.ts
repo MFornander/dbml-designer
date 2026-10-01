@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import DiagramCanvas from '@/diagram/components/DiagramCanvas.vue';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { compile } from './testUtils';
 
 const DBML = `

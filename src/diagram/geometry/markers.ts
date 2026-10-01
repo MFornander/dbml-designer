@@ -1,5 +1,5 @@
-import { parseCardinality, type RelationCardinality } from '@dbml/parse';
 import { CIRCLE_R, CROW_H, CROW_W } from './constants';
+import { parseMultiplicity } from '../multiplicity';
 import type { MarkerKind } from '../types';
 
 export interface MarkerGeometry {
@@ -9,15 +9,9 @@ export interface MarkerGeometry {
   lineShorten: number;
 }
 
-/** Map a DBML cardinality to the marker to draw at that endpoint. */
-export function markerKind (c: RelationCardinality): MarkerKind {
-  let min = 1;
-  let max: number | '*' = 1;
-  try {
-    ({ min, max } = parseCardinality(c));
-  } catch {
-    // Unknown format: treat as exactly one.
-  }
+/** Map a ref end's cardinality (`1`, `*`, `0..1`, ...) to the marker to draw at that endpoint. */
+export function markerKind (c: string): MarkerKind {
+  const { min, max } = parseMultiplicity(c);
   const many = max === '*' || (typeof max === 'number' && max > 1);
   const optional = min === 0;
   if (many) return optional ? 'many' : 'some';

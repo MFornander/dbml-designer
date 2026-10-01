@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   arrangeByGroup, arrangePending, type ArrangeInput, type ArrangeResult,
 } from '@/diagram/geometry/arrange';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { createMeasurer } from '@/diagram/geometry/measure';
 import { computeTableSize } from '@/diagram/geometry/tableSize';
 import { visibleFields } from '@/diagram/geometry/lod';

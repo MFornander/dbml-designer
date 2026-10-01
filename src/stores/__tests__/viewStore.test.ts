@@ -2,7 +2,7 @@ import {
   describe, it, expect, beforeEach,
 } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { compile } from '@/diagram/__tests__/testUtils';
 import { useViewStore } from '@/stores/viewStore';
 

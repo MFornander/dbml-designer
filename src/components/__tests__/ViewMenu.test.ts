@@ -6,7 +6,7 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import ViewMenu from '@/components/ViewMenu.vue';
-import { buildDiagramModel } from '@/diagram';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { useEditorStore } from '@/stores/editorStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
 import { hiddenForView, sameHidden, visibleEntities } from '@/diagram/adapter/views';
 import { compile } from './testUtils';
 
@@ -47,7 +48,7 @@ describe('DiagramView model', () => {
     expect(t.tableKeys).toEqual(['public.users', 'sales.orders']);
     expect(t.filtersTables).toBe(true);
     expect(t.filtersNotes).toBe(false);
-    expect(t.token?.start.line).toBeGreaterThan(1);
+    expect(tokenOf(t.source)?.start.line).toBeGreaterThan(1);
     expect(view('by_schema').schemas).toEqual(['sales']);
     expect(view('by_schema').noteKeys).toEqual(['note:tips']);
     expect(view('by_group').groupKeys).toEqual(['group:public.content']);

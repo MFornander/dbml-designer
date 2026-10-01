@@ -161,8 +161,10 @@ import {
 import {
   PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
-import { DiagramCanvas, buildDiagramModel } from '@/diagram';
-import type { ColorChangePayload, TableLinkPayload } from '@/types/diagram';
+import { DiagramCanvas } from '@/diagram';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
+import type { ColorChangePayload, TableLinkPayload, TokenRange } from '@/types/diagram';
 import DetailLevelSelect from '@/components/DetailLevelSelect.vue';
 import DiagramViewsPanel from '@/components/DiagramViewsPanel.vue';
 import EdgeModeSelect from '@/components/EdgeModeSelect.vue';
@@ -198,48 +200,51 @@ watch(model, (m) => views.sync(m), {
   immediate: true,
 });
 
-/** The color picker's choice becomes a `headercolor` or `color` setting in the DBML text. */
-/** Edits and jumps only make sense for elements declared in the text being edited, not in an imported file. */
-function inEditor (token: { file?: string } | undefined): boolean {
-  return !!token && (token.file === undefined || token.file === parser.entryPath);
+/** Where an element sits in the text being edited; none for one declared in an imported file, where edits and jumps make no sense. */
+function editorToken (source: unknown): TokenRange | undefined {
+  const token = tokenOf(source);
+  return token && (token.file === undefined || token.file === parser.entryPath) ? token : undefined;
 }
 
+/** The color picker's choice becomes a `headercolor` or `color` setting in the DBML text. */
 function onSetColor (payload: ColorChangePayload) {
   // The diagram shows the last error-free parse; while the text is ahead of it, positions are unreliable.
   if (parser.isStale) return;
   const text = textEdits.text();
   if (payload.kind === 'ref') {
     const ref = model.value.refs.find((r) => r.key === payload.key);
-    if (!ref?.token || !inEditor(ref.token)) return;
+    const token = editorToken(ref?.source);
+    if (!ref || !token) return;
     const range = {
-      start: offsetAt(text, ref.token.start.line, ref.token.start.column),
-      end: offsetAt(text, ref.token.end.line, ref.token.end.column),
+      start: offsetAt(text, token.start.line, token.start.column),
+      end: offsetAt(text, token.end.line, token.end.column),
     };
     const edits = setRefColor(text, range, payload.color, relationshipText(model.value, ref));
     if (edits) textEdits.apply(edits);
     return;
   }
-  const token = payload.kind === 'table'
-    ? model.value.tablesByKey.get(payload.key)?.token
+  const token = editorToken(payload.kind === 'table'
+    ? model.value.tablesByKey.get(payload.key)?.source
     : payload.kind === 'group'
-      ? model.value.groups.find((g) => g.key === payload.key)?.token
-      : model.value.notes.find((n) => n.key === payload.key)?.token;
-  if (!token || !inEditor(token)) return;
+      ? model.value.groups.find((g) => g.key === payload.key)?.source
+      : model.value.notes.find((n) => n.key === payload.key)?.source);
+  if (!token) return;
   const start = offsetAt(text, token.start.line, token.start.column);
   const edit = setColorSetting(text, start, payload.kind === 'table' ? 'headercolor' : 'color', payload.color);
   if (edit) textEdits.apply([edit]);
 }
 
 function onTableClick (payload: TableLinkPayload) {
-  if (!inEditor(payload.token)) return;
-  editorInstance.revealLine(payload.token.start.line, payload.token.start.column);
+  const token = editorToken(payload.source);
+  if (token) editorInstance.revealLine(token.start.line, token.start.column);
 }
 
 function onTableHover (payload: TableLinkPayload | null) {
-  editorInstance.highlightLines(payload
+  const token = payload ? tokenOf(payload.source) : undefined;
+  editorInstance.highlightLines(token
     ? {
-        startLine: payload.token.start.line,
-        endLine: payload.token.end.line,
+        startLine: token.start.line,
+        endLine: token.end.line,
       }
     : null);
 }

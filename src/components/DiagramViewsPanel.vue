@@ -510,7 +510,7 @@ function blockFor (name: string): string {
 function save () {
   const v = views.view;
   if (!v || !canSave.value || !editable(v)) return;
-  textEdits.apply(upsertDiagramView(textEdits.text(), v.token ? rangeOf(v.token) : null, blockFor(v.name)));
+  textEdits.apply(upsertDiagramView(textEdits.text(), rangeOf(v.source), blockFor(v.name)));
   views.adopt(v.name);
 }
 
@@ -585,8 +585,9 @@ function submitName () {
     // A view saved from another named view starts out arranged like it.
     if (current) layout.copyView(current.name, name);
   } else {
-    if (!current?.token || !editable(current)) return;
-    textEdits.apply(renameDiagramView(textEdits.text(), rangeOf(current.token), name));
+    const range = current ? rangeOf(current.source) : null;
+    if (!current || !range || !editable(current)) return;
+    textEdits.apply(renameDiagramView(textEdits.text(), range, name));
     layout.renameView(current.name, name);
   }
   // The header shows the active name right away; the next parse brings the block itself.

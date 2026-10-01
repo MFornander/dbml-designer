@@ -6,7 +6,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useViewStore } from '@/stores/viewStore';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 
 describe('layoutStore', () => {
   beforeEach(() => {

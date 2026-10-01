@@ -1,4 +1,5 @@
 import type { DiagramViewVM } from '@/diagram/types';
+import { tokenOf } from '@/dbml/token';
 import { offsetAt } from '@/editor/colorEdit';
 import { deleteDiagramView } from '@/editor/viewText';
 import { useTextEdits } from '@/editor/useTextEdits';
@@ -11,7 +12,10 @@ export function useViewActions () {
   const parser = useParserStore();
   const textEdits = useTextEdits();
 
-  function rangeOf (token: NonNullable<DiagramViewVM['token']>) {
+  /** The text range of a view's block, from the view's source; null when it has none. */
+  function rangeOf (source: unknown): { start: number; end: number } | null {
+    const token = tokenOf(source);
+    if (!token) return null;
     const text = textEdits.text();
     return {
       start: offsetAt(text, token.start.line, token.start.column),
@@ -20,14 +24,17 @@ export function useViewActions () {
   }
 
   /** A view declared in an imported file is shown but cannot be rewritten from this text. */
-  function editable (v: { token?: { file?: string } } | null): boolean {
-    return !!v && (v.token?.file === undefined || v.token.file === parser.entryPath);
+  function editable (v: { source?: unknown } | null): boolean {
+    if (!v) return false;
+    const file = tokenOf(v.source)?.file;
+    return file === undefined || file === parser.entryPath;
   }
 
   /** Remove the view's block from the DBML and fall back to the Default View; false when that cannot be done now. */
   function deleteView (v: DiagramViewVM | null): boolean {
-    if (!v?.token || parser.isStale || !editable(v)) return false;
-    textEdits.apply(deleteDiagramView(textEdits.text(), rangeOf(v.token)));
+    const range = v ? rangeOf(v.source) : null;
+    if (!range || parser.isStale || !editable(v)) return false;
+    textEdits.apply(deleteDiagramView(textEdits.text(), range));
     views.select(null);
     return true;
   }

@@ -4,7 +4,8 @@ import {
 import { setActivePinia, createPinia } from 'pinia';
 import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
 import { buildTooltipContent } from '@/diagram/state/useTooltip';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -133,7 +134,7 @@ describe('parserStore imports', () => {
     const m = buildDiagramModel(parser.rawDatabase);
     expect(m.refs.map((r) => [r.key, r.viaPartial])).toEqual([['#input.site(config_id)->input.config(config_id)', 'per_config']]);
     // The ref is declared in the imported file, so the diagram does not try to edit it from here.
-    expect(m.refs[0]!.token?.file).toBe('/proj/shared.dbml');
+    expect(tokenOf(m.refs[0]!.source)?.file).toBe('/proj/shared.dbml');
     expect(m.tablesByKey.get('input.site')!.partialRefs).toEqual([{
       partial: 'per_config',
       refKeys: ['#input.site(config_id)->input.config(config_id)'],

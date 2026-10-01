@@ -4,7 +4,9 @@ import {
 } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
 import { normalizeHex } from '@/utils/hexColor';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
+import type { TokenRange } from '@/types/diagram';
 import { compile } from '@/diagram/__tests__/testUtils';
 
 function apply (text: string, e: TextEdit | null): string {
@@ -129,13 +131,13 @@ describe('setRefColor', () => {
     ].join('\n');
     const model = buildDiagramModel(compile(text));
     // Offsets belong to the text a token was parsed from.
-    const rangeOf = (source: string, token: NonNullable<typeof model.refs[0]['token']>) => ({
+    const rangeOf = (source: string, token: TokenRange) => ({
       start: offsetAt(source, token.start.line, token.start.column),
       end: offsetAt(source, token.end.line, token.end.column),
     });
 
     const inline = model.refs.find((r) => r.name === null)!;
-    let next = applyTextEdits(text, setRefColor(text, rangeOf(text, inline.token!), '#E74C3C', relationshipText(model, inline))!);
+    let next = applyTextEdits(text, setRefColor(text, rangeOf(text, tokenOf(inline.source)!), '#E74C3C', relationshipText(model, inline))!);
     expect(next).toContain('user_id int [not null]\n');
     expect(next).toContain('\nRef: users.id < "user posts".user_id [color: #E74C3C]\n');
 
@@ -146,7 +148,7 @@ describe('setRefColor', () => {
     expect(inline2.color).toBe('#E74C3C');
 
     const named2 = model2.refs.find((r) => r.name === 'named')!;
-    next = applyTextEdits(next, setRefColor(next, rangeOf(next, named2.token!), '#2ECC71', relationshipText(model2, named2))!);
+    next = applyTextEdits(next, setRefColor(next, rangeOf(next, tokenOf(named2.source)!), '#2ECC71', relationshipText(model2, named2))!);
     expect(next).toContain('Ref named: "user posts".id - users.id [update: cascade, color: #2ECC71]');
     expect(buildDiagramModel(compile(next)).refs.find((r) => r.name === 'named')!.color).toBe('#2ECC71');
   });

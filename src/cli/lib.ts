@@ -9,7 +9,8 @@ import {
 import type { Database, Diagnostic, Filepath } from '@dbml/parse';
 
 type DbmlProjectLayout = ConstructorParameters<typeof Compiler>[0];
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
 import type { DiagramModel, EdgeEndpointVM, RefEndpointVM } from '@/diagram/types';
 import { splitLayoutComment, validateLayout } from '@/layout';
 import { layoutKeysOf } from '@/layout/schemaKeys';
@@ -140,9 +141,10 @@ export function checkText (text: string, opts: CompileOptions = {}): CheckResult
   const model = compiled.db ? buildDiagramModel(compiled.db) : null;
   if (model) {
     for (const d of model.diagnostics) {
+      const token = tokenOf(d.source);
       diagnostics.push({
-        line: d.token?.start.line ?? 1,
-        column: d.token?.start.column ?? 1,
+        line: token?.start.line ?? 1,
+        column: token?.start.column ?? 1,
         severity: 'warning',
         message: d.message,
         source: 'dbml',

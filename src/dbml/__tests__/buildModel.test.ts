@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Database, Ref } from '@dbml/parse';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
-import { compile } from './testUtils';
-import GRAIN from './fixtures/partialGrain.dbml?raw';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { tokenOf } from '@/dbml/token';
+import { compile } from '@/diagram/__tests__/testUtils';
+import GRAIN from '@/diagram/__tests__/fixtures/partialGrain.dbml?raw';
 
 describe('buildDiagramModel', () => {
   it('returns an empty model for no database', () => {
@@ -24,7 +25,7 @@ describe('buildDiagramModel', () => {
     expect(users.fields[1]!.unique).toBe(true);
     expect(users.fields[1]!.notNull).toBe(true);
     expect(users.fields[1]!.note).toBe('login');
-    expect(users.token?.start.line).toBe(2);
+    expect(tokenOf(users.source)?.start.line).toBe(2);
 
     expect(m.refs).toHaveLength(1);
     const ref = m.refs[0]!;

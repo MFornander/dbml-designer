@@ -461,10 +461,10 @@ function onElementClick (key: string) {
         kind: 'table',
         key,
       });
-  if (table.token) {
+  if (table.source !== undefined) {
     emit('table-click', {
       key,
-      token: table.token,
+      source: table.source,
     });
   }
 }
@@ -547,10 +547,10 @@ watch(hover.hover, (target, prev) => {
     return;
   }
   const table = model.value.tablesByKey.get(key);
-  if (table?.token) {
+  if (table && table.source !== undefined) {
     emit('table-hover', {
       key,
-      token: table.token,
+      source: table.source,
     });
   }
 });

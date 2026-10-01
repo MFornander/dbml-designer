@@ -5,7 +5,7 @@ import {
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { nextTick, type ComponentPublicInstance } from 'vue';
 import DiagramCanvas from '@/diagram/components/DiagramCanvas.vue';
-import { buildDiagramModel } from '@/diagram/adapter/buildModel';
+import { buildDiagramModel } from '@/dbml/buildModel';
 import { deriveHighlight } from '@/diagram/state/useHover';
 import type { XY } from '@/types/diagram';
 import { compile } from './testUtils';

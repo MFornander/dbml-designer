@@ -2,8 +2,8 @@ import {
   getMultiplicities,
   type Column, type Database, type Ref, type Table,
 } from '@dbml/parse';
-import type { ModelDiagnostic } from '../types';
-import { tableKey, type TableKey } from '../keys';
+import type { ModelDiagnostic } from '@/diagram/types';
+import { tableKey, type TableKey } from '@/diagram/keys';
 import { toTokenRange } from './token';
 
 /** A ref promoted from an inline ref on a field that a TablePartial injected into a table. */
@@ -57,7 +57,7 @@ export function expandPartials (raw: Database): ExpandedDatabase {
         diagnostics.push({
           kind: 'unresolved-partial',
           message: `Table partial "${injection.name}" not found`,
-          token: toTokenRange(injection.token),
+          source: toTokenRange(injection.token),
         });
         slots.splice(slot, 1);
         continue;
