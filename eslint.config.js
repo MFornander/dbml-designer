@@ -80,5 +80,32 @@ export default defineConfig(
         '@stylistic/operator-linebreak': ['error', 'before', { overrides: { '=': 'after' } }],
       },
     },
+    // The engine stands alone (issue #8): relative imports only, and nothing of DBML, Monaco, or the editor's state.
+    // Its tests may still build models from DBML through the editor's adapter.
+    {
+      files: ['src/engine/**/*.{ts,vue}'],
+      ignores: ['src/engine/**/__tests__/**'],
+      rules: {
+        'no-restricted-imports': ['error', {
+          patterns: [{
+            group: ['@/*', '@dbml/*', 'monaco-editor', 'monaco-editor/*', 'pinia', 'yaml'],
+            message: 'The engine stands alone: import its own modules relatively, and nothing of DBML, Monaco, Pinia, or the editor.',
+          }],
+        }],
+      },
+    },
+    // Everyone else reaches the engine through its public surface.
+    {
+      files: ['src/**/*.{ts,vue}', 'cli/**/*.ts', 'plugins/**/*.ts'],
+      ignores: ['src/engine/**'],
+      rules: {
+        'no-restricted-imports': ['error', {
+          patterns: [{
+            group: ['@/engine/*', '**/engine/*', '!@/engine/core'],
+            message: "Import the engine from '@/engine', its public surface, or '@/engine/core' where no components can load.",
+          }],
+        }],
+      },
+    },
   ],
 );

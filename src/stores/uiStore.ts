@@ -1,6 +1,6 @@
 import { computed, watch } from 'vue';
 import { defineStore } from 'pinia';
-import type { DetailLevel, PartialRefMode, ThemeMode } from '@/types/diagram';
+import type { ThemeMode } from '@/types/diagram'; import type { DetailLevel, PartialRefMode } from '@/engine';
 import { usePersistedRef } from '@/utils/persistedRef';
 
 /** Which connections the diagram draws: relationships, both, or lineage edges only. */

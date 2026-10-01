@@ -2,8 +2,7 @@ import {
   getMultiplicities,
   type Column, type Database, type Ref, type Table,
 } from '@dbml/parse';
-import type { ModelDiagnostic } from '@/diagram/types';
-import { tableKey, type TableKey } from '@/diagram/keys';
+import { type ModelDiagnostic, tableKey, type TableKey } from '@/engine/core';
 import { toTokenRange } from './token';
 
 /** A ref promoted from an inline ref on a field that a TablePartial injected into a table. */

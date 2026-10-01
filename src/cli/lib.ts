@@ -11,7 +11,7 @@ import type { Database, Diagnostic, Filepath } from '@dbml/parse';
 type DbmlProjectLayout = ConstructorParameters<typeof Compiler>[0];
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
-import type { DiagramModel, EdgeEndpointVM, RefEndpointVM } from '@/diagram/types';
+import type { DiagramModel, EdgeEndpointVM, RefEndpointVM } from '@/engine/core';
 import { splitLayoutComment, validateLayout } from '@/layout';
 import { layoutKeysOf } from '@/layout/schemaKeys';
 import type { ParserDiagnostic } from '@/types/diagnostics';

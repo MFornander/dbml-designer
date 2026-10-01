@@ -12,7 +12,7 @@
 
 <script setup lang="ts">
 import { PhColumns } from '@phosphor-icons/vue';
-import type { DetailLevel } from '@/types/diagram';
+import type { DetailLevel } from '@/engine';
 import MenuSelect from '@/components/common/MenuSelect.vue';
 import { useUiStore } from '@/stores/uiStore';
 

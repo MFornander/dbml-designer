@@ -7,11 +7,9 @@ import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useViewStore } from '@/stores/viewStore';
 import { buildDiagramModel } from '@/dbml/buildModel';
-import { arrangeByGroup } from '@/diagram/geometry/arrange';
-import { createMeasurer } from '@/diagram/geometry/measure';
-import { computeTableSize } from '@/diagram/geometry/tableSize';
-import { visibleFields } from '@/diagram/geometry/lod';
-import type { PositionChange } from '@/types/diagram';
+import {
+  arrangeByGroup, createMeasurer, computeTableSize, visibleFields, type PositionChange,
+} from '@/engine';
 
 /** What the canvas hands the store when Arrange runs: every table the view shows, and the routes between them. */
 function arrangement (): { changes: PositionChange[]; routes: string[] } {

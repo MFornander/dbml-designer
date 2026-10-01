@@ -7,4 +7,6 @@
 export * from './format';
 export * from './validateLayout';
 export * from './layoutComment';
-export * from '@/diagram/engine/layers';
+export {
+  baseLayoutFrom, emptyLayout, isEmptyLayout, minimizeLayout, type LayoutLayer, type LayoutSnapshot,
+} from '@/engine/core';

@@ -6,7 +6,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
-import { buildTooltipContent } from '@/diagram/state/useTooltip';
+import { buildTooltipContent } from '@/engine';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 

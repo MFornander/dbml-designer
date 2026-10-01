@@ -12,9 +12,7 @@ import type {
   Node, Pair, Range, YAMLMap, YAMLSeq,
 } from 'yaml';
 import type { ParserDiagnostic, QuickFixAction } from '@/types/diagnostics';
-import type { XY } from '@/types/diagram';
-import { isValidRails } from '@/diagram/geometry/routing';
-import { noteKey } from '@/diagram/keys';
+import { type XY, isValidRails, noteKey } from '@/engine/core';
 import type { LayoutKeys } from './schemaKeys';
 import {
   DEFAULT_VIEW, endFromFile, GROUP_PREFIX, qualifiedForFile, refKeyOf, ROOT_SECTIONS, SECTION_ORDER, SIDECAR_VERSION, SidecarError,

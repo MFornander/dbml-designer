@@ -1,10 +1,11 @@
 import type { Database } from '@dbml/parse';
-import { groupKey, noteKey, tableKey } from '@/diagram/keys';
+import {
+  groupKey, noteKey, tableKey, type LayoutKeys,
+} from '@/engine/core';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { groupDisplayName } from '@/dbml/toModel';
-import type { LayoutKeys } from '@/diagram/engine/layout';
 
-export type { LayoutKeys } from '@/diagram/engine/layout';
+export type { LayoutKeys } from '@/engine/core';
 
 /** Every key a layout of this database may refer to; take it from an error-free parse. */
 export function layoutKeysOf (db: Database): LayoutKeys {

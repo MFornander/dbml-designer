@@ -1,6 +1,5 @@
 import type { Database } from '@dbml/parse';
-import { fromModel } from '@/diagram/fromModel';
-import type { DiagramModel } from '@/diagram/types';
+import { fromModel, type DiagramModel } from '@/engine/core';
 import { toModel } from './toModel';
 
 /**

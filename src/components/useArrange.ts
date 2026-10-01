@@ -4,7 +4,7 @@ import {
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
-import { isTypingTarget } from '@/utils/typingTarget';
+import { isTypingTarget } from '@/engine';
 
 /** What the diagram canvas offers for arranging. */
 export interface ArrangeCanvas {

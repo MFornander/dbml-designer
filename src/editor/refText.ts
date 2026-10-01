@@ -1,5 +1,6 @@
-import type { DiagramModel, RefEndpointVM, RefVM } from '@/diagram/types';
-import { DEFAULT_SCHEMA } from '@/diagram/keys';
+import {
+  type DiagramModel, type RefEndpointVM, type RefVM, DEFAULT_SCHEMA,
+} from '@/engine';
 
 /** Bare identifiers stay as they are; anything else is double-quoted. */
 export function quoteIdentifier (name: string): string {

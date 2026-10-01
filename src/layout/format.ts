@@ -15,9 +15,9 @@
  * `validateLayout.ts`.
  */
 import { Document, isScalar, visit } from 'yaml';
-import type { XY } from '@/types/diagram';
-import { DEFAULT_SCHEMA, isNoteKey } from '@/diagram/keys';
-import type { LayoutSnapshot } from '@/diagram/engine/layers';
+import {
+  type XY, DEFAULT_SCHEMA, isNoteKey, type LayoutSnapshot,
+} from '@/engine/core';
 
 /** Version of the layout format this build writes and reads. */
 export const SIDECAR_VERSION = 1;
@@ -36,7 +36,7 @@ export const SECTION_ORDER = ['tables', 'notes', 'groups', 'refs'] as const;
  * at the top are the Default View (`views.default` in the file); `views` holds each named
  * `DiagramView`'s own entry.
  */
-export type { LayoutSnapshot } from '@/diagram/engine/layers';
+export type { LayoutSnapshot } from '@/engine/core';
 
 export class SidecarError extends Error {}
 

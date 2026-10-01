@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import { useEngineStore } from './engineStore';
 
-export type { PositionOrigin } from '@/diagram/engine/layout';
+export type { PositionOrigin } from '@/engine';
 
 /**
  * What the View menu asks the diagram for: arranging the active view, placing only the tables

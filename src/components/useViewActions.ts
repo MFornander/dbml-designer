@@ -1,4 +1,4 @@
-import type { DiagramViewVM } from '@/diagram/types';
+import type { DiagramViewVM } from '@/engine';
 import { tokenOf } from '@/dbml/token';
 import { offsetAt } from '@/editor/colorEdit';
 import { deleteDiagramView } from '@/editor/viewText';

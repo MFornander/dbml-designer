@@ -3,7 +3,7 @@ import {
 } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { buildDiagramModel } from '@/dbml/buildModel';
-import { compile } from '@/diagram/__tests__/testUtils';
+import { compile } from '@/dbml/__tests__/testUtils';
 import { useViewStore } from '@/stores/viewStore';
 
 const model = buildDiagramModel(compile(`

@@ -144,9 +144,9 @@ import { computed, ref, useTemplateRef } from 'vue';
 import {
   PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
-import { EngineDiagram } from '@/diagram';
+import { EngineDiagram, type ColorChangePayload, type TableLinkPayload } from '@/engine';
 import { tokenOf } from '@/dbml/token';
-import type { ColorChangePayload, TableLinkPayload, TokenRange } from '@/types/diagram';
+import type { TokenRange } from '@/types/diagram';
 import DetailLevelSelect from '@/components/DetailLevelSelect.vue';
 import DiagramViewsPanel from '@/components/DiagramViewsPanel.vue';
 import EdgeModeSelect from '@/components/EdgeModeSelect.vue';

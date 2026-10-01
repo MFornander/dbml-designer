@@ -16,6 +16,7 @@ in that repository and carry a header comment naming their source:
   src/types/diagnostics.ts              <- dbml-playground/src/types/index.ts
   src/utils/logger.ts                   <- dbml-playground/src/utils/logger.ts
   src/utils/markdown.ts                 <- dbml-playground/src/utils/markdown.ts
+  src/engine/util/markdown.ts           <- dbml-playground/src/utils/markdown.ts (in part)
   src/stores/parserStore.ts             <- dbml-playground/src/stores/parserStore.ts
   src/editor/DbmlEditor.vue             <- dbml-playground/src/components/editor/DbmlEditor.vue
   src/editor/dbml_language.ts           <- dbml-playground/src/components/editor/dbml_language.ts

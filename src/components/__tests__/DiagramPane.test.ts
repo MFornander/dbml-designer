@@ -9,7 +9,7 @@ import DiagramPane from '@/components/DiagramPane.vue';
 import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
-import GRAIN from '@/diagram/__tests__/fixtures/partialGrain.dbml?raw';
+import GRAIN from '@/dbml/__tests__/fixtures/partialGrain.dbml?raw';
 
 const TOGGLE = 'button[aria-label="Partial refs as badges"]';
 

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { toModel } from '@/dbml/toModel';
 import { tokenOf } from '@/dbml/token';
-import { fromModel } from '@/diagram/fromModel';
-import { compile } from '@/diagram/__tests__/testUtils';
+import { fromModel } from '@/engine/core';
+import { compile } from '@/dbml/__tests__/testUtils';
 
 const DBML = `
 Enum sales.status {

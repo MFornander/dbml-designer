@@ -1,10 +1,9 @@
 import { computed, markRaw } from 'vue';
 import { defineStore } from 'pinia';
 import { toModel } from '@/dbml/toModel';
-import { createEngine } from '@/diagram/engine/engine';
 import {
-  emptyLayoutState, isLayoutState, layoutStateFrom, type LayoutState,
-} from '@/diagram/engine/layout';
+  createEngine, emptyLayoutState, isLayoutState, layoutStateFrom, type LayoutState,
+} from '@/engine';
 import { splitLayoutComment, validateLayout } from '@/layout';
 import type { LayoutSnapshot } from '@/layout';
 import { usePersistedRef } from '@/utils/persistedRef';

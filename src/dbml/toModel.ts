@@ -2,13 +2,8 @@ import type {
   Check, Column, Database, Index, Ref, RefEndpoint, TablePartial,
 } from '@dbml/parse';
 import {
-  DEFAULT_SCHEMA, enumKey, groupKey, normalizeSchema, tableKey,
-  type TableKey,
-} from '@/diagram/keys';
-import type {
-  Model, ModelDep, ModelEdgeEnd, ModelField, ModelGroup, ModelIndex, ModelRef, ModelTable, ModelView,
-} from '@/diagram/model';
-import type { ModelDiagnostic } from '@/diagram/types';
+  DEFAULT_SCHEMA, enumKey, groupKey, normalizeSchema, tableKey, type TableKey, type Model, type ModelDep, type ModelEdgeEnd, type ModelField, type ModelGroup, type ModelIndex, type ModelRef, type ModelTable, type ModelView, type ModelDiagnostic,
+} from '@/engine/core';
 import { expandPartials } from './expandPartials';
 import { toTokenRange } from './token';
 

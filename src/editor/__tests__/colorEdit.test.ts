@@ -3,11 +3,11 @@ import {
   applyTextEdits, offsetAt, setColorSetting, setRefColor, type TextEdit,
 } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
-import { normalizeHex } from '@/utils/hexColor';
+import { normalizeHex } from '@/engine';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
 import type { TokenRange } from '@/types/diagram';
-import { compile } from '@/diagram/__tests__/testUtils';
+import { compile } from '@/dbml/__tests__/testUtils';
 
 function apply (text: string, e: TextEdit | null): string {
   if (!e) throw new Error('expected an edit');

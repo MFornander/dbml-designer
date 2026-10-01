@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { Database, Ref } from '@dbml/parse';
 import { buildDiagramModel } from '@/dbml/buildModel';
 import { tokenOf } from '@/dbml/token';
-import { compile } from '@/diagram/__tests__/testUtils';
-import GRAIN from '@/diagram/__tests__/fixtures/partialGrain.dbml?raw';
+import { compile } from '@/dbml/__tests__/testUtils';
+import GRAIN from '@/dbml/__tests__/fixtures/partialGrain.dbml?raw';
 
 describe('buildDiagramModel', () => {
   it('returns an empty model for no database', () => {
