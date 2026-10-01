@@ -105,4 +105,20 @@ describe('value categories', () => {
     expect(element.querySelector('.dg-legend')!.classList.contains('is-bottom-right')).toBe(true);
     done();
   });
+
+  it('fold to a button the reader opens again', async () => {
+    const { element, engine, done } = await setup();
+    engine.setCategories({ 'spec.bom.qty[1]': 'overlay' });
+    await nextTick();
+    const toggle = element.querySelector<HTMLButtonElement>('.dg-legend-toggle')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    toggle.click();
+    await nextTick();
+    expect(element.querySelector('.dg-legend')!.classList.contains('is-collapsed')).toBe(true);
+    expect(element.querySelectorAll('.dg-legend-item')).toHaveLength(0);
+    toggle.click();
+    await nextTick();
+    expect(element.querySelectorAll('.dg-legend-item')).toHaveLength(1);
+    done();
+  });
 });

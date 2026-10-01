@@ -4,6 +4,12 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.7.3 - 2026-10-01
+
+### Added
+
+- A button in the legend folds it to that button, out of the way of what lies under it, and opens it again; the reader's choice, kept while the diagram is mounted. DOM hooks `.dg-legend-toggle`, and `is-collapsed` on a folded `.dg-legend`.
+
 ## 0.7.2 - 2026-10-01
 
 ### Added

@@ -157,7 +157,7 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Value categories (engine 0.7.1): `engine.setCategories(cells)` gives values a category by cell key, drawn as a dot of the category's color before the value from the host's palette (display option `categories`), named in the value's tooltip, and listed in the legend as used. Not part of the model, and not stored.
 
-- [x] Legend corner (engine 0.7.2): display option `legendCorner` puts the legend of lineage kinds and value categories in any corner, top left by default, so it need not cover a table placed there.
+- [x] Legend corner and fold (engine 0.7.2, 0.7.3): display option `legendCorner` puts the legend of lineage kinds and value categories in any corner, top left by default, and a button in the legend folds it out of the way and opens it again, so it need not cover a table placed under it.
 
 ### Remaining
 

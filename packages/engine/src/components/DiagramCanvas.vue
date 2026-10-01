@@ -188,11 +188,30 @@
     <div
       v-if="legendKinds.length || legendCategories.length"
       class="dg-legend"
-      :class="`is-${legendCorner}`"
+      :class="[`is-${legendCorner}`, { 'is-collapsed': legendCollapsed }]"
       aria-label="Legend"
     >
+      <!-- Folds the legend to this button, out of the way of what lies under it, and opens it again -->
+      <button
+        type="button"
+        class="dg-legend-toggle"
+        :aria-expanded="!legendCollapsed"
+        :aria-label="legendCollapsed ? 'Show the legend' : 'Hide the legend'"
+        :title="legendCollapsed ? 'Show the legend' : 'Hide the legend'"
+        @pointerdown.stop
+        @click="legendCollapsed = !legendCollapsed"
+      >
+        <PhListBullets
+          v-if="legendCollapsed"
+          :size="14"
+        />
+        <PhCaretLeft
+          v-else
+          :size="12"
+        />
+      </button>
       <span
-        v-for="k in legendKinds"
+        v-for="k in legendCollapsed ? [] : legendKinds"
         :key="k"
         class="dg-legend-item"
       >
@@ -211,7 +230,7 @@
       </span>
       <!-- The categories of the values drawn, each with its dot -->
       <span
-        v-for="c in legendCategories"
+        v-for="c in legendCollapsed ? [] : legendCategories"
         :key="c.name"
         class="dg-legend-item is-category"
       >
@@ -272,6 +291,7 @@ import { useHover, type HoverTarget } from '../state/useHover';
 import { sameSet, shareMap } from '../state/share';
 import { usePanZoom } from '../state/usePanZoom';
 import { useTooltip } from '../state/useTooltip';
+import { PhCaretLeft, PhListBullets } from '@phosphor-icons/vue';
 import DiagramDefs from './DiagramDefs.vue';
 import TableNode from './TableNode.vue';
 import RefEdge from './RefEdge.vue';
@@ -1266,6 +1286,9 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
 });
 
 /** The kinds the drawn column mappings have, in legend order, while lineage is drawn by column. */
+/** The legend folded to its button by the reader. */
+const legendCollapsed = ref(false);
+
 /** The grey of a category the palette does not name. */
 const UNNAMED_CATEGORY = '#9CA3AF';
 
