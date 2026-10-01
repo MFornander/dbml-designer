@@ -16,6 +16,7 @@
     :highlight-all="display.highlightAll"
     :reveal-added="display.revealAdded"
     :highlighted="engine.highlighted.value"
+    :tooltip-filter="tooltipFilter"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"
@@ -47,9 +48,14 @@ import type {
   ColorChangePayload, DiagramViewport, ElementClickEvent, ElementEvent, PositionChange, TableLinkPayload,
 } from '../types';
 import DiagramCanvas from './DiagramCanvas.vue';
+import type { HoverTarget } from '../state/useHover';
 import type { DiagramHandle, Engine } from '../engine/engine';
 
-const props = defineProps<{ engine: Engine }>();
+const props = defineProps<{
+  engine: Engine;
+  /** Whether the engine shows its tooltip for a hovered element; false leaves the element to the host's own popover. */
+  tooltipFilter?: (target: HoverTarget) => boolean;
+}>();
 const emit = defineEmits<{
   'table-click': [payload: TableLinkPayload];
   'table-hover': [payload: TableLinkPayload | null];

@@ -72,6 +72,8 @@ export interface UseTooltipInputs {
   /** Last pointer position in pane pixels; edge tooltips trail it. */
   pointer: Ref<Point | null>;
   suppressed: Ref<boolean>;
+  /** Whether to show the tooltip for a target at all; the host's, to show its own instead. */
+  filter?: Ref<((target: HoverTarget) => boolean) | undefined>;
   delayMs?: number;
 }
 
@@ -380,7 +382,7 @@ export function useTooltip (input: UseTooltipInputs) {
 
   watch([input.target, input.suppressed], ([target, suppressed]) => {
     cancel();
-    if (!target || suppressed) {
+    if (!target || suppressed || input.filter?.value?.(target) === false) {
       hide();
       return;
     }

@@ -4,6 +4,14 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.4.2 - 2026-10-01
+
+The host decides where the engine's tooltip shows.
+
+### Added
+
+- `tooltipFilter`, a prop of `EngineDiagram` and `DiagramCanvas` and an option of `mount`: `(target: HoverTarget) => boolean`, asked before the engine shows its tooltip for a hovered element. Return false to leave that element to a popover of the host's own, anchored with `element-hover`'s `rect` or `point`, so the two never show together.
+
 ## 0.4.1 - 2026-10-01
 
 The host can highlight and dim.

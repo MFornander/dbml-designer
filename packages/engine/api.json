@@ -1,11 +1,11 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "note": "The public API of @dbml-designer/engine at this version, written by `npm run api` (see the README, \"Versioning\"). Keys: `<entry> <name>` for what an entry exports, `type <Name>.<member>` for members of exported types (`?` when optional), `component <Name>.props` and `.emits` for components. CHANGELOG.md says what changed between versions.",
   "api": {
     "component DiagramCanvas.emits": "arrange, edge-route-change, element-click, element-hover, position-change, set-color, table-click, table-hover, toggle-group, viewport-change, zoom-change",
-    "component DiagramCanvas.props": "collapsedGroups?, dark, detailLevel, edgeRoutes?, hidden?, highlightAll?, highlighted?, lineageColumns?, lineageLayout?, loading?, marked?, model, partialRefMode?, pickColors?, positions, revealAdded?, showLineage?, showRefs?, showValues?",
+    "component DiagramCanvas.props": "collapsedGroups?, dark, detailLevel, edgeRoutes?, hidden?, highlightAll?, highlighted?, lineageColumns?, lineageLayout?, loading?, marked?, model, partialRefMode?, pickColors?, positions, revealAdded?, showLineage?, showRefs?, showValues?, tooltipFilter?",
     "component EngineDiagram.emits": "arrange, element-click, element-hover, set-color, table-click, table-hover, viewport-change, zoom-change",
-    "component EngineDiagram.props": "engine",
+    "component EngineDiagram.props": "engine, tooltipFilter?",
     "core ArrangeInput": "interface",
     "core ArrangeOptions": "interface",
     "core ArrangeResult": "interface",
@@ -565,6 +565,7 @@
     "type MountOptions.onTableHover?": "((payload: TableLinkPayload | null) => void) | undefined",
     "type MountOptions.onViewportChange?": "((viewport: DiagramViewport) => void) | undefined",
     "type MountOptions.onZoomChange?": "((k: number) => void) | undefined",
+    "type MountOptions.tooltipFilter?": "((target: HoverTarget) => boolean) | undefined",
     "type MountedDiagram.engine.addEdges": "(deps: readonly ModelDep[]) => void",
     "type MountedDiagram.engine.addTables": "(tables: readonly ModelTable[]) => void",
     "type MountedDiagram.engine.addToView": "(name: string, tables: readonly string[]) => void",

@@ -143,6 +143,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Host highlight and dim (engine 0.4.1): `engine.highlight(keys, { dim, accent })` lights tables, fields, edges, groups, and notes by key on top of hover and pin, as an overlay that moves and stores nothing. A mapping key lights its column pair, drawn even while lineage is drawn by table pair; `dim` fades what the highlight does not keep (the keys, the tables of their fields and at their edges' ends, a column pair's table pair, their groups), and `accent` draws some keys more strongly. Dimmed elements still take hovers and clicks, and a hover lights them through the dim; host-lit edges get no walking ants.
 
+- [x] Tooltip control (engine 0.4.2): `tooltipFilter(target)` on `EngineDiagram`, `DiagramCanvas`, and `mount` is asked before the engine shows its tooltip for a hovered element; returning false leaves the element to the host's own popover, so a host's roll-over and the engine's tooltip never show together.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

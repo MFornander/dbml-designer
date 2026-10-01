@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.4.1. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.4.2. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.4.1.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.4.2.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -281,7 +281,7 @@ A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroup
 
 ## Drawing it
 
-**`EngineDiagram`** draws one engine and fills its container. Its one prop is `engine`. Its events:
+**`EngineDiagram`** draws one engine and fills its container. Its props are `engine` and, optionally, `tooltipFilter`: `(target: HoverTarget) => boolean`, asked before the engine shows its tooltip for a hovered element; returning false leaves that element to a popover of the host's own, anchored with `element-hover`'s `rect` or `point`. Its events:
 
 | Event | Payload | When |
 |---|---|---|
@@ -294,7 +294,7 @@ A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroup
 | `viewport-change` | `DiagramViewport` | The pan or zoom changed. |
 | `arrange` | `PositionChange[]`, reset route keys | An arrangement was stored. |
 
-**`mount(element, options)`** draws into any element and returns a `MountedDiagram`: `engine` and `unmount()`. Its `MountOptions` are those of `createEngine`, or an `engine` made elsewhere, plus the events as callbacks: `onElementClick`, `onElementHover`, `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, `onViewportChange`, and `onArrange`. `unmount()` disposes an engine that `mount` created.
+**`mount(element, options)`** draws into any element and returns a `MountedDiagram`: `engine` and `unmount()`. Its `MountOptions` are those of `createEngine`, or an `engine` made elsewhere, plus `tooltipFilter` and the events as callbacks: `onElementClick`, `onElementHover`, `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, `onViewportChange`, and `onArrange`. `unmount()` disposes an engine that `mount` created.
 
 `DiagramCanvas` is the component `EngineDiagram` wraps, for hosts that keep their own state; it takes the drawn model, positions, and display options as props.
 

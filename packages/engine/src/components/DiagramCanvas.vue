@@ -294,6 +294,8 @@ const props = withDefaults(defineProps<{
   revealAdded?: RevealAdded;
   /** The host's highlight: keys lit, an accent among them, and the rest dimmed if asked. */
   highlighted?: Highlight | null;
+  /** Whether the engine shows its tooltip for a hovered element; false leaves the element to the host's own. */
+  tooltipFilter?: (target: HoverTarget) => boolean;
 }>(), {
   revealAdded: 'pan',
   highlighted: null,
@@ -894,6 +896,7 @@ const tooltip = useTooltip({
   pointer,
   // The picker sits where the tooltip would; keep the two from stacking. No tooltips mid route-drag either.
   suppressed: computed(() => suppressed.value || colorTarget.value !== null || recordsKey.value !== null || routeDragOverride.value !== null),
+  filter: toRef(props, 'tooltipFilter'),
 });
 
 function onWheel (e: WheelEvent) {

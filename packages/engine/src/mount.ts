@@ -5,6 +5,7 @@
 import { createApp, h } from 'vue';
 import EngineDiagram from './components/EngineDiagram.vue';
 import { createEngine, type Engine, type EngineOptions } from './engine/engine';
+import type { HoverTarget } from './state/useHover';
 import type {
   ColorChangePayload, DiagramViewport, ElementClickEvent, ElementEvent, PositionChange, TableLinkPayload,
 } from './types';
@@ -25,6 +26,8 @@ export interface MountOptions extends EngineOptions {
   onElementClick?: (event: ElementClickEvent) => void;
   /** The pointer moved onto an element, or off every element (null). */
   onElementHover?: (event: ElementEvent | null) => void;
+  /** Whether the engine shows its tooltip for a hovered element; return false to show the host's own instead. */
+  tooltipFilter?: (target: HoverTarget) => boolean;
   /** An arrangement was stored in the layout, as one step `undoArrange` can take back. */
   onArrange?: (changes: PositionChange[], resetRoutes: string[]) => void;
 }
@@ -47,6 +50,7 @@ export function mount (element: Element, options: MountOptions = {}): MountedDia
       onViewportChange: options.onViewportChange,
       onElementClick: options.onElementClick,
       onElementHover: options.onElementHover,
+      tooltipFilter: options.tooltipFilter,
       onArrange: options.onArrange,
     }),
   });
