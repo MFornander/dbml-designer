@@ -1,7 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
 import {
-  checkText, formatCheck, formatGraphText, graphOf,
+  checkText, formatCheck, formatModelText, modelOf,
 } from '@/cli/lib';
+import { buildDiagramModel } from '@/dbml/buildModel';
+import { fromModel } from '@/engine/core';
+
+/** Every sample schema and test fixture, by path. */
+const SCHEMAS = ['src/sample', 'src/dbml/__tests__/fixtures']
+  .flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith('.dbml')).map((f) => `${dir}/${f}`));
+
+/** A value with every `source` left out, Maps included. */
+function withoutSource (v: unknown): unknown {
+  if (v instanceof Map) return new Map([...v].map(([k, x]) => [k, withoutSource(x)]));
+  if (Array.isArray(v)) return v.map(withoutSource);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'source').map(([k, x]) => [k, withoutSource(x)]));
+  }
+  return v;
+}
 
 const DBML = [
   'Project blog {',
@@ -78,39 +95,38 @@ describe('checkText', () => {
   });
 });
 
-describe('graphOf', () => {
-  it('lists tables, refs, deps, groups, and views as data in declaration order', () => {
-    const { graph, check } = graphOf(DBML);
+describe('modelOf', () => {
+  it('gives the engine model as plain data in declaration order, without text positions', () => {
+    const { model, check } = modelOf(DBML);
     expect(check.errors).toBe(0);
-    expect(graph).not.toBeNull();
-    const g = graph!;
-    expect(g.project).toEqual({ name: 'blog', databaseType: 'PostgreSQL', note: null });
-    expect(g.tables.map((t) => t.key)).toEqual(['public.users', 'public.posts', 'public.post_stats']);
-    expect(g.tables[0]!.fields).toEqual([
-      { name: 'id', type: 'int', pk: true, unique: false, notNull: false, increment: true },
-      { name: 'name', type: 'varchar(64)', pk: false, unique: false, notNull: true, increment: false, note: 'Display name' },
+    expect(model).not.toBeNull();
+    const m = model!;
+    expect(m.project).toEqual({ name: 'blog', databaseType: 'PostgreSQL' });
+    expect(m.tables.map((t) => t.name)).toEqual(['users', 'posts', 'post_stats']);
+    expect(m.tables[0]!.fields).toEqual([
+      { name: 'id', type: 'int', pk: true, increment: true },
+      { name: 'name', type: 'varchar(64)', notNull: true, note: 'Display name' },
     ]);
-    expect(g.tables[1]!.group).toBe('group:public.content');
-    expect(g.refs).toHaveLength(2);
-    expect(g.refs[0]).toMatchObject({
-      from: { table: 'public.users', fields: ['id'] },
-      to: { table: 'public.posts', fields: ['author_id'] },
-      inactive: false,
+    expect(m.refs).toHaveLength(2);
+    expect(m.refs![0]).toEqual({
+      from: { table: 'public.users', fields: ['id'], cardinality: '1' },
+      to: { table: 'public.posts', fields: ['author_id'], cardinality: '*' },
     });
-    expect(g.deps).toEqual([{
-      names: ['rollup'],
-      upstream: 'public.posts',
-      downstream: 'public.post_stats',
-      columns: [{ from: 'public.posts.id', to: 'public.post_stats.post_id' }],
+    expect(m.deps).toEqual([{
+      from: { table: 'public.posts', fields: ['id'] },
+      to: { table: 'public.post_stats', fields: ['post_id'] },
+      name: 'rollup',
     }]);
-    expect(g.groups).toEqual([{ key: 'group:public.content', name: 'content', tables: ['public.posts', 'public.post_stats'] }]);
-    expect(g.views).toEqual([{ name: 'core', tables: ['public.users', 'public.posts'], groups: [], schemas: [], notes: [] }]);
-    // Stable output: the same text gives the same JSON.
-    expect(JSON.stringify(graphOf(DBML).graph)).toBe(JSON.stringify(g));
+    expect(m.groups).toEqual([{ name: 'content', tables: ['public.posts', 'public.post_stats'] }]);
+    expect(m.views).toEqual([{ name: 'core', tables: ['public.users', 'public.posts'] }]);
+    expect(JSON.stringify(m)).not.toContain('"source"');
+    // Stable output: the same text gives the same JSON, and the engine draws it like the DBML.
+    expect(JSON.stringify(modelOf(DBML).model)).toBe(JSON.stringify(m));
+    expect(fromModel(m).tablesByKey.get('public.posts')!.groupKey).toBe('group:public.content');
   });
 
   it('renders a compact text listing', () => {
-    const text = formatGraphText(graphOf(DBML).graph!);
+    const text = formatModelText(modelOf(DBML).model!);
     expect(text).toContain('TABLES\n  public.users\n    id int [pk, increment]\n');
     expect(text).toContain('REFS\n  public.users(id) 1 -- public.posts(author_id) *\n');
     expect(text).toContain('DEPS\n  public.posts -> public.post_stats  [rollup]\n    public.posts.id -> public.post_stats.post_id\n');
@@ -134,24 +150,32 @@ describe('graphOf', () => {
       '}',
       '',
     ].join('\n');
-    const g = graphOf(text).graph!;
-    expect(g.refs.map((r) => [r.from.table, r.to.table, r.viaPartial ?? null])).toEqual([
+    const m = modelOf(text).model!;
+    expect(m.refs!.map((r) => [r.from.table, r.to.table, r.viaPartial ?? null])).toEqual([
       ['public.owners', 'public.site', null],
       ['public.site', 'public.config', 'per_config'],
     ]);
-    expect(JSON.stringify(g)).toContain('"viaPartial":"per_config"');
-    expect(g.tables.find((t) => t.key === 'public.site')!.fields[0]).toMatchObject({
+    expect(JSON.stringify(m)).toContain('"viaPartial":"per_config"');
+    expect(m.tables.find((t) => t.name === 'site')!.fields[0]).toMatchObject({
       name: 'config_id',
       injectedFrom: 'per_config',
     });
-    const listing = formatGraphText(g);
+    const listing = formatModelText(m);
     expect(listing).toContain('REFS\n  public.owners(id) 1 -- public.site(owner_id) *\n');
     expect(listing).toContain('  public.site(config_id) 1 -- public.config(config_id) 1  (from partial per_config)\n');
   });
 
-  it('gives no graph for DBML with errors', () => {
-    const { graph, check } = graphOf('Table x {');
-    expect(graph).toBeNull();
+  it.each(SCHEMAS)('prints a model of %s that draws exactly what the editor draws', (file) => {
+    const { model, check } = modelOf(readFileSync(file, 'utf8'));
+    expect(withoutSource(fromModel(model!))).toEqual(withoutSource({
+      ...buildDiagramModel(check.db!),
+      diagnostics: [],
+    }));
+  });
+
+  it('gives no model for DBML with errors', () => {
+    const { model, check } = modelOf('Table x {');
+    expect(model).toBeNull();
     expect(check.errors).toBeGreaterThan(0);
   });
 });

@@ -174,7 +174,7 @@ npm run graph -- path/to/schema.dbml
 npm run graph -- path/to/schema.dbml --text
 ```
 
-`graph` prints the schema as data in declaration order: project, tables with their fields and group, refs with both ends and cardinalities, lineage edges with their column mappings, groups, views, notes, and enums. JSON by default, or a compact listing with `--text`. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
+`graph` prints the diagram engine's model of the file (`src/engine/model.ts`): the JSON a program would hand the engine to draw the same diagram, with names resolved to keys and `TablePartial`s spliced into the tables that inject them. In declaration order it holds the project, tables with their fields, indexes, and partials, refs with both ends and cardinalities, `Dep` edges with their column mappings (one per edge, carrying its block's name, color, note, and metadata), groups, sticky notes, views, and enums. JSON by default, or with `--text` a compact listing of the model as the engine resolves it, with each table's group and the `Dep` edges between two tables folded into one. Refs that a `TablePartial` brings carry its name, `"viaPartial": "per_config"` in the JSON and `(from partial per_config)` in the listing, so they can be told apart from refs declared on a table. It refuses a file with errors and prints them instead. The DBML text stays the source of truth; these commands only read it.
 
 ## Layout of the code
 

@@ -104,7 +104,7 @@ describe('toModel', () => {
       [['id'], ['user_id'], 'fill', '#f00', 'nightly'],
       [['email'], ['state'], 'fill', '#f00', 'nightly'],
     ]);
-    expect(model.views?.map((v) => [v.name, v.groups, v.notes, v.tables])).toEqual([['focus', ['public.shop'], ['tips'], []]]);
+    expect(model.views?.map((v) => [v.name, v.groups, v.notes, v.tables])).toEqual([['focus', ['public.shop'], ['tips'], undefined]]);
   });
 
   it('keeps each element\'s place in the text as its source', () => {

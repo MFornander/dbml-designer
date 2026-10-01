@@ -365,6 +365,18 @@ export function toModel (raw: Database | undefined): DbmlModel {
       }
     }
     if (ve?.schemas != null) view.schemas = ve.schemas.map((sc) => sc.name);
+    // The parser lists every table-side section once any is written; empty ones add nothing unless all are empty.
+    if (view.tables || view.groups || view.schemas) {
+      if (!view.tables?.length && !view.groups?.length && !view.schemas?.length) {
+        view.tables = [];
+        delete view.groups;
+        delete view.schemas;
+      } else {
+        if (!view.tables?.length) delete view.tables;
+        if (!view.groups?.length) delete view.groups;
+        if (!view.schemas?.length) delete view.schemas;
+      }
+    }
     if (ve?.stickyNotes != null) {
       view.notes = [];
       for (const n of ve.stickyNotes) {

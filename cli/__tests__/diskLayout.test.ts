@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Filepath } from '@dbml/parse';
-import { checkText, formatCheck, graphOf } from '../../src/cli/lib';
+import { checkText, formatCheck, modelOf } from '../../src/cli/lib';
 import { DiskProjectLayout } from '../diskLayout';
 
 let dir: string;
@@ -34,10 +34,10 @@ describe('DiskProjectLayout', () => {
     const text = opts.layout.getSource(opts.entry)!;
     const result = checkText(text, opts);
     expect(result.errors).toBe(0);
-    const { graph } = graphOf(text, opts);
-    expect(graph!.tables.map((t) => t.name).sort()).toEqual(['derived', 'users']);
-    expect(graph!.deps).toHaveLength(1);
-    expect(graph!.refs).toHaveLength(1);
+    const { model } = modelOf(text, opts);
+    expect(model!.tables.map((t) => t.name).sort()).toEqual(['derived', 'users']);
+    expect(model!.deps).toHaveLength(1);
+    expect(model!.refs).toHaveLength(1);
   });
 
   it('checks unsaved entry text against the files on disk', () => {
