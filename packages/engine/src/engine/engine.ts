@@ -14,7 +14,7 @@ import type {
   DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip,
 } from '../types';
 import type { Rect } from '../geometry/rect';
-import { CHIP_W } from '../geometry/constants';
+import { CHIP_W, GRID_ROWS } from '../geometry/constants';
 import { fromModel } from '../fromModel';
 import type {
   Model, ModelDep, ModelRecord, ModelTable,
@@ -65,6 +65,12 @@ export interface DisplayOptions {
   lineageKinds: readonly string[] | null;
   /** How wide every chip `setChips` puts in a table header is drawn, whatever its label; longer labels are cut with an ellipsis. */
   chipWidth: number;
+  /**
+   * How many records a table with several shows as a grid: a value column per record on its field
+   * rows, headed by the record's label, those a lineage edge's row names first; a "+N" column opens
+   * the rest. 0 shows a count badge that opens them instead. Needs `showValues`.
+   */
+  gridRows: number;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -81,6 +87,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   revealAdded: 'pan',
   lineageKinds: null,
   chipWidth: CHIP_W,
+  gridRows: GRID_ROWS,
 };
 
 /** A value given once, or a getter to follow. */

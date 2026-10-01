@@ -222,7 +222,9 @@ import type {
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
-import type { FieldKey, TableKey } from '../keys';
+import {
+  cellKey, parseCellKey, type FieldKey, type TableKey,
+} from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod } from '../geometry/lod';
 import {
@@ -231,7 +233,7 @@ import {
 import { arrangeByGroup, arrangePending } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
 import {
-  CHIP_W, FONT_GROUP_NAME, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, PARTIAL_BADGE_H, ROW_H,
+  CHIP_W, FONT_GROUP_NAME, GRID_ROWS, PAD_X, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, PARTIAL_BADGE_H, ROW_H,
 } from '../geometry/constants';
 import {
   intersects, snap8, union, type Point, type Rect,
@@ -300,7 +302,10 @@ const props = withDefaults(defineProps<{
   chips?: Readonly<Record<string, readonly TableChip[]>> | null;
   /** How wide every chip is drawn, whatever its label. */
   chipWidth?: number;
+  /** How many records a table's grid shows before a "+N" column; 0 shows a count badge instead of a grid. */
+  gridRows?: number;
 }>(), {
+  gridRows: GRID_ROWS,
   chips: null,
   chipWidth: CHIP_W,
   revealAdded: 'pan',
@@ -403,6 +408,7 @@ const geo = useDiagramGeometry({
   hidden: toRef(props, 'hidden'),
   chips: toRef(props, 'chips'),
   chipWidth: toRef(props, 'chipWidth'),
+  gridRows: toRef(props, 'gridRows'),
   measurer,
   measureVersion,
 });
@@ -601,9 +607,22 @@ function elementEvent (target: HoverTarget): ElementEvent {
   return {
     target,
     ...(source !== undefined ? { source } : {}),
-    rect: target.kind === 'chip' ? chipRect(target.tableKey, target.chip) : rectOf(target.kind === 'field' ? target.fieldKey : target.kind === 'partial' ? target.tableKey : target.key),
+    rect: target.kind === 'chip' ? chipRect(target.tableKey, target.chip) : rectOf(targetKey(target)),
     point: lastPointer ? { ...lastPointer } : null,
   };
+}
+
+/** The key a target is drawn by: a cell's for a field in one record. */
+function targetKey (target: HoverTarget): string {
+  switch (target.kind) {
+    case 'field':
+      return target.row !== undefined ? cellKey(target.fieldKey, target.row) : target.fieldKey;
+    case 'partial':
+    case 'chip':
+      return target.tableKey;
+    default:
+      return target.key;
+  }
 }
 
 function sourceOf (target: HoverTarget): Source | undefined {
@@ -1376,6 +1395,24 @@ function worldRectOf (key: string): Rect | null {
       y: Math.min(...ys),
       w: Math.max(...xs) - Math.min(...xs),
       h: Math.max(...ys) - Math.min(...ys),
+    };
+  }
+  // A cell of a grid: its column on its field's row, or the "+N" column for a record past those shown.
+  const cell = parseCellKey(key);
+  if (cell) {
+    const t = m.tables.find((x) => x.fields.some((f) => f.key === cell.fieldKey));
+    const tableBox = t && geo.boxes.value.get(t.key);
+    const grid = t && geo.sizes.value.get(t.key)?.grid;
+    const idx = t ? geo.rowsByTable.value.get(t.key)?.findIndex((f) => f.key === cell.fieldKey) ?? -1 : -1;
+    // A table without a grid shows its one record on the field's row.
+    if (t && !grid) return worldRectOf(cell.fieldKey);
+    const col = grid?.columns.find((c) => c.record === cell.row) ?? grid?.more;
+    if (!tableBox || !grid || !col || idx < 0) return null;
+    return {
+      x: tableBox.x + tableBox.w - PAD_X - grid.w + col.x,
+      y: tableBox.y + ROW_H * (idx + 1),
+      w: col.w,
+      h: ROW_H,
     };
   }
   for (const t of m.tables) {

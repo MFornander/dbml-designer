@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.5.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.6.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.5.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.6.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -119,7 +119,7 @@ Every element can carry a `source`: anything the host recognizes it by, handed b
 | `indexes?` | `ModelIndex[]` | `columns`, `unique?`, `pk?` (a composite key drawn as key fields), `type?`, `name?`, `note?`. |
 | `checks?` | `string[]` | Check constraints as shown. |
 | `partials?` | `ModelPartial[]` | Table partials the table injects: `name`, `keyColumns?`, `note?`. |
-| `records?` | `ModelRecord[]` | Rows of data. One record shows its values on the fields; several get a row-count badge that opens them as a table. |
+| `records?` | `ModelRecord[]` | Rows of data. One record shows its values on the fields; several show as a grid, a value column per record on the field rows, headed by the record's label (the values of its key fields that differ among the records, else 1, 2, 3), up to `gridRows`, then a "+N" column that opens them all as a table. |
 | `source?` | `unknown` | Handed back with events. |
 
 A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, or null. Dates and times are strings.
@@ -155,7 +155,7 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 
 | Field | Type | Meaning |
 |---|---|---|
-| `from`, `to` | `ModelEdgeEnd` | `table` (key) and `fields?`. With fields at both ends it is a column mapping. Every dep between the same two tables is drawn as one edge. |
+| `from`, `to` | `ModelEdgeEnd` | `table` (key), `fields?`, and `row?`. With fields at both ends it is a column mapping. Every dep between the same two tables is drawn as one edge. `row` names the record the end is about, for lineage between cells: its index in the table's `records`, or the values of the table's key fields (its primary key, composite included); a row that is not there is left out and reported as `unresolved-row`. Deps of one kind between the same columns but different records are one curve, its mapping's `rows` listing the record pairs. |
 | `kind?` | `string` | `value`: an operand of the downstream formula, drawn solid. `row`: it chose the row used, as a join key or a filter, drawn in short dashes. Anything else is listed in the tooltip. Kinds show when mappings are drawn (`lineageColumns`). |
 | `name?` | `string` | Shown while highlighted; names of deps between the same tables are joined. |
 | `color?` | `string` | Line color, whatever the kind. |
@@ -239,7 +239,8 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `chipWidth` | `72` | How wide every chip `setChips` puts in a table header is drawn, whatever its label. |
 | `lineageKinds` | `null` | The lineage kinds drawn, such as `['value']`, or null for every kind. A dep without a kind always shows; a column pair shows while one of its mappings does, styled by the strongest of those; a table pair while one of its deps does; the legend lists only the kinds drawn. `engine.diagram` is the model drawn, so placement and Arrange follow the lineage drawn too. |
 | `partialRefMode` | `'badges'` | `PartialRefMode`: refs from a table partial as a badge in the table header, or `'lines'`. |
-| `showValues` | `true` | Record values on fields, and the row-count badge. |
+| `showValues` | `true` | Record values on fields, and the grid or row-count badge of several. |
+| `gridRows` | `5` | How many records a table with several shows as a grid, those a lineage edge's `row` names first; a "+N" column opens the rest. 0 shows a row-count badge instead. |
 | `lineageLayout` | `false` | Lay tables out by dependency order instead of their stored positions; nothing can be moved meanwhile. |
 | `highlightAll` | `false` | Highlight every edge. |
 | `pickColors` | `true` | Offer the color picker on hovered tables, groups, and notes and on a selected relationship. The picked color comes back as `set-color`; the host writes it into its model. |
@@ -317,6 +318,7 @@ Everything drawn has a key, the same in the drawn model, the layout, `marked`, a
 | Enum | `enum:schema.name` | `enumKey(schema, name)` |
 | Relationship | `name#from(fields)->to(fields)`, with `#2`, `#3` added to repeats | |
 | Lineage edge between two tables | `dep:from->to` | |
+| Cell of a table's grid: a field in one record | `schema.table.field[index]`, the record's index in `records` | `cellKey(field, index)`, `parseCellKey(key)` |
 | Column pair, drawn as one curve | `dep:from(fields)->to(fields)` | |
 | Column mapping of one kind | `dep:from(fields)->to(fields)#kind`; a dep without a kind has the column pair's key | |
 
@@ -326,7 +328,7 @@ Everything drawn has a key, the same in the drawn model, the layout, `marked`, a
 
 - `data-key` on every drawn table (`.dg-table`), field row (`.dg-field`), group (`.dg-group`), note (`.dg-note`), and edge (`.dg-ref`, lineage edges also `.dg-dep`). `elementOf(key)` finds them.
 - `is-highlighted` on highlighted tables, fields, and edges; `is-dimmed` on what a host's `highlight` dims and `is-accent` on its accent; `--dg-dim-opacity` on the page sets how faint dimmed elements are (0.15); `is-kind-value` and `is-kind-row` on column pairs drawn by kind, after the strongest kind among their mappings (`value`, then `row`).
-- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
+- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-cell` (a cell of a grid, with its cell key in `data-key`), `.dg-grid-heading`, `.dg-grid-more` (the "+N" that opens the rest), `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
 - The colors are `--dg-*` CSS variables on the diagram's root, `.dg-root`; `paletteToCssVars(LIGHT)` and `paletteToCssVars(DARK)` list them.
 
 ## A diagram that grows
@@ -356,8 +358,8 @@ Every entry has all of `core`; `index` and `standalone` add the components and `
 
 - **Engine:** `createEngine`, `Engine`, `EngineOptions`, `Input`, `DisplayOptions`, `DEFAULT_DISPLAY`, `DiagramHandle`, `ENGINE_VERSION`, `MARK_MS`, `MARK_WAIT_MS`, `addedKeys` (what one drawn model adds to another).
 - **Model:** `Model`, `ModelProject`, `ModelTable`, `ModelField`, `ModelIndex`, `ModelPartial`, `ModelRecord`, `ModelValue`, `ModelRef`, `ModelRefEnd`, `ModelDep`, `ModelEdgeEnd`, `ModelGroup`, `ModelNote`, `ModelView`, `ModelEnum`, `Source`, `MODEL_SCHEMA`, `checkModel`, `asModel`, `ModelProblem`, and the pure edits the growing methods use: `withTables`, `withEdges`, `withRows`, `withViewTables`.
-- **Drawn model:** `fromModel` (model to `DiagramModel`), `emptyModel`, `DiagramModel`, `TableVM`, `FieldVM`, `IndexVM`, `RefVM`, `RefEndpointVM`, `EdgeEndpointVM`, `DepLineVM`, `DepEdgeVM`, `DepColumnVM`, `DepMappingVM`, `GroupVM`, `NoteVM`, `EnumVM`, `EnumValueVM`, `DiagramViewVM`, `PartialRefsVM`, `ModelDiagnostic`, `MarkerKind`, `AutoLod`, `DetailLevel`, `PartialRefMode`, `TooltipContent` with `buildTooltipContent`, and `HoverTarget`.
-- **Keys:** `TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`, `DEFAULT_SCHEMA`, `normalizeSchema`, `tableKey`, `fieldKey`, `groupKey`, `noteKey`, `enumKey`, `isNoteKey`.
+- **Drawn model:** `fromModel` (model to `DiagramModel`), `emptyModel`, `DiagramModel`, `TableVM`, `FieldVM`, `IndexVM`, `RefVM`, `RefEndpointVM`, `EdgeEndpointVM`, `DepLineVM`, `DepEdgeVM`, `DepColumnVM`, `DepMappingVM`, `GroupVM`, `NoteVM`, `EnumVM`, `EnumValueVM`, `DiagramViewVM`, `PartialRefsVM`, `ModelDiagnostic`, `ModelDiagnosticKind`, `MarkerKind`, `AutoLod`, `DetailLevel`, `PartialRefMode`, `TooltipContent` with `buildTooltipContent`, and `HoverTarget`.
+- **Keys:** `TableKey`, `FieldKey`, `RefKey`, `GroupKey`, `NoteKey`, `EnumKey`, `DepKey`, `DEFAULT_SCHEMA`, `normalizeSchema`, `tableKey`, `fieldKey`, `groupKey`, `noteKey`, `enumKey`, `isNoteKey`, `cellKey`, `parseCellKey`.
 - **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
 - **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.
 - **Placing and arranging:** `placeByLineage`, `placeNewItems`, `LineageLink`, `PlacementItem`, `PlacementOptions`, `arrangeByGroup`, `arrangePending`, `ArrangeInput`, `ArrangeOptions`, `ArrangeResult`, `PendingInput`, `createMeasurer`, `Measurer`, `computeTableSize`, `TableSize`, `visibleFields`, `Point`, `Size`, `Rect`.

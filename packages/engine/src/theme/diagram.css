@@ -195,6 +195,39 @@
   pointer-events: none;
 }
 
+/* A table's grid: a value column per record, headed by the record's label in the header */
+
+.dg-grid-heading {
+  font: 600 10px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  opacity: 0.75;
+}
+
+.dg-grid-heading.is-highlighted {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.dg-grid-more.is-highlighted .dg-records-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
+.dg-cell-bg {
+  fill: transparent;
+}
+
+.dg-cell.is-highlighted .dg-cell-bg {
+  fill: var(--dg-highlight-field-bg);
+  stroke: var(--dg-table-highlight);
+  stroke-width: 1;
+}
+
+.dg-cell.is-accent .dg-field-value {
+  font-weight: 700;
+  fill: var(--dg-table-highlight);
+}
+
 /* The host's chips in a table header: a fixed-width pill, outlined or filled (colors set per chip) */
 
 .dg-chip-bg {

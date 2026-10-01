@@ -172,6 +172,13 @@ export interface TableVM {
   partialRefs?: PartialRefsVM[];
   /** The table's rows of data; set only when there are some. */
   records?: readonly ModelRecord[];
+  /**
+   * A short label per record, for the headings of the table's grid: the values of its key fields
+   * that differ among the records, else its place, 1, 2, 3. Set with `records`.
+   */
+  recordLabels?: string[];
+  /** The records in the order the grid shows them: those a lineage edge's row names first, then the rest as given. Set with `records`. */
+  recordOrder?: number[];
   /** Declaration order. */
   order: number;
   source?: Source;
@@ -255,6 +262,12 @@ export interface DepMappingVM {
   note?: string;
   metadata?: Record<string, string>;
   source?: Source;
+  /**
+   * The records the mapping joins, as pairs of indices into the upstream and downstream tables'
+   * `records`, null for an end that names none; one pair per dep of this kind between these
+   * columns. Unset when no dep names a record.
+   */
+  rows?: [number | null, number | null][];
 }
 
 /**
@@ -315,8 +328,12 @@ export interface EnumVM {
   values: EnumValueVM[];
 }
 
+/** What a model diagnostic is about: something an element names that is not there, or a duplicate. */
+export type ModelDiagnosticKind = 'unresolved-ref' | 'unresolved-dep' | 'unresolved-group-member' | 'unresolved-partial'
+  | 'duplicate-ref' | 'duplicate-table' | 'unresolved-view-entity' | 'unresolved-row';
+
 export interface ModelDiagnostic {
-  kind: 'unresolved-ref' | 'unresolved-dep' | 'unresolved-group-member' | 'unresolved-partial' | 'duplicate-ref' | 'duplicate-table' | 'unresolved-view-entity';
+  kind: ModelDiagnosticKind;
   message: string;
   source?: Source;
 }

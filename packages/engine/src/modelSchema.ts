@@ -175,6 +175,10 @@ export const MODEL_SCHEMA = {
       properties: {
         table: text('Table key, `schema.name`.'),
         fields: list('Field names for a column-level edge; none between whole tables.'),
+        row: {
+          description: 'The record this end is about, for an edge between cells: its index in the table\'s `records`, or the values of the table\'s key fields that pick it out.',
+          oneOf: [{ type: 'integer', minimum: 0 }, ref('record')],
+        },
       },
     },
     dep: {

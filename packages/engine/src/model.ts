@@ -152,6 +152,12 @@ export interface ModelEdgeEnd {
   table: string;
   /** Field names for a column-level edge; none between whole tables. */
   fields?: string[];
+  /**
+   * The record of the table this end is about, for an edge between cells: its index in the
+   * table's `records`, or the values of the table's key fields (its primary key, composite
+   * included) that pick it out.
+   */
+  row?: number | ModelRecord;
 }
 
 export interface ModelGroup {

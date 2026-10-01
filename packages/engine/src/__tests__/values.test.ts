@@ -8,6 +8,7 @@ import { DIAGRAM_CTX } from '../state/context';
 import { fromModel } from '../fromModel';
 import { createMeasurer } from '../geometry/measure';
 import { computeTableSize, recordsBadgeLabel, valueShift } from '../geometry/tableSize';
+import { CHIP_W } from '../geometry/constants';
 import { visibleFields } from '../geometry/lod';
 import {
   fitText, formatNumber, formatValue, fullValue,
@@ -151,7 +152,8 @@ describe('record values', () => {
     expect(valueShift(withValues)).toBe(VALUE_GAP + withValues.valueW);
 
     const item = m.tablesByKey.get('input.item')!;
-    const itemSize = computeTableSize(item, visibleFields(item, 'all'), measurer, [], true);
+    // With the grid off, several records get a count badge instead.
+    const itemSize = computeTableSize(item, visibleFields(item, 'all'), measurer, [], true, [], CHIP_W, 0);
     expect(itemSize.recordsBadge?.label).toBe(recordsBadgeLabel(3));
     expect(itemSize.valueW).toBe(0);
     expect(computeTableSize(item, visibleFields(item, 'all'), measurer).recordsBadge).toBeUndefined();
@@ -236,7 +238,7 @@ describe('record values', () => {
     expect(Number(type.attributes('x'))).toBe(size.width - 10 - valueShift(size));
 
     const item = m.tablesByKey.get('input.item')!;
-    const itemNode = mountNode(item, computeTableSize(item, visibleFields(item, 'all'), measurer, [], true));
+    const itemNode = mountNode(item, computeTableSize(item, visibleFields(item, 'all'), measurer, [], true, [], CHIP_W, 0));
     expect(itemNode.find('.dg-field-value').exists()).toBe(false);
     await itemNode.find('.dg-records-badge').trigger('click');
     expect(ctx.recordsOpened).toEqual(['input.item']);
@@ -263,6 +265,7 @@ describe('record values', () => {
         positions,
         detailLevel: 'all',
         dark: false,
+        gridRows: 0,
       },
       attachTo: document.body,
     });

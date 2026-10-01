@@ -32,7 +32,9 @@ export const FONT_GROUP_NAME = `600 ${FONT_SIZE}px ${FONT_FAMILY_UI}`;
 export const FONT_NOTE = `${FONT_SIZE}px ${FONT_FAMILY_UI}`;
 export const FONT_PARTIAL_BADGE = `600 11px ${FONT_FAMILY_UI}`;
 /** All fonts the measurer relies on; loaded up front so widths are exact. */
-export const ALL_FONTS = [FONT_TABLE_NAME, FONT_FIELD, FONT_FIELD_BOLD, FONT_TYPE, FONT_TYPE_BOLD, FONT_GROUP_NAME, FONT_PARTIAL_BADGE];
+/** Headings of a table's grid columns, in its header. */
+export const FONT_GRID_HEADING = `600 10px ${FONT_FAMILY_UI}`;
+export const ALL_FONTS = [FONT_TABLE_NAME, FONT_FIELD, FONT_FIELD_BOLD, FONT_TYPE, FONT_TYPE_BOLD, FONT_GROUP_NAME, FONT_PARTIAL_BADGE, FONT_GRID_HEADING];
 
 // Partial badges: `~name` pills in a table header standing in for the refs a TablePartial brings
 export const PARTIAL_BADGE_H = 18;
@@ -49,6 +51,15 @@ export const FONT_VALUE = FONT_TYPE;
 export const VALUE_GAP = 14;
 /** The value column never grows wider; longer values end in an ellipsis. */
 export const VALUE_MAX_W = 150;
+
+// The grid: a value column per record when a table has several
+/** Default number of records the grid shows (see `DisplayOptions.gridRows`); the rest open from a "+N" column. */
+export const GRID_ROWS = 5;
+/** A grid column never grows wider; longer values and headings end in an ellipsis. */
+export const GRID_COL_MAX = 80;
+export const GRID_COL_MIN = 16;
+/** Space between grid columns. */
+export const GRID_GAP = 10;
 
 // Refs
 export const CROW_W = 10;

@@ -1,4 +1,5 @@
 import type { DiagramModel, Highlight } from '../types';
+import { parseCellKey } from '../keys';
 
 /** A host's highlight resolved to what the canvas draws. */
 export interface Focus {
@@ -58,6 +59,17 @@ export function resolveFocus (model: DiagramModel, highlight: Highlight | null):
       kept.add(edge.drawn);
       if (edge.pair) kept.add(edge.pair);
       edge.ends.forEach(keepTable);
+      continue;
+    }
+    // A cell of a grid: lit on its own, and it keeps its table. A table with one record has no
+    // grid, so a cell of it lights its field.
+    const cell = parseCellKey(key);
+    const cellTable = cell ? tableOfField.get(cell.fieldKey) : undefined;
+    if (cell && cellTable) {
+      const own = (model.tablesByKey.get(cellTable)?.records?.length ?? 0) > 1 ? key : cell.fieldKey;
+      lit.add(own);
+      kept.add(own);
+      keepTable(cellTable);
       continue;
     }
     const table = tableOfField.get(key);

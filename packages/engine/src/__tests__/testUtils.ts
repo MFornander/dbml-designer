@@ -35,6 +35,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
       depColumnKeys: new Set<string>(),
       tableKeys: new Set<string>(),
       fieldKeys: new Set<string>(),
+      cellKeys: new Set<string>(),
       source: null,
     })),
     dark: ref(false),

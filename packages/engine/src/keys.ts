@@ -22,6 +22,17 @@ export function fieldKey (table: TableKey, field: string): FieldKey {
   return `${table}.${field}`;
 }
 
+/** One cell of a table's grid: a field in one record, by the record's index in the table's `records`. */
+export function cellKey (field: FieldKey, row: number): string {
+  return `${field}[${row}]`;
+}
+
+/** The field and record of a cell key, or null for any other key. */
+export function parseCellKey (key: string): { fieldKey: FieldKey; row: number } | null {
+  const m = /^(.+)\[(\d+)\]$/.exec(key);
+  return m ? { fieldKey: m[1]!, row: Number(m[2]) } : null;
+}
+
 export function groupKey (schemaName: string | null | undefined, name: string): GroupKey {
   return `group:${normalizeSchema(schemaName)}.${name}`;
 }

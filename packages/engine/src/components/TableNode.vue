@@ -53,7 +53,7 @@
       <text
         v-if="lod === 'full' && size.schemaW > 0"
         class="dg-table-schema"
-        :x="w - PAD_X - (showGear ? GEAR_SIZE + ICON_GAP : 0)"
+        :x="w - PAD_X - gridRight - (showGear ? GEAR_SIZE + ICON_GAP : 0)"
         :y="ROW_H / 2"
       >{{ table.schema }}</text>
       <rect
@@ -75,6 +75,45 @@
         :height="ICON_W"
       />
       <template v-if="lod === 'full'">
+        <!-- The grid's headings: each record's label over its column, the whole label on hover; "+N" opens the rest -->
+        <template v-if="size.grid">
+          <text
+            v-for="col in size.grid.columns"
+            :key="col.record"
+            class="dg-grid-heading"
+            :class="{ 'is-highlighted': litRecords.has(col.record) }"
+            :x="gridLeft + col.x + col.w"
+            :y="ROW_H / 2"
+            text-anchor="end"
+            :style="{ fill: headerTextColor }"
+          ><title>{{ col.title }}</title>{{ col.heading }}</text>
+          <g
+            v-if="size.grid.more"
+            class="dg-grid-more"
+            :class="{ 'is-highlighted': hiddenLit }"
+            role="button"
+            :aria-label="`Show all ${table.records?.length ?? 0} rows of ${table.name}`"
+            :transform="`translate(${gridLeft + size.grid.more.x} ${(ROW_H - PARTIAL_BADGE_H) / 2})`"
+            :style="{ color: headerTextColor }"
+            @pointerdown.stop
+            @click.stop="ctx.toggleRecords(table.key)"
+          >
+            <rect
+              class="dg-records-badge-bg"
+              x="0.5"
+              y="0.5"
+              :width="size.grid.more.w - 1"
+              :height="PARTIAL_BADGE_H - 1"
+              rx="4"
+            />
+            <text
+              class="dg-records-badge-text"
+              :x="size.grid.more.w / 2"
+              :y="PARTIAL_BADGE_H / 2"
+              text-anchor="middle"
+            >{{ size.grid.more.label }}</text>
+          </g>
+        </template>
         <!-- The host's chips: outlined for what does not change, filled for what does -->
         <g
           v-for="c in size.chips"
@@ -158,7 +197,7 @@
       </template>
       <SettingsGear
         v-if="showGear"
-        :x="w - PAD_X - GEAR_SIZE"
+        :x="w - PAD_X - gridRight - GEAR_SIZE"
         :y="(ROW_H - GEAR_SIZE) / 2"
         :color="headerTextColor"
         @click="ctx.openColorPicker({ kind: 'table', key: table.key })"
@@ -247,6 +286,36 @@
           :y="ROW_H / 2"
           text-anchor="end"
         >{{ size.rows[i]!.value!.text }}</text>
+        <!-- The grid: the field's value in each record shown, each a cell of its own -->
+        <template v-if="size.grid">
+          <g
+            v-for="(col, j) in size.grid.columns"
+            :key="col.record"
+            class="dg-cell"
+            :class="{ 'is-highlighted': isCellLit(f.key, col.record), 'is-accent': ctx.focus.value.accent.has(cellKey(f.key, col.record)) }"
+            :data-key="cellKey(f.key, col.record)"
+            :transform="`translate(${gridLeft + col.x} 0)`"
+            @pointerenter="onCellEnter(f, col.record)"
+            @pointerleave="onFieldEnter(f)"
+          >
+            <rect
+              class="dg-cell-bg"
+              :x="-GRID_GAP / 2"
+              y="3"
+              :width="col.w + GRID_GAP"
+              :height="ROW_H - 6"
+              rx="3"
+            />
+            <text
+              v-if="size.rows[i]?.cells?.[j]"
+              class="dg-field-value"
+              :class="`is-${size.rows[i]!.cells![j]!.kind}`"
+              :x="col.w"
+              :y="ROW_H / 2"
+              text-anchor="end"
+            >{{ size.rows[i]!.cells![j]!.text }}</text>
+          </g>
+        </template>
       </template>
       <template v-else-if="lod === 'minimal'">
         <rect
@@ -282,14 +351,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { FieldVM, TableChip, TableVM } from '../types';
-import type { FieldKey } from '../keys';
+import { cellKey, parseCellKey, type FieldKey } from '../keys';
 import type { Rect } from '../geometry/rect';
 import {
   BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, valueShift, type FieldBadge, type TableSize,
 } from '../geometry/tableSize';
 import { isKeyField } from '../geometry/lod';
 import {
-  GEAR_SIZE, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_H, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
+  GEAR_SIZE, GRID_GAP, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_H, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
+  VALUE_GAP,
 } from '../geometry/constants';
 import { roundedTopRectPath } from '../geometry/pathBuilder';
 import { textColorFor } from '../geometry/color';
@@ -333,6 +403,28 @@ const headerStyle = computed(() => ({
 const placeholderH = ROW_H * PLACEHOLDER_HEIGHT_RATIO;
 /** How far the type and its badges sit left of the row's right padding: the width of the value column. */
 const shift = computed(() => valueShift(props.size));
+/** Where the grid starts, and how far the header's schema label and gear keep left of its headings. */
+const gridLeft = computed(() => (props.size.grid ? w.value - PAD_X - props.size.grid.w : 0));
+const gridRight = computed(() => (props.size.grid ? props.size.grid.w + VALUE_GAP : 0));
+/** Cells lit by the hover or the host, as records of this table: shown ones light their heading, hidden ones "+N". */
+const litCells = computed(() => {
+  const out = new Set<string>();
+  if (!props.size.grid) return out;
+  const fields = new Set(props.table.fields.map((f) => f.key));
+  for (const keys of [ctx.highlight.value.cellKeys, ctx.focus.value.lit]) {
+    for (const k of keys) {
+      const cell = parseCellKey(k);
+      if (cell && fields.has(cell.fieldKey)) out.add(k);
+    }
+  }
+  return out;
+});
+const litRecords = computed(() => new Set([...litCells.value].map((k) => parseCellKey(k)!.row)));
+const hiddenLit = computed(() => {
+  const shown = new Set(props.size.grid?.columns.map((c) => c.record));
+  return [...litRecords.value].some((r) => !shown.has(r));
+});
+const isCellLit = (field: string, row: number) => litCells.value.has(cellKey(field, row));
 const showHeaderIcon = computed(() => hasTableDetails(props.table));
 
 /** The gear shows while this table (or one of its fields or badges) is the hovered or pinned element. */
@@ -341,7 +433,7 @@ const showGear = computed(() => {
   const s = ctx.highlight.value.source;
   if (!s) return false;
   if (s.kind === 'table') return s.key === props.table.key;
-  return (s.kind === 'field' || s.kind === 'partial') && s.tableKey === props.table.key;
+  return (s.kind === 'field' || s.kind === 'partial' || s.kind === 'chip') && s.tableKey === props.table.key;
 });
 
 /**
@@ -404,6 +496,15 @@ function onFieldEnter (f: FieldVM) {
     kind: 'field',
     tableKey: props.table.key,
     fieldKey: f.key,
+  });
+}
+
+function onCellEnter (f: FieldVM, row: number) {
+  ctx.setHover({
+    kind: 'field',
+    tableKey: props.table.key,
+    fieldKey: f.key,
+    row,
   });
 }
 

@@ -152,8 +152,13 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
       const metadata = metadataEntries(f.metadata);
       const lines: string[] = [];
       if (f.injectedFrom) lines.push(`from partial ${f.injectedFrom}`);
-      const value = f.value !== undefined ? fullValue(f.value) : undefined;
-      const values = (t.records?.length ?? 0) > 1 ? columnValues(t.records!, f.name) : [];
+      // A cell: the field's value in that one record, under the record's label.
+      const record = target.row !== undefined ? t.records?.[target.row] : undefined;
+      const recordValue = record && Object.prototype.hasOwnProperty.call(record, f.name) ? record[f.name] : undefined;
+      const value = record
+        ? (recordValue !== undefined ? fullValue(recordValue) : undefined)
+        : (f.value !== undefined ? fullValue(f.value) : undefined);
+      const values = !record && (t.records?.length ?? 0) > 1 ? columnValues(t.records!, f.name) : [];
       if (!f.note && !en && !f.dbdefault && flags.length === 0 && !f.checks?.length && !metadata && lines.length === 0
         && value === undefined && values.length === 0) {
         return null;
@@ -161,6 +166,7 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
       return {
         kind: 'field',
         title: f.name,
+        ...(record && target.row !== undefined ? { subtitle: t.recordLabels?.[target.row] ?? String(target.row + 1) } : {}),
         type: f.typeText,
         typeIsEnum: !!en,
         ...(flags.length ? { flags } : {}),
@@ -248,12 +254,21 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
           const kinds = mappings.flatMap((m) => (m.kind ? [m.kind] : []));
           const metadata = metadataEntries(Object.assign({}, ...mappings.map((m) => m.metadata ?? {})));
           const notes = [...new Set(mappings.map((m) => m.note).filter((n): n is string => !!n))];
+          // The records it joins, by their labels, as the grids head them.
+          const label = (tableKey: string, row: number | null) => (row === null
+            ? 'all'
+            : model.tablesByKey.get(tableKey)?.recordLabels?.[row] ?? String(row + 1));
+          const rows = mappings.flatMap((m) => m.rows ?? []).map(([a, b]) => `${label(col.upstream.tableKey, a)} → ${label(col.downstream.tableKey, b)}`);
+          const lines = [
+            ...(kinds.length ? [`${kinds.length > 1 ? 'kinds' : 'kind'}: ${kinds.join(', ')}`] : []),
+            ...(rows.length ? [`${rows.length > 1 ? 'rows' : 'row'}: ${rows.join(', ')}`] : []),
+          ];
           return {
             kind: 'dep',
             title: describe(col.upstream),
             target: describe(col.downstream),
             ...(names.length ? { subtitle: names.join(', ') } : {}),
-            ...(kinds.length ? { lines: [`${kinds.length > 1 ? 'kinds' : 'kind'}: ${kinds.join(', ')}`] } : {}),
+            ...(lines.length ? { lines } : {}),
             ...(metadata ? { metadata } : {}),
             ...(notes.length ? { note: notes.join('\n') } : {}),
           };

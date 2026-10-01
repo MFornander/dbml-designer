@@ -3,7 +3,7 @@ import {
   type DepKey, type FieldKey, type GroupKey, type NoteKey, type RefKey, type TableKey,
 } from './keys';
 import type {
-  Model, ModelDep, ModelEdgeEnd, ModelField, ModelRef, ModelRefEnd, ModelTable,
+  Model, ModelDep, ModelEdgeEnd, ModelField, ModelRecord, ModelRef, ModelRefEnd, ModelTable, ModelValue,
 } from './model';
 import {
   emptyModel,
@@ -19,6 +19,20 @@ const DEFAULT_CARDINALITY = '1';
 
 function endpointKeyPart (tk: TableKey, fieldNames: readonly string[]): string {
   return `${tk}(${fieldNames.join(',')})`;
+}
+
+/** The table's key fields, which pick out a record: its primary key, composite included. */
+function keyFieldNames (fields: readonly FieldVM[]): string[] {
+  return fields.filter((f) => f.pk || f.compositePk).map((f) => f.name);
+}
+
+/** A record's key value as text, to compare and to show. */
+const keyText = (v: ModelValue | undefined): string => (v === undefined ? '' : String(v));
+
+/** A label per record: the values of the key fields that differ among them, else 1, 2, 3. */
+function recordLabels (records: readonly ModelRecord[], keys: readonly string[]): string[] {
+  const differing = keys.filter((k) => new Set(records.map((r) => keyText(r[k]))).size > 1);
+  return records.map((r, i) => (differing.length ? differing.map((k) => keyText(r[k])).join(' · ') : String(i + 1)));
 }
 
 /** A mapping's key: its column pair's key, with `#kind` when the dep has a kind. */
@@ -134,6 +148,8 @@ function toTableVM (t: ModelTable, order: number, enums: ReadonlySet<string>): T
   if (t.metadata && Object.keys(t.metadata).length > 0) vm.metadata = { ...t.metadata };
   if (t.records?.length) {
     vm.records = t.records;
+    vm.recordLabels = recordLabels(t.records, keyFieldNames(fields));
+    vm.recordOrder = t.records.map((_, i) => i);
     // One record is shown on the fields it names.
     const only = t.records.length === 1 ? t.records[0]! : null;
     if (only) for (const f of fields) if (Object.prototype.hasOwnProperty.call(only, f.name)) f.value = only[f.name]!;
@@ -344,7 +360,51 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
     fieldKeys: [],
     fieldIndices: [],
   });
+  /**
+   * The record an edge end names, by index or by the values of its table's key fields; null when
+   * it names none. One it names that is not there is reported and taken as none.
+   */
+  function resolveRow (tableKey: TableKey, row: ModelEdgeEnd['row'], sourced: { source?: unknown }): number | null {
+    if (row === undefined) return null;
+    const table = model.tablesByKey.get(tableKey)!;
+    const records = table.records ?? [];
+    let found = -1;
+    if (typeof row === 'number') {
+      if (Number.isInteger(row) && row >= 0 && row < records.length) found = row;
+    } else {
+      const keys = keyFieldNames(table.fields);
+      if (keys.length && keys.every((k) => k in row)) {
+        found = records.findIndex((r) => keys.every((k) => keyText(r[k]) === keyText(row[k])));
+      }
+    }
+    if (found >= 0) return found;
+    diagnostics.push({
+      kind: 'unresolved-row',
+      message: `Row ${typeof row === 'number' ? row : JSON.stringify(row)} not found in table "${table.displayName}"`,
+      ...sourced,
+    });
+    return null;
+  }
+
   for (const dep of input.deps ?? []) addDep(dep);
+
+  // The grid shows the records lineage names first, so they seldom hide behind its "+N".
+  const named = new Map<TableKey, Set<number>>();
+  for (const d of model.deps) {
+    for (const c of d.columns) {
+      for (const m of c.mappings) {
+        for (const [a, b] of m.rows ?? []) {
+          if (a !== null) (named.get(c.upstream.tableKey) ?? named.set(c.upstream.tableKey, new Set()).get(c.upstream.tableKey)!).add(a);
+          if (b !== null) (named.get(c.downstream.tableKey) ?? named.set(c.downstream.tableKey, new Set()).get(c.downstream.tableKey)!).add(b);
+        }
+      }
+    }
+  }
+  for (const [key, rows] of named) {
+    const t = model.tablesByKey.get(key)!;
+    if (!t.recordOrder) continue;
+    t.recordOrder = [...[...rows].sort((a, b) => a - b), ...t.recordOrder.filter((i) => !rows.has(i))];
+  }
 
   function addDep (dep: ModelDep): void {
     const sourced = dep.source !== undefined ? { source: dep.source } : {};
@@ -400,6 +460,9 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
     // A table-level edge adds nothing beyond the pair itself.
     if (up.fieldNames.length === 0 && down.fieldNames.length === 0) return;
     const directed = `${endpointKeyPart(up.tableKey, up.fieldNames)}->${endpointKeyPart(down.tableKey, down.fieldNames)}`;
+    const upRow = resolveRow(up.tableKey, dep.from.row, sourced);
+    const downRow = resolveRow(down.tableKey, dep.to.row, sourced);
+    const rowPair: [number | null, number | null] | null = upRow === null && downRow === null ? null : [upRow, downRow];
     const mapping: DepMappingVM = {
       key: mappingKey(`dep:${directed}`, dep.kind),
       label: name,
@@ -407,6 +470,7 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
       ...(dep.note ? { note: dep.note } : {}),
       ...(dep.metadata && Object.keys(dep.metadata).length > 0 ? { metadata: { ...dep.metadata } } : {}),
       ...sourced,
+      ...(rowPair ? { rows: [rowPair] } : {}),
     };
     let column = columnByPair.get(directed);
     if (!column) {
@@ -431,8 +495,12 @@ export function fromModel (input: Model | null | undefined): DiagramModel {
         }
       }
     }
-    // A second dep of the same kind between the same columns adds nothing; the first one stands.
-    if (column.mappings.some((m) => m.key === mapping.key)) return;
+    // A second dep of the same kind between the same columns adds its records to the first, if it names any; else nothing.
+    const same = column.mappings.find((m) => m.key === mapping.key);
+    if (same) {
+      if (rowPair && !same.rows?.some(([a, b]) => a === rowPair[0] && b === rowPair[1])) (same.rows ??= []).push(rowPair);
+      return;
+    }
     column.mappings.push(mapping);
     column.mappings.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
     column.color ??= color;

@@ -16,6 +16,8 @@ interface Schema {
   items?: Schema;
   additionalProperties?: boolean | Schema;
   pattern?: string;
+  minimum?: number;
+  oneOf?: readonly Schema[];
   $ref?: string;
 }
 
@@ -43,6 +45,16 @@ function check (value: unknown, schema: Schema, path: (string | number)[], out: 
     message,
     severity,
   });
+  // One of several shapes, as an edge end's row is: an index or a record's key values.
+  if (schema.oneOf) {
+    const fits = schema.oneOf.some((alternative) => {
+      const problems: ModelProblem[] = [];
+      check(value, alternative, path, problems);
+      return problems.length === 0;
+    });
+    if (!fits) fail('Not a value this can be', 'warning');
+    return;
+  }
   // A choice of plain types, as a record's values have: anything else is drawn as text.
   if (Array.isArray(schema.type)) {
     if (!schema.type.includes(jsonType(value))) fail(`Expected ${schema.type.join(', ')}`, 'warning');
@@ -92,6 +104,11 @@ function check (value: unknown, schema: Schema, path: (string | number)[], out: 
       return;
     case 'boolean':
       if (typeof value !== 'boolean') fail('Expected true or false', 'warning');
+      return;
+    case 'integer':
+      if (!Number.isInteger(value) || (schema.minimum !== undefined && (value as number) < schema.minimum)) {
+        fail(`Expected a whole number${schema.minimum !== undefined ? ` of at least ${schema.minimum}` : ''}`, 'warning');
+      }
       return;
     default:
   }

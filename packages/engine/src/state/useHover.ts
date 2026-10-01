@@ -2,13 +2,14 @@ import {
   computed, shallowRef, watch, type Ref,
 } from 'vue';
 import type { DiagramModel } from '../types';
-import type {
-  DepKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
+import {
+  cellKey, type DepKey, type FieldKey, type GroupKey, type NoteKey, type RefKey, type TableKey,
 } from '../keys';
 
 export type HoverTarget =
   | { kind: 'table'; key: TableKey }
-  | { kind: 'field'; tableKey: TableKey; fieldKey: FieldKey }
+  /** A field, or with `row` one cell of its table's grid: the field in that record, by its index in the table's `records`. */
+  | { kind: 'field'; tableKey: TableKey; fieldKey: FieldKey; row?: number }
   /** A partial badge in a table header: the refs that partial gives the table. */
   | { kind: 'partial'; tableKey: TableKey; partial: string }
   /** A chip the host put in a table header (see `Engine.setChips`), by its id. */
@@ -26,6 +27,8 @@ export interface HighlightSet {
   depColumnKeys: ReadonlySet<DepKey>;
   tableKeys: ReadonlySet<TableKey>;
   fieldKeys: ReadonlySet<FieldKey>;
+  /** Cells of tables' grids, by cell key: those a hovered cell's records lead to, or a hovered lineage's records. */
+  cellKeys: ReadonlySet<string>;
   source: HoverTarget | null;
 }
 
@@ -35,6 +38,7 @@ const EMPTY: HighlightSet = {
   depColumnKeys: new Set(),
   tableKeys: new Set(),
   fieldKeys: new Set(),
+  cellKeys: new Set(),
   source: null,
 };
 
@@ -46,6 +50,10 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
   const depColumnKeys = new Set<DepKey>();
   const tableKeys = new Set<TableKey>();
   const fieldKeys = new Set<FieldKey>();
+  const cellKeys = new Set<string>();
+  /** The record of a hovered cell. */
+  const row = target.kind === 'field' ? target.row : undefined;
+  if (target.kind === 'field' && row !== undefined) cellKeys.add(cellKey(target.fieldKey, row));
 
   let refList: RefKey[] = [];
   /** Table-level lineage edges to light up. */
@@ -120,6 +128,18 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
   for (const ck of columnList) {
     const col = columnsByKey.get(ck);
     if (!col) continue;
+    // The records the column pair joins; a hovered cell follows only those it is one of.
+    let pairs = col.mappings.flatMap((m) => m.rows ?? []);
+    if (target.kind === 'field' && row !== undefined && pairs.length) {
+      const up = col.upstream.fieldKeys.includes(target.fieldKey);
+      const down = col.downstream.fieldKeys.includes(target.fieldKey);
+      pairs = pairs.filter(([a, b]) => (up && a === row) || (down && b === row));
+      if (!pairs.length) continue;
+    }
+    for (const [a, b] of pairs) {
+      if (a !== null) for (const fk of col.upstream.fieldKeys) cellKeys.add(cellKey(fk, a));
+      if (b !== null) for (const fk of col.downstream.fieldKeys) cellKeys.add(cellKey(fk, b));
+    }
     depColumnKeys.add(ck);
     depKeys.add(col.edgeKey);
     for (const ep of [col.upstream, col.downstream]) {
@@ -134,6 +154,7 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
     depColumnKeys,
     tableKeys,
     fieldKeys,
+    cellKeys,
     source: target,
   };
 }
@@ -141,7 +162,7 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
 export function sameTarget (a: HoverTarget | null, b: HoverTarget | null): boolean {
   if (a === b) return true;
   if (!a || !b || a.kind !== b.kind) return false;
-  if (a.kind === 'field' && b.kind === 'field') return a.fieldKey === b.fieldKey;
+  if (a.kind === 'field' && b.kind === 'field') return a.fieldKey === b.fieldKey && a.row === b.row;
   if (a.kind === 'partial' && b.kind === 'partial') return a.tableKey === b.tableKey && a.partial === b.partial;
   if (a.kind === 'chip' && b.kind === 'chip') return a.tableKey === b.tableKey && a.chip === b.chip;
   if ('key' in a && 'key' in b) return a.key === b.key;

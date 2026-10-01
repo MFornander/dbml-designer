@@ -81,6 +81,8 @@ export interface GeometryInputs {
   /** The host's chips by table key, and the width each is drawn at. */
   chips: Ref<Readonly<Record<string, readonly TableChip[]>> | null>;
   chipWidth: Ref<number>;
+  /** How many records a table's grid shows; 0 draws a count badge instead. */
+  gridRows: Ref<number>;
   /** Lineage layout: tables with lineage edges laid out by dependency order; everything else hidden. */
   lineageLayout: Ref<boolean>;
   dragOverride: Ref<DragOverride | null>;
@@ -180,7 +182,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
       const badges = partialBadges.value ? partialsOf(t) : [];
-      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges, input.showValues.value, chipsOf(t), input.chipWidth.value));
+      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges, input.showValues.value, chipsOf(t), input.chipWidth.value, input.gridRows.value));
     }
     return map;
   });
@@ -194,7 +196,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     void input.measureVersion.value;
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
-      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t), true, chipsOf(t), input.chipWidth.value));
+      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t), true, chipsOf(t), input.chipWidth.value, input.gridRows.value));
     }
     return map;
   });

@@ -1,6 +1,6 @@
 import {
   FONT_FIELD, FONT_FIELD_BOLD, FONT_PARTIAL_BADGE, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD, FONT_VALUE,
-  CHIP_W, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, VALUE_GAP, VALUE_MAX_W, WIDTH_EXTRA,
+  CHIP_W, FONT_GRID_HEADING, GRID_COL_MAX, GRID_COL_MIN, GRID_GAP, GRID_ROWS, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, VALUE_GAP, VALUE_MAX_W, WIDTH_EXTRA,
 } from './constants';
 import type { Measurer } from './measure';
 import { fitText, formatValue, type ValueKind } from './values';
@@ -20,6 +20,34 @@ export interface RowMetrics {
     text: string;
     kind: ValueKind;
   };
+  /** The field's values in the grid's columns, in their order; null where a record does not name the field. */
+  cells?: ({ text: string; kind: ValueKind } | null)[];
+}
+
+/** One column of a table's grid: a record's values, under a heading in the header. */
+export interface GridColumn {
+  /** The record's index in the table's `records`. */
+  record: number;
+  /** Left edge, from the grid's left edge. */
+  x: number;
+  w: number;
+  /** The record's label cut to fit; `title` is the whole label. */
+  heading: string;
+  title: string;
+}
+
+/** The grid of a table with several records: a column per record shown, and a column that opens the rest. */
+export interface TableGrid {
+  columns: GridColumn[];
+  /** The records past those shown: how many, and the column that opens them all. */
+  more?: {
+    count: number;
+    label: string;
+    x: number;
+    w: number;
+  };
+  /** From the grid's left edge to the table's right padding. */
+  w: number;
 }
 
 /** A partial badge in the table header. */
@@ -60,8 +88,10 @@ export interface TableSize {
     x: number;
     w: number;
   };
-  /** Width of the value column at the right of the field rows; 0 without values. */
+  /** Width of the value column, or of the grid, at the right of the field rows; 0 without values. */
   valueW: number;
+  /** The grid, when the table has several records, values show, and the grid is on. */
+  grid?: TableGrid;
   rows: RowMetrics[];
 }
 
@@ -154,7 +184,7 @@ export function valueShift (size: Pick<TableSize, 'valueW'>): number {
  */
 export function computeTableSize (
   t: TableVM, rows: readonly FieldVM[], m: Measurer, badges: readonly string[] = [], values = false,
-  chips: readonly TableChip[] = [], chipWidth = CHIP_W,
+  chips: readonly TableChip[] = [], chipWidth = CHIP_W, gridRows = GRID_ROWS,
 ): TableSize {
   const nameW = m.measure(t.name, FONT_TABLE_NAME);
   const schemaW = t.schema === DEFAULT_SCHEMA ? 0 : m.measure(t.schema, FONT_FIELD);
@@ -183,8 +213,9 @@ export function computeTableSize (
     return badge;
   });
   const recordCount = values ? t.records?.length ?? 0 : 0;
+  const gridded = recordCount > 1 && gridRows > 0;
   let recordsBadge: TableSize['recordsBadge'];
-  if (recordCount > 1) {
+  if (recordCount > 1 && !gridded) {
     const label = recordsBadgeLabel(recordCount);
     const w = Math.ceil(m.measure(label, FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
     badgesW += PARTIAL_BADGE_GAP;
@@ -195,9 +226,10 @@ export function computeTableSize (
     };
     badgesW += w;
   }
-  const headerW = nameW + iconW + badgesW + (schemaW ? SCHEMA_GAP + schemaW : 0);
   const metrics = rows.map((f) => rowMetrics(f, m));
-  let valueW = 0;
+  const grid = gridded ? gridOf(t, rows, metrics, m, gridRows) : undefined;
+  const headerW = nameW + iconW + badgesW + (schemaW ? SCHEMA_GAP + schemaW : 0) + (grid ? VALUE_GAP + grid.w : 0);
+  let valueW = grid?.w ?? 0;
   if (recordCount === 1) {
     rows.forEach((f, i) => {
       if (f.value === undefined) return;
@@ -225,6 +257,71 @@ export function computeTableSize (
     badges: headerBadges,
     ...(recordsBadge ? { recordsBadge } : {}),
     valueW,
+    ...(grid ? { grid } : {}),
     rows: metrics,
+  };
+}
+
+/**
+ * The grid of a table with several records: a column per record, in `recordOrder`, up to
+ * `gridRows`, each as wide as its heading and values up to `GRID_COL_MAX`; then a "+N" column
+ * for the rest. Fills in each row's `cells`.
+ */
+function gridOf (t: TableVM, rows: readonly FieldVM[], metrics: RowMetrics[], m: Measurer, gridRows: number): TableGrid {
+  const records = t.records ?? [];
+  const order = t.recordOrder ?? records.map((_, i) => i);
+  const shown = order.slice(0, gridRows);
+  const inner = GRID_COL_MAX;
+  rows.forEach((_, i) => {
+    metrics[i]!.cells = [];
+  });
+  let x = 0;
+  const columns = shown.map((record, j): GridColumn => {
+    const title = t.recordLabels?.[record] ?? String(record + 1);
+    const heading = fitText(title, inner, m, FONT_GRID_HEADING);
+    let w = Math.max(GRID_COL_MIN, Math.ceil(m.measure(heading, FONT_GRID_HEADING)));
+    rows.forEach((f, i) => {
+      const r = records[record]!;
+      if (!Object.prototype.hasOwnProperty.call(r, f.name)) {
+        metrics[i]!.cells!.push(null);
+        return;
+      }
+      const v = formatValue(r[f.name]!);
+      const text = fitText(v.text, inner, m, FONT_VALUE);
+      metrics[i]!.cells!.push({
+        text,
+        kind: v.kind,
+      });
+      w = Math.max(w, Math.ceil(m.measure(text, FONT_VALUE)));
+    });
+    if (j > 0) x += GRID_GAP;
+    const column = {
+      record,
+      x,
+      w: Math.min(w, GRID_COL_MAX),
+      heading,
+      title,
+    };
+    x += column.w;
+    return column;
+  });
+  const count = records.length - shown.length;
+  let more: TableGrid['more'];
+  if (count > 0) {
+    const label = `+${count}`;
+    const w = Math.ceil(m.measure(label, FONT_GRID_HEADING) + 2 * PARTIAL_BADGE_PAD_X);
+    x += GRID_GAP;
+    more = {
+      count,
+      label,
+      x,
+      w,
+    };
+    x += w;
+  }
+  return {
+    columns,
+    ...(more ? { more } : {}),
+    w: x,
   };
 }

@@ -19,6 +19,7 @@
     :tooltip-filter="tooltipFilter"
     :chips="engine.chips.value"
     :chip-width="display.chipWidth"
+    :grid-rows="display.gridRows"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

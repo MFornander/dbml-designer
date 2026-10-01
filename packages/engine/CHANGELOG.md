@@ -4,6 +4,23 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.6.0 - 2026-10-01
+
+Several records as a grid in their table, and lineage between cells.
+
+### Added
+
+- `ModelEdgeEnd.row`: the record an end is about, by index in the table's `records` or by the values of its key fields. Deps of one kind between the same columns but different records are one curve; `DepMappingVM.rows` lists the record pairs, and the column pair's tooltip lists them by label. A row that is not there is left out and reported as `unresolved-row`.
+- The grid: a table with several records shows a value column per record on its field rows, up to the display option `gridRows` (5), those a lineage edge names first, each headed by the record's label in the header (`TableVM.recordLabels`: the key values that differ among the records, else 1, 2, 3; the whole label on hover) and capped at 80 px; a "+N" column opens the rest as a table. `TableVM.recordOrder` is the order shown.
+- Cells: `cellKey(field, index)` and `parseCellKey`, keys like `power.line_power.input_watts[2]`. A cell's hovers and clicks reach the host as a field target with `row`, with the cell's own `rect`; hovering one lights the cells its records lead to and the curves between them; `highlight` and `rectOf` take cell keys, a record past those shown standing on its "+N", and a cell of a table with one record, which has no grid, on its field. A cell's tooltip shows its record's label and value.
+- DOM hooks `.dg-cell` (with its cell key in `data-key`), `.dg-grid-heading`, and `.dg-grid-more`.
+
+### Changed (breaking)
+
+- A table with several records shows the grid instead of the row-count badge; `gridRows: 0` keeps the badge.
+- `ModelDiagnostic.kind` has `unresolved-row`, and is named `ModelDiagnosticKind`; `HighlightSet` has `cellKeys`. `computeTableSize` takes `gridRows` after the chip width; `TableSize` has `grid`, and `RowMetrics` `cells`.
+- A second dep of the same kind between the same columns adds its records to the first mapping instead of being dropped.
+
 ## 0.5.0 - 2026-10-01
 
 Chips in table headers, kept by the host.

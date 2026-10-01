@@ -28,7 +28,7 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 | Ref: inactive | Dashed line | Dashed line, noted in tooltip | Full |
 | Enum (values, value notes, quoted names) | Values in the field tooltip | Same | Full |
 | TablePartial and `~injection` | Fields spliced in, injected fields marked | Fields spliced in with correct precedence and refs; tilde icon and "from partial" in tooltip; the refs a partial brings are one `~partial` badge in the table header by default (hover draws them and lists them with the partial's key), or lines by toggle; imported partials included | Full |
-| Records / Data Sample | Records icon on the header opens a preview | One row's values on the fields; a row-count badge opens a preview of several | Full |
+| Records / Data Sample | Records icon on the header opens a preview | One row's values on the fields; several as a grid of value columns, headed by their key, with "+N" opening a preview of all | Full |
 
 ### Enrichment and visualization
 
@@ -148,6 +148,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 - [x] Lineage by kind (engine 0.4.3): display option `lineageKinds` (null for all) draws only the deps of the kinds listed, and those without a kind; a column pair shows while one of its mappings does, styled by the strongest shown, a table pair while one of its deps does, and the legend lists only what is drawn. The filter applies to the model drawn, so hover, tooltips, highlight, placement, and Arrange follow it.
 
 - [x] Chips in table headers (engine 0.5.0): `engine.setChips(map)` puts the host's chips after a table's name, outlined (a kind) or filled (a status, colored by severity), each `chipWidth` wide with its label cut to fit, so case switches never resize a table; a chip's note is its tooltip, and its clicks and hovers reach the host as a `chip` target with its own rectangle. Not part of the model, and not stored.
+
+- [x] Several records as a grid, and lineage between cells (engine 0.6.0): a table with several records shows a value column per record on its field rows, headed by the record's label (key values that differ, else 1, 2, 3), up to `gridRows`, referenced records first, with a "+N" column for the rest; `gridRows: 0` keeps the count badge. A dep end's `row` names a record by index or key values; row edges between the same columns stay one curve that lists its record pairs. Cells have keys (`t.c[2]`), take hover, click, `highlight`, and `rectOf`, and a hovered cell lights the cells its records lead to.
 
 ### Remaining
 
