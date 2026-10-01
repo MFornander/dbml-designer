@@ -18,6 +18,7 @@ import { usePersistedRef } from '@/utils/persistedRef';
 import { useEditorStore } from './editorStore';
 import { useLayoutStore } from './layoutStore';
 import { useParserStore } from './parserStore';
+import { useViewStore } from './viewStore';
 
 /** A file's arrangement as it was when switching away from it, with the layout then on disk. */
 interface LeftLayout {
@@ -102,6 +103,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   const editor = useEditorStore();
   const parser = useParserStore();
   const layout = useLayoutStore();
+  const views = useViewStore();
   const io = useFileIO();
 
   const state = usePersistedRef<FileLinkState>('fileLink', () => ({ ...FORGOTTEN }), {
@@ -176,6 +178,15 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   /** A layout on disk other than the one last read or written; one that merely vanished does not count. */
   const footerChanged = (footer: string | null) => footer !== null && footer !== synced.value?.footer;
 
+  /**
+   * A change on disk is about to be taken in. When it changes the text, the views it adds may be
+   * switched to once the text is read (see the view store); one that leaves the text alone is
+   * never read again, so it is not noted.
+   */
+  function noteDiskChange (text: string): void {
+    if (splitDocument(text, languageOfPath(path.value)).body !== editor.text) views.noteDiskChange();
+  }
+
   /** Put a file's text, minus its layout, into the editor, and give the diagram the layout asked for. */
   function applyFile (text: string, mtimeMs: number, take: LayoutSource): void {
     const language = languageOfPath(path.value);
@@ -226,6 +237,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       return;
     }
     // Someone else changed the layout: take theirs. Otherwise keep ours and take the text.
+    noteDiskChange(file.text);
     applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
     // A new `use` may point at a file that did not exist a moment ago.
     parser.retryImports();
@@ -347,8 +359,12 @@ export const useFileLinkStore = defineStore('fileLink', () => {
       return;
     }
     const same = synced.value !== null && parts.body.trimEnd() === synced.value.body.trimEnd() && parts.layout === synced.value.footer;
-    if (same) synced.value = { ...synced.value!, mtimeMs: file.mtimeMs };
-    else applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
+    if (same) {
+      synced.value = { ...synced.value!, mtimeMs: file.mtimeMs };
+    } else {
+      noteDiskChange(file.text);
+      applyFile(file.text, file.mtimeMs, footerChanged(parts.layout) ? 'footer' : 'keep');
+    }
     status.value = 'following';
     error.value = null;
     if (!stopWatching) startWatching(p);
@@ -359,6 +375,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   function reloadFromDisk (): void {
     const p = pending.value;
     if (!p) return;
+    noteDiskChange(p.text);
     applyFile(p.text, p.mtimeMs, footerChanged(splitDocument(p.text, languageOfPath(path.value)).layout) ? 'footer' : 'keep');
   }
 

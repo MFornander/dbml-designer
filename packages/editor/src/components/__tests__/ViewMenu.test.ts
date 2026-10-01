@@ -62,8 +62,8 @@ describe('ViewMenu', () => {
     expect(trigger.findAll('span').map((el) => el.text())).toEqual(['View', 'first']);
     expect(views.hidden.has('public.posts')).toBe(true);
     await trigger.trigger('click');
-    expect(labels(wrapper)).toEqual(['Default', 'first', 'New View', 'Rename…', 'Reset', 'Delete', 'Arrange', 'Arrange new tables', 'Undo arrange']);
-    expect(texts(wrapper, '[role="listbox"] [role="option"]').at(-1)).toContain('⌘Z');
+    expect(labels(wrapper)).toEqual(['Default', 'first', 'New View', 'Rename…', 'Reset', 'Delete', 'Arrange', 'Arrange new tables', 'Undo arrange', 'Follow new views']);
+    expect(texts(wrapper, '[role="listbox"] [role="option"]').at(-2)).toContain('⌘Z');
     expect(wrapper.find('[role="option"][aria-selected="true"]').text()).toBe('first');
 
     await wrapper.findAll('[role="option"]')[0]!.trigger('click');

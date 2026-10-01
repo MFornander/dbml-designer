@@ -1151,9 +1151,13 @@ function stopAutoFit () {
   autoFit = false;
 }
 
-/** Fit the whole diagram once positions just handed to the host are in, never zooming past 100%. */
+/**
+ * Fit the whole diagram once positions just handed to the host are in, never zooming past 100%,
+ * and keep it fitted like the first time, as the pane may still be settling (a view opened as the
+ * page loads), until the user zooms, pans, or drags.
+ */
 function refit () {
-  stopAutoFit();
+  autoFit = true;
   nextTick(() => pz.fitTo(geo.contentBounds.value, 1));
 }
 watch([geo.contentBounds, pz.viewSize], ([bounds, size]) => {

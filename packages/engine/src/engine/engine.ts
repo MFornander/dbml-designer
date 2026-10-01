@@ -7,7 +7,7 @@
  * follows, for a host that already keeps it in reactive state.
  */
 import {
-  computed, effectScope, shallowRef, watch, type Ref,
+  computed, effectScope, nextTick, shallowRef, watch, type Ref,
 } from 'vue';
 import type { DetailLevel, PartialRefMode } from '../types';
 import { fromModel } from '../fromModel';
@@ -70,6 +70,12 @@ export interface EngineOptions {
   layoutState?: Ref<LayoutState>;
   /** Where the active view's name is kept, for a host that persists the choice. */
   activeView?: Ref<string | null>;
+  /**
+   * Arrange a named view by group and lineage when it is switched to while it has no arrangement of
+   * its own, so a view another program wrote opens laid out; the result is that view's alone. On by
+   * default. Either way, switching views fits the new one to the window.
+   */
+  arrangeViews?: boolean;
 }
 
 /** What a mounted diagram offers the engine; `EngineDiagram` attaches it while mounted. */
@@ -109,7 +115,17 @@ export function createEngine (options: EngineOptions = {}) {
       ...displayInput.value.value,
     }));
 
-    const views = createViews({ active: options.activeView });
+    /** A view switched to that has no arrangement yet, to arrange once a mounted diagram can. */
+    const toArrange = shallowRef<string | null>(null);
+    /** A view was switched to: fit it once a mounted diagram shows it. */
+    const toFit = shallowRef(false);
+    const views = createViews({
+      active: options.activeView,
+      onSelect: (name) => {
+        toArrange.value = name !== null && (options.arrangeViews ?? true) && !layout.hasViewLayout(name) ? name : null;
+        toFit.value = true;
+      },
+    });
     const layout = createLayout({
       state: options.layoutState,
       activeView: () => views.activeView.value,
@@ -131,6 +147,23 @@ export function createEngine (options: EngineOptions = {}) {
 
     const handle = shallowRef<DiagramHandle | null>(null);
 
+    // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
+    // has no arrangement yet (which fits it), else fit it. Waits a tick for the diagram to take the
+    // view's hidden set.
+    watch([handle, toArrange, toFit, loading.value], ([h, name, fit, busy]) => {
+      if (!h || busy || (name === null && !fit)) return;
+      void nextTick(() => {
+        if (handle.value !== h) return;
+        const pending = toArrange.value;
+        toArrange.value = null;
+        toFit.value = false;
+        if (pending !== null && pending === views.activeView.value && !layout.hasViewLayout(pending) && h.arrange()) return;
+        h.refit();
+      });
+    }, {
+      flush: 'post',
+    });
+
     return {
       diagram,
       loading: loading.value,
@@ -150,7 +183,10 @@ export function createEngine (options: EngineOptions = {}) {
         });
       },
       setBases: bases.set,
-      /** Switch to a view by name, or to the Default View (null). */
+      /**
+       * Switch to a view by name, or to the Default View (null), and fit it; a named view with no
+       * arrangement of its own is arranged first (see `arrangeViews`).
+       */
       selectView (name: string | null): void {
         views.select(name, diagram.value);
       },

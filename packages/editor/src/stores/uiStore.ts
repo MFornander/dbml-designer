@@ -7,7 +7,7 @@ import { usePersistedRef } from '@/utils/persistedRef';
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
 interface UiState {
-  version: 12;
+  version: 13;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -32,10 +32,12 @@ interface UiState {
   showValues: boolean;
   /** Lineage drawn mapping by mapping, field to field and styled by kind, instead of one edge per pair of tables. */
   lineageColumns: boolean;
+  /** Switch to a view the followed file gains on disk. */
+  followNewViews: boolean;
 }
 
 /** The shape before version 11, which all older ones migrate to first. */
-type V10State = Omit<UiState, 'version' | 'showValues' | 'lineageColumns'> & { version: 10 };
+type V10State = Omit<UiState, 'version' | 'showValues' | 'lineageColumns' | 'followNewViews'> & { version: 10 };
 
 /** The layout panel's share of the editor pane until the user drags its handle. */
 export const DEFAULT_LAYOUT_SIZE = 40;
@@ -48,7 +50,7 @@ const PARTIAL_REF_MODES: readonly PartialRefMode[] = ['badges', 'lines'];
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 12
+  return s.version === 13
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -63,7 +65,8 @@ function isUiState (v: unknown): v is UiState {
     && typeof s.viewsOpen === 'boolean'
     && PARTIAL_REF_MODES.includes(s.partialRefMode as PartialRefMode)
     && typeof s.showValues === 'boolean'
-    && typeof s.lineageColumns === 'boolean';
+    && typeof s.lineageColumns === 'boolean'
+    && typeof s.followNewViews === 'boolean';
 }
 
 /**
@@ -74,25 +77,24 @@ function isUiState (v: unknown): v is UiState {
  * the collapsed-editor flag; version 7 replaced the editor view with the
  * collapsible layout panel's open flag; version 8 added that panel's height; version 9 added
  * the Diagram Views panel's open flag; version 10 added how partial refs are drawn, badges by
- * default; version 11 added the Values toggle, on by default; version 12 adds drawing lineage by
- * column, off by default.
+ * default; version 11 added the Values toggle, on by default; version 12 added drawing lineage by
+ * column, and version 13 following new views, both off by default.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const version = parsed.version as number;
-  if (version >= 12) return parsed as unknown as UiState;
-  if (version === 11) {
-    return {
-      ...(parsed as unknown as Omit<UiState, 'version' | 'lineageColumns'>),
-      version: 12,
-      lineageColumns: false,
-    };
-  }
+  if (version >= 13) return parsed as unknown as UiState;
+  const since11 = version >= 11
+    ? parsed as unknown as Omit<UiState, 'version' | 'lineageColumns' | 'followNewViews'>
+    : {
+        ...migrateToV10(parsed),
+        showValues: true,
+      };
   return {
-    ...migrateToV10(parsed),
-    version: 12,
-    showValues: true,
     lineageColumns: false,
+    ...since11,
+    version: 13,
+    followNewViews: false,
   };
 }
 
@@ -187,7 +189,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 12,
+    version: 13,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -202,6 +204,7 @@ export const useUiStore = defineStore('ui', () => {
     partialRefMode: 'badges',
     showValues: true,
     lineageColumns: false,
+    followNewViews: false,
   }), {
     validate: isUiState,
     deserialize: migrateUiState,
@@ -223,6 +226,7 @@ export const useUiStore = defineStore('ui', () => {
   const partialRefMode = computed(() => state.value.partialRefMode);
   const showValues = computed(() => state.value.showValues);
   const lineageColumns = computed(() => state.value.lineageColumns);
+  const followNewViews = computed(() => state.value.followNewViews);
 
   const splitSizes = computed<number[]>({
     get: () => [...state.value.splitSizes],
@@ -308,6 +312,11 @@ export const useUiStore = defineStore('ui', () => {
     state.value.lineageColumns = !state.value.lineageColumns;
   }
 
+  /** Switch, or not, to a view the followed file gains on disk. */
+  function toggleFollowNewViews (): void {
+    state.value.followNewViews = !state.value.followNewViews;
+  }
+
   watch(theme, (t) => {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', t === 'dark');
@@ -352,5 +361,7 @@ export const useUiStore = defineStore('ui', () => {
     toggleShowValues,
     lineageColumns,
     toggleLineageColumns,
+    followNewViews,
+    toggleFollowNewViews,
   };
 });

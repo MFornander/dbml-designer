@@ -513,6 +513,12 @@ export function createLayout (options: LayoutOptions) {
     };
   }
 
+  /** Whether a named view has an arrangement of its own, in its layer or in what an inherited layout says about it. */
+  function hasViewLayout (name: string): boolean {
+    const own = state.value.views[name];
+    return (own !== undefined && !isEmptyLayout(asSnapshot(own))) || !isEmptyLayout(inheritedView(name));
+  }
+
   return {
     /** Every layer, as kept; what a host persists to restore the layout exactly. */
     state,
@@ -536,6 +542,7 @@ export function createLayout (options: LayoutOptions) {
     replaceLayout,
     renameView,
     copyView,
+    hasViewLayout,
   };
 }
 

@@ -59,6 +59,8 @@ const { useFileLinkStore } = await import('@/stores/fileLinkStore');
 const { useEditorStore } = await import('@/stores/editorStore');
 const { useLayoutStore } = await import('@/stores/layoutStore');
 const { useParserStore } = await import('@/stores/parserStore');
+const { useUiStore } = await import('@/stores/uiStore');
+const { useViewStore } = await import('@/stores/viewStore');
 
 const DBML = 'Table users {\n  id int [pk]\n}\nTable posts {\n  id int [pk]\n}\n';
 const FOOTER = '\n/* === DBML DESIGNER FOOTER ===\nversion: 1\ntables:\n  public:\n    users: { x: 8, y: 16 }\n*/\n';
@@ -132,6 +134,24 @@ describe('fileLinkStore', () => {
     disk.change();
     await flush();
     expect(layout.positions['public.users']).toEqual({ x: 800, y: 0 });
+  });
+
+  it('switches to a view another program appends, with "follow new views" on, once its text is read', async () => {
+    const link = useFileLinkStore();
+    const views = useViewStore();
+    useUiStore().toggleFollowNewViews();
+    await link.follow(MAIN);
+    useParserStore().parseNow();
+    await flush();
+
+    disk.set(`${DBML}DiagramView only_users {\n  Tables {\n    users\n  }\n}\n${FOOTER}`);
+    disk.change();
+    await flush();
+    // Nothing yet: the text is read after the typing pause.
+    expect(views.activeView).toBeNull();
+    useParserStore().parseNow();
+    await flush();
+    expect(views.activeView).toBe('only_users');
   });
 
   it('holds a change on disk while the editor is dirty until reloaded or overwritten', async () => {

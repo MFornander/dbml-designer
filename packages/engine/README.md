@@ -74,14 +74,14 @@ const engine = createEngine({
 | `setLoading(flag)` | While true, the model is taken to be behind what the host is loading: nothing is placed or dropped against it |
 | `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), lineage by column (`lineageColumns`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all |
 | `views` | The views: `activeView`, `select`, the hidden set, and toggles that can be saved back into a view |
-| `selectView(name)` | Switch to a view, or to the Default View with `null` |
+| `selectView(name)` | Switch to a view, or to the Default View with `null`, and fit it to the window. A named view with no arrangement of its own, as when a program just wrote it, is arranged first by group and lineage, into its own layer |
 | `layout` | Positions, folded groups, hand-drawn routes, kept as layers: the Default View's, and one per named view on top |
 | `snapshot()`, `restore(snapshot)` | The layout as plain data, to keep wherever the host likes, and back |
 | `arrange(onlyNew?)`, `undoArrange()` | Lay out what the view shows by group and lineage, or only the tables placed automatically since the layout was loaded, and take it back |
 | `fitToScreen()`, `zoomIn()`, `zoomOut()`, `resetZoom()` | The view of the mounted diagram |
 | `dispose()` | Stop following the inputs |
 
-Each input of `createEngine` (`model`, `loading`, `display`, `bases`) is a value or a getter. A Vue host that keeps them in reactive state passes getters and the engine follows them; any other host passes values and calls the setters. `bases` are layouts the diagram inherits, nearest first; the editor passes the footers of the files a DBML file imports. `layoutState` and `activeView` take refs for a host that persists the layout layers and the active view as they change.
+Each input of `createEngine` (`model`, `loading`, `display`, `bases`) is a value or a getter. A Vue host that keeps them in reactive state passes getters and the engine follows them; any other host passes values and calls the setters. `bases` are layouts the diagram inherits, nearest first; the editor passes the footers of the files a DBML file imports. `layoutState` and `activeView` take refs for a host that persists the layout layers and the active view as they change. `arrangeViews: false` leaves a view switched to without an arrangement looking like the Default View instead of arranging it.
 
 Engines share nothing: several can live on one page, each with its own model, layout, and views.
 

@@ -49,6 +49,8 @@ export interface ViewsOptions {
    * to outlive the page passes a ref it persists. Defaults to a fresh one.
    */
   active?: Ref<string | null>;
+  /** Called after a switch to a view (`select`), not after a view was saved as the working set (`adopt`). */
+  onSelect?: (name: string | null) => void;
 }
 
 /**
@@ -94,11 +96,8 @@ export function createViews (options: ViewsOptions = {}) {
   /** Switch views, discarding unsaved toggles; against the model given, else the one last synced. */
   function select (name: string | null, m: DiagramModel | null = model.value): void {
     setActive(name);
-    if (!m) {
-      resetTo(new Set());
-      return;
-    }
-    resetTo(hiddenForView(m, m.views.find((v) => v.name === name) ?? null));
+    resetTo(m ? hiddenForView(m, m.views.find((v) => v.name === name) ?? null) : new Set());
+    options.onSelect?.(name);
   }
 
   /** After the host saved the working set as view `name`: that is now its definition. */

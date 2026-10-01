@@ -167,6 +167,25 @@
         <span>Undo arrange</span>
         <span :class="MENU_HINT">⌘Z</span>
       </button>
+      <!-- For a file another program writes views into -->
+      <div :class="MENU_DIVIDER" />
+      <button
+        type="button"
+        :class="MENU_ITEM"
+        role="option"
+        :aria-selected="ui.followNewViews"
+        title="Switch to a view the followed file gains on disk"
+        @click="ui.toggleFollowNewViews"
+      >
+        <span :class="MENU_SLOT">
+          <PhCheck
+            v-if="ui.followNewViews"
+            class="w-4 h-4"
+            weight="bold"
+          />
+        </span>
+        <span>Follow new views</span>
+      </button>
     </div>
   </div>
 </template>
@@ -192,8 +211,8 @@ import { useViewActions } from '@/components/useViewActions';
  * The header's view switcher, titled like the bottom toolbar's pickers: the active diagram view
  * with a list of the Default View, every `DiagramView` block, "New View", and Rename and Delete
  * for the active one, then Arrange, Arrange new tables, and Undo arrange for the active view's
- * layout, plus the button that shows or hides the Diagram Views panel where a view is shaped,
- * named, and saved.
+ * layout, and the Follow new views option, plus the button that shows or hides the Diagram Views
+ * panel where a view is shaped, named, and saved.
  */
 const views = useViewStore();
 const ui = useUiStore();

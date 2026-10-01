@@ -16,6 +16,7 @@ const FLAGS = {
   partialRefMode: 'badges',
   showValues: true,
   lineageColumns: false,
+  followNewViews: false,
 };
 
 describe('migrateUiState', () => {
@@ -28,7 +29,7 @@ describe('migrateUiState', () => {
       problemsOpen: true,
     });
     expect(migrateUiState(v1)).toEqual({
-      version: 12,
+      version: 13,
       theme: 'dark',
       detailLevel: 'keys',
       splitSizes: [40, 60],
@@ -50,7 +51,7 @@ describe('migrateUiState', () => {
     expect(migrateUiState(v2(false)).edgeMode).toBe('erd');
     expect(migrateUiState(v2(true)).edgeMode).toBe('erd+deps');
     expect(migrateUiState(v2(true)).splitSizes).toEqual([35, 65]);
-    expect(migrateUiState(v2(true)).version).toBe(12);
+    expect(migrateUiState(v2(true)).version).toBe(13);
   });
 
   it('keeps the version 3 edge mode and adds the new toggles switched off', () => {
@@ -63,7 +64,7 @@ describe('migrateUiState', () => {
       edgeMode: 'deps',
     });
     expect(migrateUiState(v3)).toEqual({
-      version: 12,
+      version: 13,
       theme: 'light',
       detailLevel: 'all',
       splitSizes: [35, 65],
@@ -87,7 +88,7 @@ describe('migrateUiState', () => {
   it('adds the layout panel, collapsed, and views panel flags when upgrading from version 4, keeping the toggles', () => {
     expect(migrateUiState(JSON.stringify(v4))).toEqual({
       ...v4,
-      version: 12,
+      version: 13,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: false,
@@ -95,6 +96,7 @@ describe('migrateUiState', () => {
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
@@ -106,7 +108,7 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v5))).toEqual({
       ...v4,
-      version: 12,
+      version: 13,
       layoutOpen: true,
       layoutSize: 40,
       editorCollapsed: false,
@@ -114,6 +116,7 @@ describe('migrateUiState', () => {
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
     const v6 = {
       ...v4,
@@ -123,7 +126,7 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v6))).toEqual({
       ...v4,
-      version: 12,
+      version: 13,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: true,
@@ -131,6 +134,7 @@ describe('migrateUiState', () => {
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
@@ -143,12 +147,13 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v7))).toEqual({
       ...v7,
-      version: 12,
+      version: 13,
       layoutSize: 40,
       viewsOpen: false,
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
@@ -163,11 +168,12 @@ describe('migrateUiState', () => {
   it('adds the views panel flag when upgrading from version 8', () => {
     expect(migrateUiState(JSON.stringify(v8))).toEqual({
       ...v8,
-      version: 12,
+      version: 13,
       viewsOpen: false,
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
@@ -179,10 +185,11 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v9))).toEqual({
       ...v9,
-      version: 12,
+      version: 13,
       partialRefMode: 'badges',
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
@@ -195,13 +202,14 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v10))).toEqual({
       ...v10,
-      version: 12,
+      version: 13,
       showValues: true,
       lineageColumns: false,
+      followNewViews: false,
     });
   });
 
-  it('draws lineage by table pair when upgrading from version 11, and passes version 12 through unchanged', () => {
+  it('draws lineage by table pair when upgrading from version 11', () => {
     const v11 = {
       ...v8,
       version: 11,
@@ -211,15 +219,32 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v11))).toEqual({
       ...v11,
-      version: 12,
+      version: 13,
       lineageColumns: false,
+      followNewViews: false,
     });
+  });
+
+  it('leaves new views alone when upgrading from version 12, and passes version 13 through unchanged', () => {
     const v12 = {
-      ...v11,
+      ...v8,
       version: 12,
+      viewsOpen: true,
+      partialRefMode: 'lines',
+      showValues: false,
       lineageColumns: true,
     };
-    expect(migrateUiState(JSON.stringify(v12))).toEqual(v12);
+    expect(migrateUiState(JSON.stringify(v12))).toEqual({
+      ...v12,
+      version: 13,
+      followNewViews: false,
+    });
+    const v13 = {
+      ...v12,
+      version: 13,
+      followNewViews: true,
+    };
+    expect(migrateUiState(JSON.stringify(v13))).toEqual(v13);
   });
 });
 
