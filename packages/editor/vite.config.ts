@@ -5,6 +5,7 @@ import { loadEnv } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { fileBridge } from './plugins/fileBridge.ts';
+import { phosphorIcons } from './plugins/phosphorIcons.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const engineSrc = fileURLToPath(new URL('../engine/src', import.meta.url));
@@ -19,7 +20,7 @@ export default defineConfig(({ mode }) => {
   const roots = (env.DBML_ROOTS ?? '').split(path.delimiter).map((s) => s.trim()).filter(Boolean);
 
   return {
-    plugins: [vue(), tailwindcss(), fileBridge({ roots: roots.length ? roots : [repoRoot] })],
+    plugins: [vue(), tailwindcss(), phosphorIcons(), fileBridge({ roots: roots.length ? roots : [repoRoot] })],
     envDir: repoRoot,
     resolve: {
       // The editor uses the engine's source, so changes to it reload without a rebuild.
@@ -52,6 +53,8 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       include: ['monaco-editor', 'vue', '@dbml/parse'],
+      // `phosphorIcons()` loads each icon from its own file, so the barrel is never served.
+      exclude: ['@phosphor-icons/vue'],
     },
     test: {
       name: 'editor',
