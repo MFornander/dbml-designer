@@ -1,23 +1,8 @@
 <template>
   <div class="relative h-full w-full overflow-hidden">
-    <DiagramCanvas
+    <EngineDiagram
       ref="canvas"
-      :model="model"
-      :positions="layout.positions"
-      :detail-level="ui.detailLevel"
-      :dark="ui.isDark"
-      :collapsed-groups="layout.collapsedGroups"
-      :show-refs="ui.showRefs"
-      :show-lineage="ui.showLineage"
-      :partial-ref-mode="ui.partialRefMode"
-      :lineage-layout="ui.lineageLayout"
-      :highlight-all="ui.highlightAll"
-      :edge-routes="layout.edgeRoutes"
-      :hidden="views.hidden"
-      :loading="parser.isLoading"
-      @position-change="layout.applyPositionChanges"
-      @edge-route-change="layout.setEdgeRoute"
-      @toggle-group="layout.toggleGroup"
+      :engine="engine"
       @table-click="onTableClick"
       @table-hover="onTableHover"
       @set-color="onSetColor"
@@ -155,14 +140,11 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed, ref, useTemplateRef, watch,
-} from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import {
   PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
-import { DiagramCanvas } from '@/diagram';
-import { buildDiagramModel } from '@/dbml/buildModel';
+import { EngineDiagram } from '@/diagram';
 import { tokenOf } from '@/dbml/token';
 import type { ColorChangePayload, TableLinkPayload, TokenRange } from '@/types/diagram';
 import DetailLevelSelect from '@/components/DetailLevelSelect.vue';
@@ -174,10 +156,9 @@ import { useEditorInstance } from '@/editor/editorInstance';
 import { offsetAt, setColorSetting, setRefColor } from '@/editor/colorEdit';
 import { relationshipText } from '@/editor/refText';
 import { useTextEdits } from '@/editor/useTextEdits';
-import { useLayoutStore } from '@/stores/layoutStore';
+import { useEngineStore } from '@/stores/engineStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
-import { useViewStore } from '@/stores/viewStore';
 
 const TOOLBAR = 'pointer-events-auto flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white/95 px-1 py-0.5 shadow-md dark:border-gray-700 dark:bg-[#2d2f35]/95 select-none';
 const BUTTON = 'h-6 w-8 flex items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 cursor-pointer dark:text-gray-300 dark:hover:bg-[#3a3c44] dark:hover:text-white';
@@ -185,20 +166,16 @@ const ACTIVE = 'bg-blue-600/15 text-blue-700 hover:bg-blue-600/20 hover:text-blu
 const DIVIDER = 'mx-1 h-5 w-px bg-gray-200 dark:bg-gray-600';
 
 const parser = useParserStore();
-const layout = useLayoutStore();
 const ui = useUiStore();
-const views = useViewStore();
+const { engine } = useEngineStore();
 const editorInstance = useEditorInstance();
 const textEdits = useTextEdits();
 
-const canvas = useTemplateRef<InstanceType<typeof DiagramCanvas>>('canvas');
+const canvas = useTemplateRef<InstanceType<typeof EngineDiagram>>('canvas');
 const zoom = ref(1);
 
-const model = computed(() => buildDiagramModel(parser.rawDatabase));
-// The view store follows every parse so its hidden set matches the current definitions.
-watch(model, (m) => views.sync(m), {
-  immediate: true,
-});
+/** What the engine draws: the last error-free parse, converted from DBML. */
+const model = computed(() => engine.diagram.value);
 
 /** Where an element sits in the text being edited; none for one declared in an imported file, where edits and jumps make no sense. */
 function editorToken (source: unknown): TokenRange | undefined {
@@ -250,5 +227,5 @@ function onTableHover (payload: TableLinkPayload | null) {
 }
 
 // Arrange, asked for from the header's View menu, runs here where the canvas measures the tables.
-const { noticeTables: arrangedTables, apply: onArrange, undo: undoArrange } = useArrange(canvas);
+const { noticeTables: arrangedTables, noticeArranged: onArrange, undo: undoArrange } = useArrange(canvas);
 </script>

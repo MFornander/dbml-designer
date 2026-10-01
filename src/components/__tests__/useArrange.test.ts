@@ -21,7 +21,7 @@ const ARRANGED = [
   { key: 'public.posts', x: 400, y: 64 },
 ];
 
-/** Mount useArrange with a canvas that "arranges" by emitting a fixed result, as DiagramPane wires it. */
+/** Mount useArrange with a canvas that "arranges" by storing a fixed result, as the engine's diagram does, and reporting it. */
 function setup () {
   localStorage.clear();
   document.body.innerHTML = '';
@@ -39,7 +39,8 @@ function setup () {
   let api!: ReturnType<typeof useArrange>;
   const canvas: ArrangeCanvas = {
     arrange: vi.fn(() => {
-      api.apply(ARRANGED, []);
+      layout.applyArrangement(ARRANGED, []);
+      api.noticeArranged();
       return true;
     }),
     refit: vi.fn(),

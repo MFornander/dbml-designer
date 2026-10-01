@@ -1,14 +1,6 @@
-import { computed, ref, watch } from 'vue';
+import { ref } from 'vue';
 import { defineStore } from 'pinia';
-import {
-  createLayout, emptyLayoutState, isLayoutState, layoutStateFrom, type LayoutState,
-} from '@/diagram/engine/layout';
-import { usePersistedRef } from '@/utils/persistedRef';
-import { splitLayoutComment, validateLayout } from '@/layout';
-import type { LayoutSnapshot } from '@/layout';
-import { layoutKeysOf } from '@/layout/schemaKeys';
-import { useParserStore } from './parserStore';
-import { useViewStore } from './viewStore';
+import { useEngineStore } from './engineStore';
 
 export type { PositionOrigin } from '@/diagram/engine/layout';
 
@@ -19,48 +11,12 @@ export type { PositionOrigin } from '@/diagram/engine/layout';
 export type ArrangeRequest = 'arrange' | 'arrange-new' | 'undo';
 
 /**
- * The editor's layout: the engine's layers (`createLayout`), persisted, on top of the footers of
- * the files the DBML imports, and pruned against every error-free parse. What it keeps for itself
- * is exactly what its footer records.
+ * The editor's layout: the layers of its engine (see `engineStore`), on top of the footers of the
+ * files the DBML imports. What it keeps for itself is exactly what its footer records.
  */
 export const useLayoutStore = defineStore('layout', () => {
-  const state = usePersistedRef<LayoutState>('layout', emptyLayoutState, {
-    debounceMs: 250,
-    validate: isLayoutState,
-    deserialize: (raw) => layoutStateFrom(JSON.parse(raw) as Partial<LayoutState>),
-  });
-
-  const parser = useParserStore();
-  const viewStore = useViewStore();
-
-  /** The footers of imported files, nearest import first. */
-  const importedSnapshots = computed<LayoutSnapshot[]>(() => {
-    const snapshots: LayoutSnapshot[] = [];
-    for (const { text } of parser.importSources) {
-      const yaml = splitLayoutComment(text).layout;
-      if (yaml === null) continue;
-      const v = validateLayout(yaml);
-      if (v.ok) snapshots.push(v.snapshot);
-    }
-    return snapshots;
-  });
-
-  // While a parse or its imports are on the way the model is the previous text's, so nothing is pruned against it.
-  const validKeys = () => (parser.rawDatabase && !parser.isLoading ? layoutKeysOf(parser.rawDatabase) : null);
-
-  const layout = createLayout({
-    state,
-    activeView: () => viewStore.activeView,
-    bases: () => importedSnapshots.value,
-    validKeys,
-  });
-
-  // rawDatabase only changes after an error-free parse, so a syntax error never prunes positions.
-  watch(() => (parser.isLoading ? undefined : parser.rawDatabase), (db) => {
-    if (db) layout.pruneTo(layoutKeysOf(db));
-  }, {
-    immediate: true,
-  });
+  const { engine } = useEngineStore();
+  const { state: _state, pruneTo: _pruneTo, ...layout } = engine.layout;
 
   const arrangeRequest = ref<ArrangeRequest | null>(null);
 
@@ -73,10 +29,8 @@ export const useLayoutStore = defineStore('layout', () => {
     arrangeRequest.value = null;
   }
 
-  const { state: _state, pruneTo: _pruneTo, ...api } = layout;
-
   return {
-    ...api,
+    ...layout,
     arrangeRequest,
     requestArrange,
     clearArrangeRequest,

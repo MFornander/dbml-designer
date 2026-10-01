@@ -1,7 +1,6 @@
 import {
   computed, onBeforeUnmount, onMounted, ref, watch, type Ref,
 } from 'vue';
-import type { PositionChange } from '@/types/diagram';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -20,9 +19,9 @@ export const ARRANGE_NOTICE_MS = 8000;
 
 /**
  * Arrange in the diagram pane, which holds the canvas and so the measured table sizes: carries
- * out what the View menu asks for through the layout store, stores the canvas's arrangement as
- * one undoable step, takes it back on ⌘Z / Ctrl+Z unless a text field or an editor has focus,
- * and reports it in a short-lived notice with its own Undo.
+ * out what the View menu asks for through the layout store, takes the arrangement the engine
+ * stored back on ⌘Z / Ctrl+Z unless a text field or an editor has focus, and reports it in a
+ * short-lived notice with its own Undo.
  */
 export function useArrange (canvas: Readonly<Ref<ArrangeCanvas | null>>) {
   const layout = useLayoutStore();
@@ -40,9 +39,8 @@ export function useArrange (canvas: Readonly<Ref<ArrangeCanvas | null>>) {
     canvas.value?.arrange(onlyNew ? layout.newTables : undefined);
   }
 
-  /** Store an arrangement the canvas emitted, as one step. */
-  function apply (changes: PositionChange[], resetRoutes: string[]): void {
-    layout.applyArrangement(changes, resetRoutes);
+  /** Report an arrangement the engine just stored as one step. */
+  function noticeArranged (): void {
     noticeUp.value = true;
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
@@ -78,7 +76,7 @@ export function useArrange (canvas: Readonly<Ref<ArrangeCanvas | null>>) {
 
   return {
     noticeTables,
-    apply,
+    noticeArranged,
     undo,
   };
 }
