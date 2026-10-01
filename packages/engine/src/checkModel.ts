@@ -10,7 +10,7 @@ export interface ModelProblem {
 }
 
 interface Schema {
-  type?: string;
+  type?: string | readonly string[];
   required?: readonly string[];
   properties?: Readonly<Record<string, Schema>>;
   items?: Schema;
@@ -25,6 +25,13 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 
 const article = (type: string) => (type === 'object' || type === 'array' ? 'an' : 'a');
 
+/** The JSON Schema type of a value. */
+function jsonType (v: unknown): string {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  return typeof v;
+}
+
 function check (value: unknown, schema: Schema, path: (string | number)[], out: ModelProblem[]): void {
   if (schema.$ref) {
     check(value, DEFINITIONS[schema.$ref.split('/').pop()!]!, path, out);
@@ -36,6 +43,11 @@ function check (value: unknown, schema: Schema, path: (string | number)[], out: 
     message,
     severity,
   });
+  // A choice of plain types, as a record's values have: anything else is drawn as text.
+  if (Array.isArray(schema.type)) {
+    if (!schema.type.includes(jsonType(value))) fail(`Expected ${schema.type.join(', ')}`, 'warning');
+    return;
+  }
   switch (schema.type) {
     case 'object': {
       if (!isObject(value)) {

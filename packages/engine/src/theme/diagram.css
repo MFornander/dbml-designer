@@ -195,6 +195,115 @@
   pointer-events: none;
 }
 
+/* Record values: one record's values right of the types, and the count of several, which opens them */
+.dg-field-value {
+  fill: var(--dg-field-name);
+  font: 400 13px Inconsolata, ui-monospace, monospace;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-field-value.is-null {
+  fill: var(--dg-field-type);
+  fill-opacity: 0.55;
+  font-style: italic;
+}
+
+.dg-records-badge {
+  cursor: pointer;
+}
+
+.dg-records-badge-bg {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
+}
+
+.dg-records-badge:hover .dg-records-badge-bg,
+.dg-records-badge.is-open .dg-records-badge-bg {
+  fill-opacity: 0.3;
+  stroke-opacity: 1;
+}
+
+.dg-records-badge-text {
+  fill: currentColor;
+  font: 600 11px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.dg-records {
+  position: absolute;
+  z-index: 30;
+  max-width: 560px;
+  border-radius: 10px;
+  border: 1px solid var(--dg-tooltip-border);
+  background: var(--dg-tooltip-bg);
+  color: var(--dg-tooltip-text);
+  font: 400 13px/1.4 "Open Sans", system-ui, sans-serif;
+  box-shadow: var(--dg-tooltip-shadow);
+  overflow: hidden;
+}
+
+.dg-records-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 8px;
+  font-weight: 700;
+}
+
+.dg-records-count {
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.dg-records-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid var(--dg-tooltip-border);
+}
+
+.dg-records-table {
+  border-collapse: collapse;
+  font: 400 12px/1.5 Inconsolata, ui-monospace, monospace;
+}
+
+.dg-records-table th {
+  position: sticky;
+  top: 0;
+  padding: 4px 10px;
+  text-align: left;
+  font: 600 12px/1.5 "Open Sans", system-ui, sans-serif;
+  background: var(--dg-tooltip-bg);
+  border-bottom: 1px solid var(--dg-tooltip-border);
+  white-space: nowrap;
+}
+
+.dg-records-table td {
+  max-width: 220px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dg-records-table td.is-number {
+  text-align: right;
+}
+
+.dg-records-table td.is-null {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.dg-records-table tr + tr td {
+  border-top: 1px solid var(--dg-tooltip-border);
+}
+
 /* Relationship and lineage edges */
 
 /*

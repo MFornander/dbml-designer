@@ -102,6 +102,32 @@
             text-anchor="middle"
           >{{ partialBadgeLabel(b.partial) }}</text>
         </g>
+        <!-- The count of the table's records; it opens them as a table -->
+        <g
+          v-if="size.recordsBadge"
+          class="dg-records-badge"
+          role="button"
+          :aria-label="`Show the ${size.recordsBadge.label} of ${table.name}`"
+          :transform="`translate(${size.recordsBadge.x} ${(ROW_H - PARTIAL_BADGE_H) / 2})`"
+          :style="{ color: headerTextColor }"
+          @pointerdown.stop
+          @click.stop="ctx.toggleRecords(table.key)"
+        >
+          <rect
+            class="dg-records-badge-bg"
+            x="0.5"
+            y="0.5"
+            :width="size.recordsBadge.w - 1"
+            :height="PARTIAL_BADGE_H - 1"
+            rx="4"
+          />
+          <text
+            class="dg-records-badge-text"
+            :x="size.recordsBadge.w / 2"
+            :y="PARTIAL_BADGE_H / 2"
+            text-anchor="middle"
+          >{{ size.recordsBadge.label }}</text>
+        </g>
       </template>
       <SettingsGear
         v-if="showGear"
@@ -159,7 +185,7 @@
         </g>
         <text
           class="dg-field-type"
-          :x="w - PAD_X - (size.rows[i]?.badgesW ?? 0)"
+          :x="w - PAD_X - shift - (size.rows[i]?.badgesW ?? 0)"
           :y="ROW_H / 2"
           text-anchor="end"
         >{{ f.typeText }}</text>
@@ -167,7 +193,7 @@
           v-for="badge in badgeLayout(f)"
           :key="badge.kind"
           class="dg-badge"
-          :transform="`translate(${w - PAD_X - badge.right} ${(ROW_H - BADGE_H) / 2})`"
+          :transform="`translate(${w - PAD_X - shift - badge.right} ${(ROW_H - BADGE_H) / 2})`"
         >
           <rect
             class="dg-badge-bg"
@@ -184,6 +210,15 @@
             text-anchor="middle"
           >{{ badge.label }}</text>
         </g>
+        <!-- The record's value, right of the type; null dimmed -->
+        <text
+          v-if="size.rows[i]?.value"
+          class="dg-field-value"
+          :class="`is-${size.rows[i]!.value!.kind}`"
+          :x="w - PAD_X"
+          :y="ROW_H / 2"
+          text-anchor="end"
+        >{{ size.rows[i]!.value!.text }}</text>
       </template>
       <template v-else-if="lod === 'minimal'">
         <rect
@@ -196,7 +231,7 @@
         />
         <rect
           class="dg-placeholder"
-          :x="w - PAD_X - (size.rows[i]?.typeW ?? 0)"
+          :x="w - PAD_X - shift - (size.rows[i]?.typeW ?? 0)"
           :y="(ROW_H - placeholderH) / 2"
           :width="size.rows[i]?.typeW ?? 0"
           :height="placeholderH"
@@ -222,7 +257,7 @@ import type { FieldVM, TableVM } from '../types';
 import type { FieldKey } from '../keys';
 import type { Rect } from '../geometry/rect';
 import {
-  BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, type FieldBadge, type TableSize,
+  BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, valueShift, type FieldBadge, type TableSize,
 } from '../geometry/tableSize';
 import { isKeyField } from '../geometry/lod';
 import {
@@ -256,6 +291,8 @@ const headerStyle = computed(() => ({
   fill: props.table.headerColor ?? props.table.groupColor ?? 'var(--dg-header-bg)',
 }));
 const placeholderH = ROW_H * PLACEHOLDER_HEIGHT_RATIO;
+/** How far the type and its badges sit left of the row's right padding: the width of the value column. */
+const shift = computed(() => valueShift(props.size));
 const showHeaderIcon = computed(() => hasTableDetails(props.table));
 
 /** The gear shows while this table (or one of its fields or badges) is the hovered or pinned element. */

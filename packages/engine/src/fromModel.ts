@@ -119,6 +119,12 @@ function toTableVM (t: ModelTable, order: number, enums: ReadonlySet<string>): T
   if (t.source !== undefined) vm.source = t.source;
   if (t.note) vm.note = t.note;
   if (t.metadata && Object.keys(t.metadata).length > 0) vm.metadata = { ...t.metadata };
+  if (t.records?.length) {
+    vm.records = t.records;
+    // One record is shown on the fields it names.
+    const only = t.records.length === 1 ? t.records[0]! : null;
+    if (only) for (const f of fields) if (Object.prototype.hasOwnProperty.call(only, f.name)) f.value = only[f.name]!;
+  }
   return vm;
 }
 

@@ -13,6 +13,7 @@ export interface TestContext extends DiagramContext {
   drags: DragTarget[];
   toggled: string[];
   colorPicks: ColorTarget[];
+  recordsOpened: string[];
   setLod (lod: AutoLod): void;
 }
 
@@ -23,6 +24,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
   const drags: DragTarget[] = [];
   const toggled: string[] = [];
   const colorPicks: ColorTarget[] = [];
+  const recordsOpened: string[] = [];
   return {
     viewport: shallowRef(IDENTITY_VIEWPORT),
     lod: computed(() => lodRef.value),
@@ -42,11 +44,13 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
     openColorPicker: (t) => colorPicks.push(t),
+    toggleRecords: (k) => recordsOpened.push(k),
     hovers,
     pins,
     drags,
     toggled,
     colorPicks,
+    recordsOpened,
     setLod: (l) => {
       lodRef.value = l;
     },

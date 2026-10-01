@@ -79,6 +79,7 @@ export const useEngineStore = defineStore('engine', () => {
       showRefs: ui.showRefs,
       showLineage: ui.showLineage,
       partialRefMode: ui.partialRefMode,
+      showValues: ui.showValues,
       lineageLayout: ui.lineageLayout,
       highlightAll: ui.highlightAll,
     }),

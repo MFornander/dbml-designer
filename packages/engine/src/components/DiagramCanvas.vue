@@ -174,6 +174,15 @@
       @pick="onPickColor"
       @close="closeColorPicker"
     />
+    <RecordsPreview
+      v-if="recordsPreview"
+      :title="recordsPreview.title"
+      :records="recordsPreview.records"
+      :columns="recordsPreview.columns"
+      :anchor="recordsPreview.anchor"
+      :view-size="pz.viewSize.value"
+      @close="recordsKey = null"
+    />
   </div>
 </template>
 
@@ -216,6 +225,7 @@ import TableGroupNode from './TableGroupNode.vue';
 import StickyNoteNode from './StickyNoteNode.vue';
 import DiagramTooltip from './DiagramTooltip.vue';
 import ColorPickerPopover from './ColorPickerPopover.vue';
+import RecordsPreview from './RecordsPreview.vue';
 import RefEdgeControls from './RefEdgeControls.vue';
 import { installStyles } from '../theme/styles';
 
@@ -231,6 +241,8 @@ const props = withDefaults(defineProps<{
   showLineage?: boolean;
   /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
   partialRefMode?: PartialRefMode;
+  /** Record values on their fields, and the count of a table's records in its header, which opens them. */
+  showValues?: boolean;
   /** Lineage layout: positions derived from dependency order; groups and notes hidden. */
   lineageLayout?: boolean;
   /** Highlight every visible edge: walking ants, names, and endpoint cardinalities. */
@@ -248,6 +260,7 @@ const props = withDefaults(defineProps<{
   showRefs: true,
   showLineage: true,
   partialRefMode: 'badges',
+  showValues: true,
   lineageLayout: false,
   highlightAll: false,
   edgeRoutes: () => ({}),
@@ -315,6 +328,7 @@ const geo = useDiagramGeometry({
   showRefs: toRef(props, 'showRefs'),
   showLineage: toRef(props, 'showLineage'),
   partialRefMode: toRef(props, 'partialRefMode'),
+  showValues: toRef(props, 'showValues'),
   revealedRefs,
   lineageLayout: toRef(props, 'lineageLayout'),
   dragOverride,
@@ -675,6 +689,38 @@ function onPickColor (color: string) {
   }
 }
 
+// Records preview (opened from the count badge in a table header)
+const recordsKey = ref<TableKey | null>(null);
+
+/** The open preview: its table's records, their columns, and the header as anchor; null once the table or its badge is gone. */
+const recordsPreview = computed(() => {
+  const key = recordsKey.value;
+  if (!key || !props.showValues) return null;
+  const table = model.value.tablesByKey.get(key);
+  const box = geo.boxes.value.get(key);
+  const records = table?.records;
+  if (!table || !box || !records || records.length < 2 || !geo.visibleTableKeys.value.has(key)) return null;
+  const named = new Set(records.flatMap((r) => Object.keys(r)));
+  const columns = table.fields.map((f) => f.name).filter((n) => named.has(n));
+  for (const n of named) if (!columns.includes(n)) columns.push(n);
+  const vp = pz.viewport.value;
+  const tl = worldToScreen(vp, box);
+  return {
+    title: table.displayName,
+    records,
+    columns,
+    anchor: {
+      x: tl.x,
+      y: tl.y,
+      w: box.w * vp.k,
+      h: ROW_H * vp.k,
+    },
+  };
+});
+watch(recordsPreview, (v) => {
+  if (!v) recordsKey.value = null;
+});
+
 const tooltip = useTooltip({
   target: hover.hover,
   model,
@@ -685,7 +731,7 @@ const tooltip = useTooltip({
   viewport: pz.viewport,
   pointer,
   // The picker sits where the tooltip would; keep the two from stacking. No tooltips mid route-drag either.
-  suppressed: computed(() => suppressed.value || colorTarget.value !== null || routeDragOverride.value !== null),
+  suppressed: computed(() => suppressed.value || colorTarget.value !== null || recordsKey.value !== null || routeDragOverride.value !== null),
 });
 
 function onWheel (e: WheelEvent) {
@@ -841,7 +887,12 @@ const ctx: DiagramContext = {
       : target, origin);
   },
   toggleGroup: (key: string) => emit('toggle-group', key),
+  toggleRecords: (key: TableKey) => {
+    colorTarget.value = null;
+    recordsKey.value = recordsKey.value === key ? null : key;
+  },
   openColorPicker: (target: ColorTarget) => {
+    recordsKey.value = null;
     colorTarget.value = target;
   },
 };

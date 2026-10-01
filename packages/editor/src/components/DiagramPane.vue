@@ -102,6 +102,16 @@
       <div :class="[TOOLBAR, 'px-1.5 gap-1 ml-auto']">
         <DetailLevelSelect />
         <span :class="DIVIDER" />
+        <!-- Pressed while record values show on their fields, the default -->
+        <button
+          :class="[BUTTON, ui.showValues ? ACTIVE : '']"
+          :title="ui.showValues ? 'Hide record values' : 'Show record values on their fields'"
+          aria-label="Record values"
+          :aria-pressed="ui.showValues"
+          @click="ui.toggleShowValues"
+        >
+          <PhHash class="w-4 h-4" />
+        </button>
         <!-- Pressed while partial refs show as badges, the default -->
         <button
           :class="[BUTTON, ui.partialRefMode === 'badges' ? ACTIVE : '']"
@@ -142,7 +152,7 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue';
 import {
-  PhCornersOut, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
+  PhCornersOut, PhHash, PhLineSegments, PhMinus, PhPlus, PhPuzzlePiece, PhTreeStructure,
 } from '@phosphor-icons/vue';
 import { EngineDiagram, type ColorChangePayload, type TableLinkPayload } from '@dbml-designer/engine';
 import { tokenOf } from '@/dbml/token';

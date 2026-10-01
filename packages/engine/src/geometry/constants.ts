@@ -40,6 +40,14 @@ export const PARTIAL_BADGE_PAD_X = 6;
 /** Space before each badge, after the name (or its note icon) or the previous badge. */
 export const PARTIAL_BADGE_GAP = 6;
 
+// Record values: a column at the right of the field rows when a table has one record
+/** Values are drawn like types, in the monospace face. */
+export const FONT_VALUE = FONT_TYPE;
+/** Space between the type (and its badges) and the value column. */
+export const VALUE_GAP = 14;
+/** The value column never grows wider; longer values end in an ellipsis. */
+export const VALUE_MAX_W = 150;
+
 // Refs
 export const CROW_W = 10;
 export const CROW_H = 4;

@@ -9,6 +9,7 @@
     :show-refs="display.showRefs"
     :show-lineage="display.showLineage"
     :partial-ref-mode="display.partialRefMode"
+    :show-values="display.showValues"
     :lineage-layout="display.lineageLayout"
     :highlight-all="display.highlightAll"
     :edge-routes="edgeRoutes"

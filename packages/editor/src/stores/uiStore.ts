@@ -7,7 +7,7 @@ import { usePersistedRef } from '@/utils/persistedRef';
 export type EdgeMode = 'erd' | 'erd+deps' | 'deps';
 
 interface UiState {
-  version: 10;
+  version: 11;
   theme: ThemeMode;
   detailLevel: DetailLevel;
   /** [editor, diagram] in fr units; the editor is on the left. */
@@ -28,7 +28,12 @@ interface UiState {
   viewsOpen: boolean;
   /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
   partialRefMode: PartialRefMode;
+  /** Record values on their fields, and the count of a table's records in its header. */
+  showValues: boolean;
 }
+
+/** The shape before version 11, which all older ones migrate to first. */
+type V10State = Omit<UiState, 'version' | 'showValues'> & { version: 10 };
 
 /** The layout panel's share of the editor pane until the user drags its handle. */
 export const DEFAULT_LAYOUT_SIZE = 40;
@@ -41,7 +46,7 @@ const PARTIAL_REF_MODES: readonly PartialRefMode[] = ['badges', 'lines'];
 function isUiState (v: unknown): v is UiState {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Partial<UiState>;
-  return s.version === 10
+  return s.version === 11
     && THEMES.includes(s.theme as ThemeMode)
     && LEVELS.includes(s.detailLevel as DetailLevel)
     && Array.isArray(s.splitSizes) && s.splitSizes.length === 2
@@ -54,7 +59,8 @@ function isUiState (v: unknown): v is UiState {
     && typeof s.layoutSize === 'number' && s.layoutSize > 0 && s.layoutSize < 100
     && typeof s.editorCollapsed === 'boolean'
     && typeof s.viewsOpen === 'boolean'
-    && PARTIAL_REF_MODES.includes(s.partialRefMode as PartialRefMode);
+    && PARTIAL_REF_MODES.includes(s.partialRefMode as PartialRefMode)
+    && typeof s.showValues === 'boolean';
 }
 
 /**
@@ -64,22 +70,32 @@ function isUiState (v: unknown): v is UiState {
  * version 5 added the editor view (DBML text or layout YAML); version 6 added
  * the collapsed-editor flag; version 7 replaced the editor view with the
  * collapsible layout panel's open flag; version 8 added that panel's height; version 9 added
- * the Diagram Views panel's open flag; version 10 adds how partial refs are drawn, badges by default.
+ * the Diagram Views panel's open flag; version 10 added how partial refs are drawn, badges by
+ * default; version 11 adds the Values toggle, on by default.
  */
 export function migrateUiState (raw: string): UiState {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
+  if ((parsed.version as number) >= 11) return parsed as unknown as UiState;
+  return {
+    ...migrateToV10(parsed),
+    version: 11,
+    showValues: true,
+  };
+}
+
+function migrateToV10 (parsed: Record<string, unknown>): V10State {
   const version = parsed.version as number;
-  if (version >= 10) return parsed as unknown as UiState;
+  if (version >= 10) return parsed as unknown as V10State;
   if (version === 9) {
     return {
-      ...(parsed as unknown as UiState),
+      ...(parsed as unknown as V10State),
       version: 10,
       partialRefMode: 'badges',
     };
   }
   if (version === 8) {
     return {
-      ...(parsed as unknown as UiState),
+      ...(parsed as unknown as V10State),
       version: 10,
       viewsOpen: false,
       partialRefMode: 'badges',
@@ -87,7 +103,7 @@ export function migrateUiState (raw: string): UiState {
   }
   if (version === 7) {
     return {
-      ...(parsed as unknown as UiState),
+      ...(parsed as unknown as V10State),
       version: 10,
       layoutSize: DEFAULT_LAYOUT_SIZE,
       viewsOpen: false,
@@ -97,7 +113,7 @@ export function migrateUiState (raw: string): UiState {
   if (version === 5 || version === 6) {
     const { editorView, ...rest } = parsed;
     return {
-      ...(rest as unknown as UiState),
+      ...(rest as unknown as V10State),
       version: 10,
       layoutOpen: editorView === 'layout',
       layoutSize: DEFAULT_LAYOUT_SIZE,
@@ -108,7 +124,7 @@ export function migrateUiState (raw: string): UiState {
   }
   if (version === 4) {
     return {
-      ...(parsed as unknown as UiState),
+      ...(parsed as unknown as V10State),
       version: 10,
       layoutOpen: false,
       layoutSize: DEFAULT_LAYOUT_SIZE,
@@ -158,7 +174,7 @@ function preferredTheme (): ThemeMode {
 
 export const useUiStore = defineStore('ui', () => {
   const state = usePersistedRef<UiState>('ui', () => ({
-    version: 10,
+    version: 11,
     theme: preferredTheme(),
     detailLevel: 'all',
     splitSizes: [40, 60],
@@ -171,6 +187,7 @@ export const useUiStore = defineStore('ui', () => {
     editorCollapsed: false,
     viewsOpen: false,
     partialRefMode: 'badges',
+    showValues: true,
   }), {
     validate: isUiState,
     deserialize: migrateUiState,
@@ -190,6 +207,7 @@ export const useUiStore = defineStore('ui', () => {
   const editorCollapsed = computed(() => state.value.editorCollapsed);
   const viewsOpen = computed(() => state.value.viewsOpen);
   const partialRefMode = computed(() => state.value.partialRefMode);
+  const showValues = computed(() => state.value.showValues);
 
   const splitSizes = computed<number[]>({
     get: () => [...state.value.splitSizes],
@@ -265,6 +283,11 @@ export const useUiStore = defineStore('ui', () => {
     setPartialRefMode(state.value.partialRefMode === 'badges' ? 'lines' : 'badges');
   }
 
+  /** Show or hide record values on their fields and record counts in table headers. */
+  function toggleShowValues (): void {
+    state.value.showValues = !state.value.showValues;
+  }
+
   watch(theme, (t) => {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', t === 'dark');
@@ -305,5 +328,7 @@ export const useUiStore = defineStore('ui', () => {
     partialRefMode,
     setPartialRefMode,
     togglePartialRefMode,
+    showValues,
+    toggleShowValues,
   };
 });

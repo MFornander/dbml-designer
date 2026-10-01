@@ -80,8 +80,20 @@ export const MODEL_SCHEMA = {
         indexes: arrayOf('index', 'Indexes; a `pk` index marks a composite primary key.'),
         checks: list('Check constraints as shown, for example `positive: price > 0`.'),
         partials: arrayOf('partial', 'The TablePartials the table injects, in injection order.'),
+        records: {
+          type: 'array',
+          items: ref('record'),
+          description: 'Rows of data by field name. One shows its values on the fields; several show their count in the header, which opens them.',
+        },
         source: SOURCE,
       },
+    },
+    record: {
+      type: 'object',
+      additionalProperties: {
+        type: ['string', 'number', 'boolean', 'null'],
+      },
+      description: 'One row: values by field name; dates and times as text.',
     },
     partial: {
       type: 'object',

@@ -229,6 +229,9 @@ const refEnd = (e: RefEndpointVM) => `${e.tableKey}${e.fieldNames.length ? `(${e
 
 const column = (e: EdgeEndpointVM) => `${e.tableKey}.${e.fieldNames[0] ?? ''}`;
 
+/** How many of a table's records the listing shows. */
+const LISTED_RECORDS = 20;
+
 /** A compact, line-oriented rendering of a model for reading in a terminal, as the engine resolves it. */
 export function formatModelText (model: Model): string {
   const m = fromModel(model);
@@ -239,6 +242,18 @@ export function formatModelText (model: Model): string {
     for (const f of t.fields) {
       const fl = flagsOf(f);
       lines.push(`    ${f.name} ${f.typeText}${fl ? ` [${fl}]` : ''}${f.note ? `  # ${f.note}` : ''}`);
+    }
+  }
+  const withRecords = m.tables.filter((t) => t.records?.length);
+  if (withRecords.length) {
+    lines.push('RECORDS');
+    for (const t of withRecords) {
+      const records = t.records!;
+      lines.push(`  ${t.key}  (${records.length} ${records.length === 1 ? 'row' : 'rows'})`);
+      for (const r of records.slice(0, LISTED_RECORDS)) {
+        lines.push(`    ${Object.entries(r).map(([k, v]) => `${k}=${typeof v === 'string' ? JSON.stringify(v) : String(v)}`).join(', ')}`);
+      }
+      if (records.length > LISTED_RECORDS) lines.push(`    and ${records.length - LISTED_RECORDS} more`);
     }
   }
   lines.push('REFS');

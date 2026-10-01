@@ -14,6 +14,7 @@ const FLAGS = {
   editorCollapsed: false,
   viewsOpen: false,
   partialRefMode: 'badges',
+  showValues: true,
 };
 
 describe('migrateUiState', () => {
@@ -26,7 +27,7 @@ describe('migrateUiState', () => {
       problemsOpen: true,
     });
     expect(migrateUiState(v1)).toEqual({
-      version: 10,
+      version: 11,
       theme: 'dark',
       detailLevel: 'keys',
       splitSizes: [40, 60],
@@ -48,7 +49,7 @@ describe('migrateUiState', () => {
     expect(migrateUiState(v2(false)).edgeMode).toBe('erd');
     expect(migrateUiState(v2(true)).edgeMode).toBe('erd+deps');
     expect(migrateUiState(v2(true)).splitSizes).toEqual([35, 65]);
-    expect(migrateUiState(v2(true)).version).toBe(10);
+    expect(migrateUiState(v2(true)).version).toBe(11);
   });
 
   it('keeps the version 3 edge mode and adds the new toggles switched off', () => {
@@ -61,7 +62,7 @@ describe('migrateUiState', () => {
       edgeMode: 'deps',
     });
     expect(migrateUiState(v3)).toEqual({
-      version: 10,
+      version: 11,
       theme: 'light',
       detailLevel: 'all',
       splitSizes: [35, 65],
@@ -85,12 +86,13 @@ describe('migrateUiState', () => {
   it('adds the layout panel, collapsed, and views panel flags when upgrading from version 4, keeping the toggles', () => {
     expect(migrateUiState(JSON.stringify(v4))).toEqual({
       ...v4,
-      version: 10,
+      version: 11,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: false,
       viewsOpen: false,
       partialRefMode: 'badges',
+      showValues: true,
     });
   });
 
@@ -102,12 +104,13 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v5))).toEqual({
       ...v4,
-      version: 10,
+      version: 11,
       layoutOpen: true,
       layoutSize: 40,
       editorCollapsed: false,
       viewsOpen: false,
       partialRefMode: 'badges',
+      showValues: true,
     });
     const v6 = {
       ...v4,
@@ -117,12 +120,13 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v6))).toEqual({
       ...v4,
-      version: 10,
+      version: 11,
       layoutOpen: false,
       layoutSize: 40,
       editorCollapsed: true,
       viewsOpen: false,
       partialRefMode: 'badges',
+      showValues: true,
     });
   });
 
@@ -135,10 +139,11 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v7))).toEqual({
       ...v7,
-      version: 10,
+      version: 11,
       layoutSize: 40,
       viewsOpen: false,
       partialRefMode: 'badges',
+      showValues: true,
     });
   });
 
@@ -153,13 +158,14 @@ describe('migrateUiState', () => {
   it('adds the views panel flag when upgrading from version 8', () => {
     expect(migrateUiState(JSON.stringify(v8))).toEqual({
       ...v8,
-      version: 10,
+      version: 11,
       viewsOpen: false,
       partialRefMode: 'badges',
+      showValues: true,
     });
   });
 
-  it('draws partial refs as badges when upgrading from version 9, and passes version 10 through unchanged', () => {
+  it('draws partial refs as badges when upgrading from version 9', () => {
     const v9 = {
       ...v8,
       version: 9,
@@ -167,15 +173,47 @@ describe('migrateUiState', () => {
     };
     expect(migrateUiState(JSON.stringify(v9))).toEqual({
       ...v9,
-      version: 10,
+      version: 11,
       partialRefMode: 'badges',
+      showValues: true,
     });
+  });
+
+  it('shows record values when upgrading from version 10, and passes version 11 through unchanged', () => {
     const v10 = {
-      ...v9,
+      ...v8,
       version: 10,
+      viewsOpen: true,
       partialRefMode: 'lines',
     };
-    expect(migrateUiState(JSON.stringify(v10))).toEqual(v10);
+    expect(migrateUiState(JSON.stringify(v10))).toEqual({
+      ...v10,
+      version: 11,
+      showValues: true,
+    });
+    const v11 = {
+      ...v10,
+      version: 11,
+      showValues: false,
+    };
+    expect(migrateUiState(JSON.stringify(v11))).toEqual(v11);
+  });
+});
+
+describe('useUiStore values', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  it('shows record values by default, hides them, and remembers the choice', async () => {
+    const ui = useUiStore();
+    expect(ui.showValues).toBe(true);
+    ui.toggleShowValues();
+    expect(ui.showValues).toBe(false);
+    await nextTick();
+    setActivePinia(createPinia());
+    expect(useUiStore().showValues).toBe(false);
   });
 });
 

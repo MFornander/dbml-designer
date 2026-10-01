@@ -4,6 +4,8 @@ import {
 import type {
   DiagramModel, EdgeEndpointVM, EnumValueVM, FieldVM, IndexVM,
 } from '../types';
+import type { ModelRecord } from '../model';
+import { fullValue } from '../geometry/values';
 import { DEFAULT_SCHEMA } from '../keys';
 import type { NoteKey, TableKey } from '../keys';
 import type { Point, Rect } from '../geometry/rect';
@@ -42,6 +44,21 @@ export interface TooltipContent {
   primaryKey?: string;
   /** The refs a partial gives a table, as `field (card) → table.field (card)`. */
   refs?: string[];
+  /** A field's value in full, when its table has one record. */
+  value?: string;
+  /** A field's values in a table with several records, in full, the list cut short at `TOOLTIP_VALUES`. */
+  values?: string[];
+}
+
+/** How many of a column's values a field's tooltip lists. */
+export const TOOLTIP_VALUES = 10;
+
+/** The values a field's tooltip lists for a table with several records. */
+function columnValues (records: readonly ModelRecord[], field: string): string[] {
+  const named = records.filter((r) => Object.prototype.hasOwnProperty.call(r, field));
+  const listed = named.slice(0, TOOLTIP_VALUES).map((r) => fullValue(r[field]!));
+  if (named.length > TOOLTIP_VALUES) listed.push(`and ${named.length - TOOLTIP_VALUES} more`);
+  return listed;
 }
 
 export interface UseTooltipInputs {
@@ -128,7 +145,10 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
       const metadata = metadataEntries(f.metadata);
       const lines: string[] = [];
       if (f.injectedFrom) lines.push(`from partial ${f.injectedFrom}`);
-      if (!f.note && !en && !f.dbdefault && flags.length === 0 && !f.checks?.length && !metadata && lines.length === 0) {
+      const value = f.value !== undefined ? fullValue(f.value) : undefined;
+      const values = (t.records?.length ?? 0) > 1 ? columnValues(t.records!, f.name) : [];
+      if (!f.note && !en && !f.dbdefault && flags.length === 0 && !f.checks?.length && !metadata && lines.length === 0
+        && value === undefined && values.length === 0) {
         return null;
       }
       return {
@@ -148,6 +168,8 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
         ...(f.checks?.length ? { checks: f.checks } : {}),
         ...(metadata ? { metadata } : {}),
         ...(f.note ? { note: f.note } : {}),
+        ...(value !== undefined ? { value } : {}),
+        ...(values.length ? { values } : {}),
       };
     }
     case 'partial': {

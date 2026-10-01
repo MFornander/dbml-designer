@@ -27,6 +27,8 @@ export interface DisplayOptions {
   showLineage: boolean;
   /** Refs that come from a TablePartial: a badge per partial in the table header, or lines like the rest. */
   partialRefMode: PartialRefMode;
+  /** Record values on their fields, and the count of a table's records in its header, which opens them. */
+  showValues: boolean;
   /** Lay tables out by dependency order instead of their stored positions. */
   lineageLayout: boolean;
   /** Highlight every edge: walking ants, names, and cardinalities. */
@@ -39,6 +41,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   showRefs: true,
   showLineage: true,
   partialRefMode: 'badges',
+  showValues: true,
   lineageLayout: false,
   highlightAll: false,
 };

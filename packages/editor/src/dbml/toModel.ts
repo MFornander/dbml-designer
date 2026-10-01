@@ -2,7 +2,9 @@ import type {
   Check, Column, Database, Index, Ref, RefEndpoint, TablePartial,
 } from '@dbml/parse';
 import {
-  DEFAULT_SCHEMA, enumKey, groupKey, normalizeSchema, tableKey, type TableKey, type Model, type ModelDep, type ModelEdgeEnd, type ModelField, type ModelGroup, type ModelIndex, type ModelRef, type ModelTable, type ModelView, type ModelDiagnostic,
+  DEFAULT_SCHEMA, enumKey, groupKey, normalizeSchema, tableKey,
+  type TableKey, type Model, type ModelDep, type ModelEdgeEnd, type ModelField, type ModelGroup, type ModelIndex, type ModelRef, type ModelTable,
+  type ModelValue, type ModelView, type ModelDiagnostic,
 } from '@dbml-designer/engine/core';
 import { expandPartials } from './expandPartials';
 import { toTokenRange } from './token';
@@ -66,6 +68,13 @@ function partialKeyColumns (p: TablePartial): string[] {
   if (fields.length > 0) return fields;
   const index = (p.indexes ?? []).find((i) => i.pk);
   return (index?.columns ?? []).map(indexColumn);
+}
+
+/** A record value as the model holds it: the parser's text, number, boolean, or null; anything else as text. */
+function recordValue (v: unknown): ModelValue {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
+  return String(v);
 }
 
 /** Anonymous table groups get a stable name from their declaration order. */
@@ -217,6 +226,16 @@ export function toModel (raw: Database | undefined): DbmlModel {
       fields: [...ep.fieldNames],
     };
   };
+
+  // Records: rows of data by field name, on the table they belong to.
+  const modelTables = new Map(model.tables.map((t) => [tableKey(t.schema, t.name), t]));
+  for (const r of raw.records ?? []) {
+    const tk = resolveTable(r.schemaName, r.tableName);
+    const table = tk ? modelTables.get(tk) : undefined;
+    if (!table) continue;
+    const rows = r.values.map((row) => Object.fromEntries(r.columns.map((c, i) => [c, recordValue(row[i]?.value)])));
+    table.records = [...(table.records ?? []), ...rows];
+  }
 
   // Table groups
   const groupKeys = new Set<string>();

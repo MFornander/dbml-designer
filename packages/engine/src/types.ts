@@ -1,4 +1,4 @@
-import type { Source } from './model';
+import type { ModelRecord, ModelValue, Source } from './model';
 import type {
   DepKey, EnumKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
 } from './keys';
@@ -75,6 +75,8 @@ export interface FieldVM {
   metadata?: Record<string, string>;
   /** Name of the TablePartial this field was injected from. */
   injectedFrom?: string;
+  /** The field's value when its table has exactly one record and the record names the field. */
+  value?: ModelValue;
   source?: Source;
 }
 
@@ -108,6 +110,8 @@ export interface TableVM {
   groupKey?: GroupKey;
   /** Refs the table gets from each injected TablePartial that carries any, in injection order; set only when there are some. */
   partialRefs?: PartialRefsVM[];
+  /** The table's rows of data; set only when there are some. */
+  records?: readonly ModelRecord[];
   /** Declaration order. */
   order: number;
   source?: Source;

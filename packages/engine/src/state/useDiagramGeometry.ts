@@ -76,6 +76,8 @@ export interface GeometryInputs {
   partialRefMode: Ref<PartialRefMode>;
   /** Partial refs drawn in badge mode all the same: those of the hovered or pinned badge. */
   revealedRefs: Ref<ReadonlySet<RefKey>>;
+  /** Record values on their fields, and the count of a table's records in its header. */
+  showValues: Ref<boolean>;
   /** Lineage layout: tables with lineage edges laid out by dependency order; everything else hidden. */
   lineageLayout: Ref<boolean>;
   dragOverride: Ref<DragOverride | null>;
@@ -173,20 +175,21 @@ export function useDiagramGeometry (input: GeometryInputs) {
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
       const badges = partialBadges.value ? partialsOf(t) : [];
-      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges));
+      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges, input.showValues.value));
     }
     return map;
   });
 
   /**
-   * Sizes at the "all fields" level with every partial badge, used for placement so layouts
-   * survive detail-level changes and switching partial refs between badges and lines.
+   * Sizes at the "all fields" level with every partial badge and record value, used for placement
+   * so layouts survive detail-level changes, switching partial refs between badges and lines, and
+   * turning values on and off.
    */
   const fullSizes = computed(() => {
     void input.measureVersion.value;
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
-      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t)));
+      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t), true));
     }
     return map;
   });

@@ -16,6 +16,12 @@
 /** Anything the host wants to recognize an element by; handed back untouched. */
 export type Source = unknown;
 
+/** A value in a record, as the host has it; dates and times as text. */
+export type ModelValue = string | number | boolean | null;
+
+/** One row of a table's data, by field name. A field the record does not name has no value in it. */
+export type ModelRecord = Record<string, ModelValue>;
+
 export interface Model {
   project?: ModelProject;
   tables: ModelTable[];
@@ -52,6 +58,11 @@ export interface ModelTable {
    * them, with this table at their first end, are drawn as a badge per partial in the header.
    */
   partials?: ModelPartial[];
+  /**
+   * Rows of data, such as sample rows or the rows a trace touched. With one, each field it names
+   * shows its value; with several, the header shows their count, which opens them as a table.
+   */
+  records?: ModelRecord[];
   source?: Source;
 }
 

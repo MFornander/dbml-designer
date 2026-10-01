@@ -15,7 +15,8 @@
           { "name": "line_id", "type": "int", "pk": true },
           { "name": "item_id", "type": "int", "note": "Picks the item whose cost is used." },
           { "name": "quantity", "type": "int" }
-        ]
+        ],
+        "records": [{ "line_id": 1, "item_id": 7, "quantity": 4 }]
       },
       {
         "schema": "input",
@@ -24,7 +25,8 @@
         "fields": [
           { "name": "item_id", "type": "int", "pk": true },
           { "name": "unit_cost", "type": "decimal(10,2)" }
-        ]
+        ],
+        "records": [{ "item_id": 7, "unit_cost": 12.5 }]
       },
       {
         "schema": "input",
@@ -33,7 +35,8 @@
         "fields": [
           { "name": "markup_id", "type": "int", "pk": true },
           { "name": "rate", "type": "decimal(5,4)" }
-        ]
+        ],
+        "records": [{ "markup_id": 1, "rate": 0.2 }]
       },
       {
         "schema": "money",
@@ -43,7 +46,8 @@
         "fields": [
           { "name": "line_id", "type": "int", "pk": true },
           { "name": "price", "type": "decimal(12,2)" }
-        ]
+        ],
+        "records": [{ "line_id": 1, "price": 60 }]
       }
     ],
     "refs": [
