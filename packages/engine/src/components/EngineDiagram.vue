@@ -14,6 +14,7 @@
     :pick-colors="display.pickColors"
     :lineage-layout="display.lineageLayout"
     :highlight-all="display.highlightAll"
+    :reveal-added="display.revealAdded"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"
@@ -26,6 +27,9 @@
     @table-hover="emit('table-hover', $event)"
     @set-color="emit('set-color', $event)"
     @zoom-change="emit('zoom-change', $event)"
+    @viewport-change="emit('viewport-change', $event)"
+    @element-click="emit('element-click', $event)"
+    @element-hover="emit('element-hover', $event)"
   />
 </template>
 
@@ -38,7 +42,9 @@
 import {
   computed, onBeforeUnmount, onMounted, useTemplateRef,
 } from 'vue';
-import type { ColorChangePayload, PositionChange, TableLinkPayload } from '../types';
+import type {
+  ColorChangePayload, DiagramViewport, ElementClickEvent, ElementEvent, PositionChange, TableLinkPayload,
+} from '../types';
 import DiagramCanvas from './DiagramCanvas.vue';
 import type { DiagramHandle, Engine } from '../engine/engine';
 
@@ -49,6 +55,12 @@ const emit = defineEmits<{
   /** A color was chosen in the picker; the host decides where it is written. */
   'set-color': [payload: ColorChangePayload];
   'zoom-change': [k: number];
+  /** The pan or zoom changed. */
+  'viewport-change': [viewport: DiagramViewport];
+  /** Any element was clicked; `preventDefault()` keeps the engine from pinning and selecting it. */
+  'element-click': [event: ElementClickEvent];
+  /** The pointer moved onto an element, or off every element (null). */
+  'element-hover': [event: ElementEvent | null];
   /** An arrangement was stored in the layout, as one step `undoArrange` can take back. */
   'arrange': [changes: PositionChange[], resetRoutes: string[]];
 }>();
@@ -70,6 +82,10 @@ function onArrange (changes: PositionChange[], resetRoutes: string[]): void {
 
 const handle: DiagramHandle = {
   fitToScreen: () => canvas.value?.fitToScreen(),
+  fit: (keys) => canvas.value?.fit(keys),
+  rectOf: (key) => canvas.value?.rectOf(key) ?? null,
+  viewport: () => canvas.value?.viewport ?? null,
+  setViewport: (v) => canvas.value?.setViewport(v),
   resetZoom: () => canvas.value?.resetZoom(),
   zoomIn: () => canvas.value?.zoomIn(),
   zoomOut: () => canvas.value?.zoomOut(),

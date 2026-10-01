@@ -2,6 +2,8 @@ import type { ModelRecord, ModelValue, Source } from './model';
 import type {
   DepKey, EnumKey, FieldKey, GroupKey, NoteKey, RefKey, TableKey,
 } from './keys';
+import type { Point, Rect } from './geometry/rect';
+import type { HoverTarget } from './state/useHover';
 
 /** Stored placement. `w` and `h` are only used by resizable elements (sticky notes). */
 export interface XY {
@@ -31,6 +33,35 @@ export interface TableLinkPayload {
   key: TableKey;
   source: unknown;
 }
+
+/** An element the pointer is over, with where it is drawn. */
+export interface ElementEvent {
+  /** What it is: a table, field, partial badge, ref, lineage edge or column pair, group, or note. */
+  target: HoverTarget;
+  /** The `source` the model gave the element, if any. */
+  source?: Source;
+  /** Where it is drawn, in client coordinates like `getBoundingClientRect`; null when it is not drawn. */
+  rect: Rect | null;
+  /** Where the pointer was, in client coordinates, to anchor a popover at; null before the pointer has moved over the diagram. */
+  point: Point | null;
+}
+
+/** An element clicked, with where it is drawn; the host may keep the engine from pinning and selecting it. */
+export interface ElementClickEvent extends ElementEvent {
+  /** Keep the engine from its own response to this click: pinning the element and selecting it. */
+  preventDefault (): void;
+  readonly defaultPrevented: boolean;
+}
+
+/** The diagram's pan and zoom: a point at diagram coordinates (px, py) is drawn at (px·zoom + x, py·zoom + y) in the pane. */
+export interface DiagramViewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** What the view does when an update adds tables: pan to bring them into view, keep the whole diagram fitted until the user pans or zooms, or nothing. */
+export type RevealAdded = 'pan' | 'fit' | 'none';
 
 /** What the color picker is editing: a table header, a group header, a sticky note, or a relationship line. */
 export interface ColorTarget {

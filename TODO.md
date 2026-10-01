@@ -139,6 +139,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Column mappings keep their kind (engine 0.3.0, breaking): a value and a row dep between the same two columns used to collapse into one mapping, dropping the second. Now the column pair (`DepColumnVM`, key `dep:a(c)->b(c)`) holds every mapping between those columns in `mappings` (`DepMappingVM`, key `dep:a(c)->b(c)#kind`, or the pair's key for a dep without a kind), strongest kind first, each with its own name, note, and metadata. The pair is still drawn as one curve, styled by its strongest kind (`value`, then `row`), so a key column that is both projected and joined on does not draw twice; its tooltip lists every kind.
 
+- [x] Element events and the viewport (engine 0.4.0): `element-click` and `element-hover` (`onElementClick`, `onElementHover` for `mount`) report every table, field, partial badge, ref, lineage edge or column pair, group, and note, as the existing `HoverTarget`, with its `source` and its rectangle in client coordinates; a click's `preventDefault()` keeps the engine from pinning and selecting. `engine.rectOf(key)` works the rectangle out from the layout, so it stays right through pan, zoom, and redraws. `engine.viewport`, `setViewport`, `fit(keys?)`, and `viewport-change` read and set the pan and zoom. Display option `revealAdded` (`pan`, `fit`, `none`) says what the view does when an update adds tables; `fit` keeps a growing walk fitted until the user pans or zooms. Pressing a table without moving it no longer ends the automatic fit.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

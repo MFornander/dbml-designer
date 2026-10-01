@@ -16,7 +16,8 @@ export interface DiagramContext {
   dragging: ShallowRef<DragTarget | null>;
   setHover (target: HoverTarget | null): void;
   clearHover (): void;
-  togglePin (target: HoverTarget): void;
+  /** An edge was clicked: tell the host, then pin it unless the host asked not to. */
+  clickEdge (target: HoverTarget): void;
   beginDrag (e: PointerEvent, target: DragTarget, origin: Point): void;
   toggleGroup (key: string): void;
   /** Whether hovered tables, groups, notes, and selected edges offer the color picker. */

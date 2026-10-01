@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.3.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.4.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.3.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.4.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -215,6 +215,10 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `arrange(onlyNew?)` | Lay out what the view shows by group and lineage, or only the tables placed automatically since the layout was loaded. False when nothing is mounted or there is nothing to do. |
 | `undoArrange()` | Take the last arrangement back while nothing has changed since. |
 | `fitToScreen()`, `zoomIn()`, `zoomOut()`, `resetZoom()` | The mounted diagram's viewport. |
+| `fit(keys?)` | Fit the view to these elements by key, or to the whole diagram like `fitToScreen()`. |
+| `viewport` | The pan and zoom, `DiagramViewport` `{ x, y, zoom }`: a point at diagram coordinates (px, py) is drawn at (px·zoom + x, py·zoom + y) in the pane. Null while no diagram is mounted. |
+| `setViewport(partial)` | Pan and zoom; what is left out stays. |
+| `rectOf(key)` | Where a table, field, group, note, or edge is drawn, in client coordinates like `getBoundingClientRect`, worked out from the layout, so it stays right as elements redraw; a mapping of one kind (`…#kind`) is where its column pair is. Null when it is not drawn. |
 | `elementOf(key)` | The drawn element of a table, field, group, note, or edge, by key; null when it is not drawn. See [Keys and the DOM](#keys-and-the-dom). |
 | `attach(handle)` | Used by `EngineDiagram` to connect a mounted diagram. |
 | `dispose()` | Stop following the inputs. |
@@ -233,6 +237,7 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `lineageLayout` | `false` | Lay tables out by dependency order instead of their stored positions; nothing can be moved meanwhile. |
 | `highlightAll` | `false` | Highlight every edge. |
 | `pickColors` | `true` | Offer the color picker on hovered tables, groups, and notes and on a selected relationship. The picked color comes back as `set-color`; the host writes it into its model. |
+| `revealAdded` | `'pan'` | `RevealAdded`: when an update adds tables, `'pan'` brings them into view at the same zoom; `'fit'` keeps the whole diagram fitted as it grows until the user pans or zooms, then pans; `'none'` leaves the view alone. |
 
 **Views** (`engine.views`, a `Views`)
 
@@ -278,13 +283,16 @@ A `LayoutSnapshot` is plain JSON: `positions`, `collapsedGroups`, `expandedGroup
 
 | Event | Payload | When |
 |---|---|---|
-| `table-click` | `TableLinkPayload`: `{ key, source }` | A table was clicked. |
+| `element-click` | `ElementClickEvent`: `{ target, source, rect, point, preventDefault() }` | A table, field, partial badge, ref, lineage edge or column pair, group, or note was clicked. `target` is a `HoverTarget`; `rect` is where it is drawn and `point` where the pointer was, both in client coordinates. `preventDefault()` keeps the engine from pinning and selecting it. |
+| `element-hover` | `ElementEvent`: `{ target, source, rect, point }`, or null | The pointer moved onto an element, or off every element. |
+| `table-click` | `TableLinkPayload`: `{ key, source }` | A table was clicked; `element-click` says the same and more. |
 | `table-hover` | `TableLinkPayload` or null | The pointer entered a table, or left every table. |
 | `set-color` | `ColorChangePayload`: `{ kind, key, color }` | A color was picked for a table, group, note, or ref (`ColorTarget`); the host writes it into its model. |
 | `zoom-change` | the zoom factor | The zoom changed. |
+| `viewport-change` | `DiagramViewport` | The pan or zoom changed. |
 | `arrange` | `PositionChange[]`, reset route keys | An arrangement was stored. |
 
-**`mount(element, options)`** draws into any element and returns a `MountedDiagram`: `engine` and `unmount()`. Its `MountOptions` are those of `createEngine`, or an `engine` made elsewhere, plus the events as callbacks: `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, and `onArrange`. `unmount()` disposes an engine that `mount` created.
+**`mount(element, options)`** draws into any element and returns a `MountedDiagram`: `engine` and `unmount()`. Its `MountOptions` are those of `createEngine`, or an `engine` made elsewhere, plus the events as callbacks: `onElementClick`, `onElementHover`, `onTableClick`, `onTableHover`, `onSetColor`, `onZoomChange`, `onViewportChange`, and `onArrange`. `unmount()` disposes an engine that `mount` created.
 
 `DiagramCanvas` is the component `EngineDiagram` wraps, for hosts that keep their own state; it takes the drawn model, positions, and display options as props.
 
@@ -321,19 +329,17 @@ A host can grow a model it gave as a value a little at a time with `addTables`, 
 
 Tables without a position are placed as they are drawn. One that a dep connects to a placed table goes beside it: an upstream table to the left of the table that reads it, else a downstream table to the right of the one it reads, level with it and pushed down past whatever is in the way, so several stack top to bottom. Tables placed this way anchor the next; tables already placed never move. The others are packed in columns at the right. Add a table and the edges that connect it in the same task, so they are placed together.
 
-What an update adds is highlighted for `MARK_MS` (two seconds); updates in quick succession light up together. The zoom and pan stay where they are, except to bring the tables an update added into view when they land off screen. `markChanges()` asks for the same for a model given another way; a request waits `MARK_WAIT_MS` for the next model.
+What an update adds is highlighted for `MARK_MS` (two seconds); updates in quick succession light up together. The zoom and pan stay where they are, except to bring the tables an update added into view when they land off screen; with `revealAdded: 'fit'` the whole diagram stays fitted as it grows, until the user pans or zooms. `markChanges()` asks for the same for a model given another way; a request waits `MARK_WAIT_MS` for the next model.
 
 ```ts
 engine.addTables([{ schema: 'input', name: 'item', fields: [{ name: 'unit_cost', type: 'double' }], records: [{ unit_cost: 12.5 }] }]);
 engine.addEdges([{ from: { table: 'input.item', fields: ['unit_cost'] }, to: { table: 'money.line_price', fields: ['price'] }, kind: 'value' }]);
 engine.addToView('trace_L1_price', ['input.item']);
-const row = engine.elementOf('money.line_price.price'); // the field's row, to anchor a tooltip of the host's own
+const row = engine.rectOf('money.line_price.price'); // where the field's row is on screen, to anchor a popover of the host's own
 ```
 
 ## Limitations
 
-- Only table clicks and hovers reach the host. Field and edge hovers, clicks, and pins stay inside the diagram.
-- The viewport has fit and zoom methods and the `zoom-change` event, but no pan method and no way to read it.
 - A host without Vue cannot subscribe to changes in the engine's state; it reads `.value` after its own calls and listens to the events.
 - `addTables` and the other methods that grow the model replace a model given as a getter with a value.
 - Positions are stored by key, so a renamed table loses its position and is placed again.
@@ -349,7 +355,7 @@ Every entry has all of `core`; `index` and `standalone` add the components and `
 - **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
 - **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.
 - **Placing and arranging:** `placeByLineage`, `placeNewItems`, `LineageLink`, `PlacementItem`, `PlacementOptions`, `arrangeByGroup`, `arrangePending`, `ArrangeInput`, `ArrangeOptions`, `ArrangeResult`, `PendingInput`, `createMeasurer`, `Measurer`, `computeTableSize`, `TableSize`, `visibleFields`, `Point`, `Size`, `Rect`.
-- **Events:** `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`.
+- **Events and the viewport:** `ElementEvent`, `ElementClickEvent`, `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`, `DiagramViewport`, `RevealAdded`.
 - **Look:** `LIGHT`, `DARK`, `Palette`, `paletteToCssVars`, `normalizeHexColor`, `normalizeHex`, `isValidRails`, `isTypingTarget`.
 - **Components and mounting** (`index`, `standalone`): `EngineDiagram`, `DiagramCanvas`, `renderNoteMarkdown`, `mount`, `MountOptions`, `MountedDiagram`.
 

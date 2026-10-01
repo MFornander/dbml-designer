@@ -5,7 +5,9 @@
 import { createApp, h } from 'vue';
 import EngineDiagram from './components/EngineDiagram.vue';
 import { createEngine, type Engine, type EngineOptions } from './engine/engine';
-import type { ColorChangePayload, PositionChange, TableLinkPayload } from './types';
+import type {
+  ColorChangePayload, DiagramViewport, ElementClickEvent, ElementEvent, PositionChange, TableLinkPayload,
+} from './types';
 
 export interface MountOptions extends EngineOptions {
   /** An engine to draw; one is created from the other options when absent. */
@@ -17,6 +19,12 @@ export interface MountOptions extends EngineOptions {
   /** A color was picked for a table, group, note, or ref; the host decides where it goes. */
   onSetColor?: (payload: ColorChangePayload) => void;
   onZoomChange?: (k: number) => void;
+  /** The pan or zoom changed. */
+  onViewportChange?: (viewport: DiagramViewport) => void;
+  /** Any element was clicked; `event.preventDefault()` keeps the engine from pinning and selecting it. */
+  onElementClick?: (event: ElementClickEvent) => void;
+  /** The pointer moved onto an element, or off every element (null). */
+  onElementHover?: (event: ElementEvent | null) => void;
   /** An arrangement was stored in the layout, as one step `undoArrange` can take back. */
   onArrange?: (changes: PositionChange[], resetRoutes: string[]) => void;
 }
@@ -36,6 +44,9 @@ export function mount (element: Element, options: MountOptions = {}): MountedDia
       onTableHover: options.onTableHover,
       onSetColor: options.onSetColor,
       onZoomChange: options.onZoomChange,
+      onViewportChange: options.onViewportChange,
+      onElementClick: options.onElementClick,
+      onElementHover: options.onElementHover,
       onArrange: options.onArrange,
     }),
   });

@@ -14,6 +14,7 @@
       class="dg-svg"
       @wheel="onWheel"
       @pointermove="onPointerMove"
+      @pointerover.capture="trackPointer"
       @pointerdown.capture="onAnyPointerDown"
       @mousedown.middle.prevent
     >
@@ -215,8 +216,10 @@ import {
   computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, toRef, useTemplateRef, watch,
 } from 'vue';
 import type {
-  ColorChangePayload, ColorTarget, DetailLevel, PartialRefMode, PositionChange, PositionsMap, TableLinkPayload,
+  ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, PartialRefMode, PositionChange,
+  PositionsMap, RevealAdded, TableLinkPayload,
 } from '../types';
+import type { Source } from '../model';
 import type { DepLineVM, DiagramModel, RefVM } from '../types';
 import type { FieldKey, TableKey } from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
@@ -232,7 +235,7 @@ import {
 import {
   intersects, snap8, union, type Point, type Rect,
 } from '../geometry/rect';
-import { screenToWorld, worldToScreen } from '../geometry/viewport';
+import { clampZoom, screenToWorld, worldToScreen } from '../geometry/viewport';
 import { isTypingTarget } from '../util/typingTarget';
 import { DARK, LIGHT, paletteToCssVars } from '../theme/palette';
 import { DIAGRAM_CTX, type DiagramContext } from '../state/context';
@@ -240,7 +243,7 @@ import {
   useDiagramGeometry, type DragOverride, type RefGeometry, type RouteDragOverride,
 } from '../state/useDiagramGeometry';
 import { useDrag, type DragTarget } from '../state/useDrag';
-import { useHover } from '../state/useHover';
+import { useHover, type HoverTarget } from '../state/useHover';
 import { sameSet, shareMap } from '../state/share';
 import { usePanZoom } from '../state/usePanZoom';
 import { useTooltip } from '../state/useTooltip';
@@ -286,7 +289,10 @@ const props = withDefaults(defineProps<{
   marked?: ReadonlySet<string>;
   /** Hovered tables, groups, notes, and selected relationships offer the color picker. */
   pickColors?: boolean;
+  /** What the view does when an update adds tables (see `RevealAdded`). */
+  revealAdded?: RevealAdded;
 }>(), {
+  revealAdded: 'pan',
   loading: false,
   pickColors: true,
   marked: () => new Set<string>(),
@@ -309,6 +315,12 @@ const emit = defineEmits<{
   'table-hover': [payload: TableLinkPayload | null];
   'toggle-group': [key: string];
   'zoom-change': [k: number];
+  /** The pan or zoom changed. */
+  'viewport-change': [viewport: DiagramViewport];
+  /** Any element was clicked; the host may keep the engine from pinning and selecting it. */
+  'element-click': [event: ElementClickEvent];
+  /** The pointer moved onto an element, or off every element (null). */
+  'element-hover': [event: ElementEvent | null];
   /** A color was chosen in the picker; the host writes it into the DBML text. */
   'set-color': [payload: ColorChangePayload];
   /** A relationship's route was hand-drawn (rails) or reset (null). */
@@ -340,6 +352,13 @@ const lod = computed(() => autoLod(pz.viewport.value.k));
 watch(() => pz.viewport.value.k, (k) => emit('zoom-change', k), {
   immediate: true,
 });
+/** The pan and zoom as the host sees them. */
+const viewport = computed<DiagramViewport>(() => ({
+  x: pz.viewport.value.x,
+  y: pz.viewport.value.y,
+  zoom: pz.viewport.value.k,
+}));
+watch(viewport, (v) => emit('viewport-change', v));
 
 // Geometry
 const dragOverride = shallowRef<DragOverride | null>(null);
@@ -458,6 +477,8 @@ function groupDelta (pos: Point): Point {
 const drag = useDrag({
   viewport: pz.viewport,
   onMove (target, pos) {
+    // Moving something changes what a fit would show; from now on the viewport is the user's.
+    stopAutoFit();
     switch (target.kind) {
       case 'note-resize':
         dragOverride.value = {
@@ -488,6 +509,11 @@ const drag = useDrag({
       emit('position-change', changesFor(target, pos));
     } else if (target.kind === 'table' || target.kind === 'note' || target.kind === 'selection') {
       onElementClick(target.key);
+    } else if (target.kind === 'group') {
+      clicked({
+        kind: 'group',
+        key: target.key,
+      });
     }
     dragOverride.value = null;
   },
@@ -498,24 +524,97 @@ const drag = useDrag({
  * or the partial badge clicked on, which keeps its refs drawn.
  */
 function onElementClick (key: string) {
-  const next = new Set(dragAdditive ? selection.value : []);
-  if (dragAdditive && next.has(key)) next.delete(key);
-  else next.add(key);
-  selection.value = next;
-
   const table = model.value.tablesByKey.get(key);
-  if (!table) return;
   const over = hover.hover.value;
-  hover.togglePin(over?.kind === 'partial' && over.tableKey === key
-    ? over
+  // On a table, what is under the pointer: one of its fields or partial badges, or the table itself.
+  const target: HoverTarget = table
+    ? ((over?.kind === 'field' || over?.kind === 'partial') && over.tableKey === key
+        ? over
+        : {
+            kind: 'table',
+            key,
+          })
     : {
-        kind: 'table',
+        kind: 'note',
         key,
-      });
+      };
+  const prevented = clicked(target);
+  if (!prevented) {
+    const next = new Set(dragAdditive ? selection.value : []);
+    if (dragAdditive && next.has(key)) next.delete(key);
+    else next.add(key);
+    selection.value = next;
+  }
+
+  if (!table) return;
+  if (!prevented) {
+    hover.togglePin(target.kind === 'partial'
+      ? target
+      : {
+          kind: 'table',
+          key,
+        });
+  }
   emit('table-click', {
     key,
     source: table.source,
   });
+}
+
+/** Tell the host what was clicked; true when it asked the engine to leave the click alone. */
+function clicked (target: HoverTarget): boolean {
+  let prevented = false;
+  emit('element-click', {
+    ...elementEvent(target),
+    preventDefault () {
+      prevented = true;
+    },
+    get defaultPrevented () {
+      return prevented;
+    },
+  });
+  return prevented;
+}
+
+/** A click on an edge pins it, unless the host keeps the engine from it. */
+function onEdgeClick (target: HoverTarget) {
+  if (!clicked(target)) hover.togglePin(target);
+}
+
+/** An element as the host sees it: what it is, its source, and where it is drawn on screen. */
+function elementEvent (target: HoverTarget): ElementEvent {
+  const source = sourceOf(target);
+  return {
+    target,
+    ...(source !== undefined ? { source } : {}),
+    rect: rectOf(target.kind === 'field' ? target.fieldKey : target.kind === 'partial' ? target.tableKey : target.key),
+    point: lastPointer ? { ...lastPointer } : null,
+  };
+}
+
+function sourceOf (target: HoverTarget): Source | undefined {
+  const m = model.value;
+  switch (target.kind) {
+    case 'table':
+      return m.tablesByKey.get(target.key)?.source;
+    case 'partial':
+      return m.tablesByKey.get(target.tableKey)?.source;
+    case 'field':
+      return m.tablesByKey.get(target.tableKey)?.fields.find((f) => f.key === target.fieldKey)?.source;
+    case 'ref':
+      return m.refs.find((r) => r.key === target.key)?.source;
+    case 'dep':
+      for (const d of m.deps) {
+        if (d.key === target.key) return d.source;
+        const c = d.columns.find((x) => x.key === target.key);
+        if (c) return c.source;
+      }
+      return undefined;
+    case 'group':
+      return m.groups.find((g) => g.key === target.key)?.source;
+    default:
+      return m.notes.find((n) => n.key === target.key)?.source;
+  }
 }
 
 function changesFor (target: DragTarget, pos: Point): PositionChange[] {
@@ -586,6 +685,10 @@ function highlightedFieldsOf (key: TableKey): ReadonlySet<FieldKey> {
   return highlightedFieldsByTable.value.get(key) ?? NO_FIELDS;
 }
 
+watch(hover.hover, (target) => {
+  emit('element-hover', target ? elementEvent(target) : null);
+});
+
 watch(hover.hover, (target, prev) => {
   const tableOf = (t: typeof target) => {
     if (!t) return null;
@@ -611,7 +714,20 @@ watch(hover.hover, (target, prev) => {
 /** Last pointer position in pane pixels; edge tooltips trail it. */
 const pointer = shallowRef<{ x: number; y: number } | null>(null);
 
+/**
+ * Where the pointer last was, in client coordinates, for the events the host gets. Taken as it
+ * crosses into an element (`pointerover` comes before `pointerenter`), moves, and presses.
+ */
+let lastPointer: Point | null = null;
+function trackPointer (e: PointerEvent) {
+  lastPointer = {
+    x: e.clientX,
+    y: e.clientY,
+  };
+}
+
 function onPointerMove (e: PointerEvent) {
+  trackPointer(e);
   const r = root.value?.getBoundingClientRect();
   if (r) {
     pointer.value = {
@@ -780,6 +896,7 @@ function onWheel (e: WheelEvent) {
 
 // A middle-button drag pans wherever it starts, before tables or notes can claim the press.
 function onAnyPointerDown (e: PointerEvent) {
+  trackPointer(e);
   if (e.button !== 1) return;
   e.stopPropagation();
   stopAutoFit();
@@ -789,8 +906,8 @@ function onAnyPointerDown (e: PointerEvent) {
 // Bare canvas: pan (Space held) or draw a selection marquee.
 function onBackgroundDown (e: PointerEvent) {
   if (e.button !== 0) return;
-  stopAutoFit();
   if (panning.value) {
+    stopAutoFit();
     pz.onBackgroundPointerDown(e);
     return;
   }
@@ -908,11 +1025,10 @@ const ctx: DiagramContext = {
   dragging: drag.dragging,
   setHover: hover.setHover,
   clearHover: hover.clearHover,
-  togglePin: hover.togglePin,
+  clickEdge: onEdgeClick,
   beginDrag: (e: PointerEvent, target: DragTarget, origin: Point) => {
     // Lineage-layout positions are derived from the dependency order, so nothing is movable there.
     if (props.lineageLayout) return;
-    stopAutoFit();
     dragOrigin = { ...origin };
     dragAdditive = isAdditive(e);
     // Dragging one of several selected elements moves them all.
@@ -1199,7 +1315,10 @@ watch([geo.contentBounds, pz.viewSize], ([bounds, size]) => {
 let toShow: ReadonlySet<TableKey> | null = null;
 watch(() => props.marked, (marked, before) => {
   if (marked.size === 0) return;
+  // Kept fitted: the fit follows the diagram as it grows, until the user pans or zooms.
+  if (props.revealAdded === 'fit' && autoFit) return;
   stopAutoFit();
+  if (props.revealAdded === 'none') return;
   // The tables this update added, not those still lit from the one before.
   const tables = [...marked].filter((k) => !before?.has(k) && model.value.tablesByKey.has(k) && !props.hidden.has(k));
   toShow = tables.length > 0 ? new Set(tables) : null;
@@ -1213,6 +1332,78 @@ watch([() => props.marked, geo.boxes], () => {
 }, {
   flush: 'post',
 });
+
+/** Where a table, field, group, note, or edge is in diagram coordinates; null when it is not drawn. */
+function worldRectOf (key: string): Rect | null {
+  const m = model.value;
+  const box = geo.boxes.value.get(key) ?? geo.noteBoxes.value.get(key);
+  if (box) return box;
+  const group = geo.groupBoxes.value.find((g) => g.group.key === key);
+  if (group) return group.box;
+  // An edge: its route's extent. A mapping of one kind is drawn by its column pair.
+  const route = geo.routes.value.get(key) ?? geo.routes.value.get(key.replace(/#[^#]*$/, ''));
+  if (route) {
+    const xs = route.points.map((p) => p.x);
+    const ys = route.points.map((p) => p.y);
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs),
+      h: Math.max(...ys) - Math.min(...ys),
+    };
+  }
+  for (const t of m.tables) {
+    if (!t.fields.some((f) => f.key === key)) continue;
+    const tableBox = geo.boxes.value.get(t.key);
+    const idx = geo.rowsByTable.value.get(t.key)?.findIndex((f) => f.key === key) ?? -1;
+    return tableBox && idx >= 0
+      ? {
+          x: tableBox.x,
+          y: tableBox.y + ROW_H * (idx + 1),
+          w: tableBox.w,
+          h: ROW_H,
+        }
+      : null;
+  }
+  return null;
+}
+
+/** Where an element is drawn, in client coordinates; null when it is not drawn. */
+function rectOf (key: string): Rect | null {
+  const world = worldRectOf(key);
+  const pane = root.value?.getBoundingClientRect();
+  if (!world || !pane) return null;
+  const vp = pz.viewport.value;
+  const p = worldToScreen(vp, world);
+  return {
+    x: pane.left + p.x,
+    y: pane.top + p.y,
+    w: world.w * vp.k,
+    h: world.h * vp.k,
+  };
+}
+
+/** Fit the view to these elements, or to the whole diagram; the viewport is the user's from then on. */
+function fit (keys?: readonly string[]) {
+  stopAutoFit();
+  if (!keys) {
+    pz.fitTo(geo.contentBounds.value);
+    return;
+  }
+  const rects = keys.map(worldRectOf).filter((r): r is Rect => r !== null);
+  if (rects.length) pz.fitTo(union(rects));
+}
+
+/** Pan and zoom to a viewport; what is left out stays. */
+function setViewport (next: Partial<DiagramViewport>) {
+  stopAutoFit();
+  const vp = pz.viewport.value;
+  pz.viewport.value = {
+    x: next.x ?? vp.x,
+    y: next.y ?? vp.y,
+    k: clampZoom(next.zoom ?? vp.k),
+  };
+}
 
 /** The drawn element of a table, field, group, note, or edge, by key. */
 function element (key: string): Element | null {
@@ -1228,10 +1419,11 @@ watch(() => props.lineageLayout, () => {
 const cssVars = computed(() => paletteToCssVars(props.dark ? DARK : LIGHT));
 
 defineExpose({
-  fitToScreen: () => {
-    stopAutoFit();
-    pz.fitTo(geo.contentBounds.value);
-  },
+  fitToScreen: () => fit(),
+  fit,
+  rectOf,
+  viewport,
+  setViewport,
   resetZoom: () => {
     stopAutoFit();
     pz.reset(geo.contentBounds.value);

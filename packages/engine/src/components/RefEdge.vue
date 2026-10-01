@@ -131,6 +131,6 @@ function onLeave () {
 }
 
 function onClick () {
-  ctx.togglePin(target());
+  ctx.clickEdge(target());
 }
 </script>

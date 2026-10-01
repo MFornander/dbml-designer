@@ -10,7 +10,10 @@
 import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
-import type { DetailLevel, DiagramModel, PartialRefMode } from '../types';
+import type {
+  DetailLevel, DiagramModel, DiagramViewport, PartialRefMode, RevealAdded,
+} from '../types';
+import type { Rect } from '../geometry/rect';
 import { fromModel } from '../fromModel';
 import type {
   Model, ModelDep, ModelRecord, ModelTable,
@@ -47,6 +50,12 @@ export interface DisplayOptions {
   highlightAll: boolean;
   /** Offer the color picker on hovered tables, groups, and notes and on a selected relationship; the host writes the color. */
   pickColors: boolean;
+  /**
+   * What the view does when an update adds tables: `pan` brings them into view at the same zoom;
+   * `fit` keeps the whole diagram fitted as it grows, until the user pans or zooms, then pans;
+   * `none` leaves the view alone.
+   */
+  revealAdded: RevealAdded;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -60,6 +69,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   lineageLayout: false,
   highlightAll: false,
   pickColors: true,
+  revealAdded: 'pan',
 };
 
 /** A value given once, or a getter to follow. */
@@ -91,6 +101,13 @@ export interface EngineOptions {
 /** What a mounted diagram offers the engine; `EngineDiagram` attaches it while mounted. */
 export interface DiagramHandle {
   fitToScreen (): void;
+  /** Fit the view to these elements by key, or to the whole diagram. */
+  fit (keys?: readonly string[]): void;
+  /** Where an element is drawn, in client coordinates; null when it is not drawn. */
+  rectOf (key: string): Rect | null;
+  /** The pan and zoom, read reactively. */
+  viewport (): DiagramViewport | null;
+  setViewport (next: Partial<DiagramViewport>): void;
   resetZoom (): void;
   zoomIn (): void;
   zoomOut (): void;
@@ -266,6 +283,24 @@ export function createEngine (options: EngineOptions = {}) {
       /** The drawn element of a table, field, group, note, or edge, by key, to anchor the host's own overlays to. */
       elementOf (key: string): Element | null {
         return handle.value?.element(key) ?? null;
+      },
+      /**
+       * Where a table, field, group, note, or edge is drawn, by key, in client coordinates like
+       * `getBoundingClientRect`, worked out from the layout rather than the DOM; null when it is not
+       * drawn or no diagram is mounted. A mapping of one kind (`…#kind`) is where its column pair is.
+       */
+      rectOf (key: string): Rect | null {
+        return handle.value?.rectOf(key) ?? null;
+      },
+      /** The mounted diagram's pan and zoom; null while none is mounted. */
+      viewport: computed(() => handle.value?.viewport() ?? null),
+      /** Pan and zoom the mounted diagram; what is left out stays. */
+      setViewport (next: Partial<DiagramViewport>): void {
+        handle.value?.setViewport(next);
+      },
+      /** Fit the view to these elements by key, or to the whole diagram like `fitToScreen`. */
+      fit (keys?: readonly string[]): void {
+        handle.value?.fit(keys);
       },
       /**
        * Switch to a view by name, or to the Default View (null), and fit it; a named view with no

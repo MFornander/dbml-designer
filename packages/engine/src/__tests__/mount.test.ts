@@ -5,7 +5,9 @@ import { nextTick } from 'vue';
 import { mount } from '../mount';
 import { createEngine } from '../engine/engine';
 import type { Model } from '../model';
-import type { TableLinkPayload } from '../types';
+import type {
+  DiagramViewport, ElementClickEvent, ElementEvent, TableLinkPayload,
+} from '../types';
 
 const MODEL: Model = {
   tables: [
@@ -102,6 +104,48 @@ describe('mount', () => {
     engine.setModel({ tables: [MODEL.tables[0]!] });
     expect(engine.diagram.value.tables.map((t) => t.key)).toEqual(['public.users']);
     engine.dispose();
+    element.remove();
+  });
+
+  it('passes element clicks, hovers, and viewport changes to the host, and reads the viewport and rectangles', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const clicks: ElementClickEvent[] = [];
+    const hovers: (ElementEvent | null)[] = [];
+    const viewports: DiagramViewport[] = [];
+    const mounted = mount(element, {
+      model: MODEL,
+      onElementClick: (e) => {
+        clicks.push(e);
+        e.preventDefault();
+      },
+      onElementHover: (e) => hovers.push(e),
+      onViewportChange: (v) => viewports.push(v),
+    });
+    await settle();
+    const { engine } = mounted;
+    expect(engine.viewport.value).toEqual({ x: 0, y: 0, zoom: 1 });
+
+    const users = element.querySelector('.dg-table[data-key="public.users"]')!;
+    users.dispatchEvent(new PointerEvent('pointerenter'));
+    users.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+    window.dispatchEvent(new MouseEvent('pointerup', { clientX: 10, clientY: 10 }));
+    await settle();
+    expect(hovers.at(-1)?.target).toEqual({ kind: 'table', key: 'public.users' });
+    expect(clicks.map((c) => [c.target, c.source])).toEqual([[{ kind: 'table', key: 'public.users' }, 'users-row-17']]);
+    // The host prevented it: nothing is selected.
+    expect(users.classList.contains('is-selected')).toBe(false);
+
+    engine.setViewport({ zoom: 0.5 });
+    await settle();
+    expect(engine.viewport.value).toEqual({ x: 0, y: 0, zoom: 0.5 });
+    expect(viewports.at(-1)).toEqual({ x: 0, y: 0, zoom: 0.5 });
+    const box = engine.layout.positions.value['public.users']!;
+    expect(engine.rectOf('public.users')).toMatchObject({ x: box.x * 0.5, y: box.y * 0.5 });
+
+    mounted.unmount();
+    expect(engine.viewport.value).toBeNull();
+    expect(engine.rectOf('public.users')).toBeNull();
     element.remove();
   });
 });

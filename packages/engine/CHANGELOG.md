@@ -4,6 +4,22 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.4.0 - 2026-10-01
+
+Every element's clicks and hovers reach the host, with where it is on screen, and the viewport can be read and set.
+
+### Added
+
+- `element-click` and `element-hover` on `EngineDiagram` and `DiagramCanvas`, `onElementClick` and `onElementHover` for `mount`. The payload, `ElementEvent`, carries the `target` (a `HoverTarget`: a table, field, partial badge, ref, lineage edge or column pair, group, or note), its `source`, its `rect` (where it is drawn, the extent of its route for an edge), and the pointer's `point`, both in client coordinates. `ElementClickEvent` adds `preventDefault()`, which keeps the engine from pinning and selecting what was clicked. `table-click` and `table-hover` stay as they were.
+- `engine.rectOf(key)`: where an element is drawn, in client coordinates, from the layout rather than the DOM, so it stays right as elements redraw. A mapping key (`…#kind`) gives its column pair's.
+- `engine.viewport` (`DiagramViewport`, `{ x, y, zoom }`, reactive, null while nothing is mounted), `engine.setViewport(partial)`, and `engine.fit(keys?)`, which fits the view to elements by key, or to everything. `viewport-change` and `onViewportChange` report every pan and zoom.
+- Display option `revealAdded` (`RevealAdded`): `'pan'` (the default, as before), `'fit'` to keep the whole diagram fitted as it grows until the user pans or zooms, or `'none'`.
+
+### Changed
+
+- `DiagramHandle` has four new members: `fit`, `rectOf`, `viewport`, and `setViewport`. Only a host that implements its own handle for `attach` must add them; `EngineDiagram` and `mount` do.
+- Pressing a table or note without moving it, or drawing a selection on the bare canvas, no longer ends the automatic fit that holds while the pane settles; moving something, panning, or zooming still does.
+
 ## 0.3.0 - 2026-10-01
 
 Column mappings keep their kind. Before, a second dep between the same two columns was dropped whatever its kind, so a column that is both projected (`value`) and joined on (`row`) lost one of the two.

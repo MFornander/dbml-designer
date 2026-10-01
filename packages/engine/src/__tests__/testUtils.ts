@@ -40,7 +40,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     dragging: shallowRef(null),
     setHover: (t) => hovers.push(t),
     clearHover: () => hovers.push(null),
-    togglePin: (t) => pins.push(t),
+    clickEdge: (t) => pins.push(t),
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
     pickColors: ref(true),
