@@ -145,6 +145,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Tooltip control (engine 0.4.2): `tooltipFilter(target)` on `EngineDiagram`, `DiagramCanvas`, and `mount` is asked before the engine shows its tooltip for a hovered element; returning false leaves the element to the host's own popover, so a host's roll-over and the engine's tooltip never show together.
 
+- [x] Lineage by kind (engine 0.4.3): display option `lineageKinds` (null for all) draws only the deps of the kinds listed, and those without a kind; a column pair shows while one of its mappings does, styled by the strongest shown, a table pair while one of its deps does, and the legend lists only what is drawn. The filter applies to the model drawn, so hover, tooltips, highlight, placement, and Arrange follow it.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

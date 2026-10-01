@@ -1,5 +1,5 @@
 {
-  "version": "0.4.2",
+  "version": "0.4.3",
   "note": "The public API of @dbml-designer/engine at this version, written by `npm run api` (see the README, \"Versioning\"). Keys: `<entry> <name>` for what an entry exports, `type <Name>.<member>` for members of exported types (`?` when optional), `component <Name>.props` and `.emits` for components. CHANGELOG.md says what changed between versions.",
   "api": {
     "component DiagramCanvas.emits": "arrange, edge-route-change, element-click, element-hover, position-change, set-color, table-click, table-hover, toggle-group, viewport-change, zoom-change",
@@ -255,6 +255,7 @@
     "type DisplayOptions.detailLevel": "DetailLevel",
     "type DisplayOptions.highlightAll": "boolean",
     "type DisplayOptions.lineageColumns": "boolean",
+    "type DisplayOptions.lineageKinds": "readonly string[] | null",
     "type DisplayOptions.lineageLayout": "boolean",
     "type DisplayOptions.partialRefMode": "PartialRefMode",
     "type DisplayOptions.pickColors": "boolean",

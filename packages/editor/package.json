@@ -15,7 +15,7 @@
     "graph": "tsx --tsconfig tsconfig.app.json cli/dbml-designer.ts graph"
   },
   "dependencies": {
-    "@dbml-designer/engine": "0.4.2",
+    "@dbml-designer/engine": "0.4.3",
     "@dbml/parse": "^10.2.0",
     "@fontsource/inconsolata": "^5.3.0",
     "@fontsource/open-sans": "^5.3.0",

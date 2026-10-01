@@ -4,6 +4,14 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.4.3 - 2026-10-01
+
+Lineage filtered by kind.
+
+### Added
+
+- Display option `lineageKinds`: the lineage kinds drawn, such as `['value']`, or null (the default) for every kind. A dep without a kind always shows; a column pair shows while one of its mappings does, styled by the strongest of those; a table pair while one of its deps does; the legend lists only the kinds drawn. It filters the model drawn (`engine.diagram`), so hovers, tooltips, `highlight`, placement of new tables, and Arrange all follow the lineage drawn. Other display changes leave the drawn model as it is.
+
 ## 0.4.2 - 2026-10-01
 
 The host decides where the engine's tooltip shows.

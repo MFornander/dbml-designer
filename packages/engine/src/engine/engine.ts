@@ -56,6 +56,12 @@ export interface DisplayOptions {
    * `none` leaves the view alone.
    */
   revealAdded: RevealAdded;
+  /**
+   * The lineage kinds drawn, or null for every kind. A dep without a kind always shows; a column
+   * pair shows while one of its mappings does, styled by the strongest of those; a table pair
+   * while one of its deps does. Placement and Arrange follow the lineage drawn.
+   */
+  lineageKinds: readonly string[] | null;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -70,6 +76,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   highlightAll: false,
   pickColors: true,
   revealAdded: 'pan',
+  lineageKinds: null,
 };
 
 /** A value given once, or a getter to follow. */
@@ -124,6 +131,19 @@ export const MARK_MS = 2000;
 /** How long a request to mark the next update waits for it, such as a text being read. */
 export const MARK_WAIT_MS = 5000;
 
+/** The model with only the deps of these kinds, and those without a kind; all of them for null. */
+function withLineageKinds (model: Model | null, kinds: readonly string[] | null): Model | null {
+  if (!model?.deps || kinds === null) return model;
+  const keep = new Set(kinds);
+  const deps = model.deps.filter((d) => d.kind === undefined || keep.has(d.kind));
+  return deps.length === model.deps.length
+    ? model
+    : {
+        ...model,
+        deps,
+      };
+}
+
 function follow<T> (input: Input<T> | undefined, fallback: T) {
   const source = shallowRef<() => T>(typeof input === 'function' ? input as () => T : () => (input === undefined ? fallback : input));
   return {
@@ -142,12 +162,17 @@ export function createEngine (options: EngineOptions = {}) {
     const displayInput = follow<Partial<DisplayOptions>>(options.display, {});
     const bases = follow<readonly LayoutSnapshot[]>(options.bases, []);
 
-    /** The view model the canvas draws. */
-    const diagram = computed(() => fromModel(model.value.value));
     const display = computed<DisplayOptions>(() => ({
       ...DEFAULT_DISPLAY,
       ...displayInput.value.value,
     }));
+    /** The kinds drawn, as one value that changes only when they do, so other display changes leave the model alone. */
+    const lineageKinds = computed(() => {
+      const kinds = display.value.lineageKinds;
+      return kinds === null ? null : [...new Set(kinds)].sort().join('\n');
+    });
+    /** The view model the canvas draws: the model, with only the lineage of the kinds drawn. */
+    const diagram = computed(() => fromModel(withLineageKinds(model.value.value, lineageKinds.value === null ? null : lineageKinds.value.split('\n').filter(Boolean))));
 
     /** A view switched to that has no arrangement yet, to arrange once a mounted diagram can. */
     const toArrange = shallowRef<string | null>(null);
