@@ -237,6 +237,11 @@ export function readModelDocument (text: string): ModelDocument {
   };
 }
 
+/** The model without the sources the editor keeps (DBML text positions, JSON paths): what a model file holds. */
+export function withoutSources (model: Model): Model {
+  return JSON.parse(JSON.stringify(model, (key, value: unknown) => (key === 'source' ? undefined : value))) as Model;
+}
+
 /** The text of a new model file holding a model, without layout. */
 export function modelFileText (model: Model): string {
   return `${JSON.stringify({

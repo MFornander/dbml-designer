@@ -73,7 +73,7 @@
             :box="t.box"
             :rows="t.rows"
             :size="t.size"
-            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted="isTableHighlighted(t.table.key)"
             :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
@@ -98,7 +98,7 @@
             :box="t.box"
             :rows="t.rows"
             :size="t.size"
-            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted="isTableHighlighted(t.table.key)"
             :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="isDraggingKey(t.table.key)"
@@ -122,7 +122,7 @@
             :box="t.box"
             :rows="t.rows"
             :size="t.size"
-            :highlighted="hover.highlight.value.tableKeys.has(t.table.key)"
+            :highlighted="isTableHighlighted(t.table.key)"
             :highlighted-fields="highlightedFieldsOf(t.table.key)"
             :selected="selection.has(t.table.key)"
             :is-dragging="true"
@@ -221,14 +221,16 @@ import type { DepLineVM, DiagramModel, RefVM } from '../types';
 import type { FieldKey, TableKey } from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
 import { autoLod } from '../geometry/lod';
-import { collapsedGroupSize, placeNewItems, placeNewNotes } from '../geometry/layout';
+import {
+  collapsedGroupSize, placeByLineage, placeNewItems, placeNewNotes,
+} from '../geometry/layout';
 import { arrangeByGroup, arrangePending } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
 import {
   FONT_GROUP_NAME, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, ROW_H,
 } from '../geometry/constants';
 import {
-  intersects, snap8, type Point, type Rect,
+  intersects, snap8, union, type Point, type Rect,
 } from '../geometry/rect';
 import { screenToWorld, worldToScreen } from '../geometry/viewport';
 import { isTypingTarget } from '../util/typingTarget';
@@ -280,8 +282,14 @@ const props = withDefaults(defineProps<{
   hidden?: ReadonlySet<string>;
   /** The model is behind the text (a parse or its imports are on the way); auto-placement waits for it. */
   loading?: boolean;
+  /** What an update just added, by key: highlighted for a moment, and a new table off screen is panned into view. */
+  marked?: ReadonlySet<string>;
+  /** Hovered tables, groups, notes, and selected relationships offer the color picker. */
+  pickColors?: boolean;
 }>(), {
   loading: false,
+  pickColors: true,
+  marked: () => new Set<string>(),
   collapsedGroups: () => new Set<string>(),
   showRefs: true,
   showLineage: true,
@@ -560,15 +568,19 @@ const NO_FIELDS: ReadonlySet<FieldKey> = new Set();
  */
 const highlightedFieldsByTable = computed<Map<TableKey, ReadonlySet<FieldKey>>>((prev) => {
   const keys = hover.highlight.value.fieldKeys;
+  const marked = props.marked;
   const next = new Map<TableKey, ReadonlySet<FieldKey>>();
-  if (keys.size > 0) {
+  if (keys.size > 0 || marked.size > 0) {
     for (const t of model.value.tables) {
-      const own = t.fields.filter((f) => keys.has(f.key)).map((f) => f.key);
+      const own = t.fields.filter((f) => keys.has(f.key) || marked.has(f.key)).map((f) => f.key);
       if (own.length > 0) next.set(t.key, new Set(own));
     }
   }
   return shareMap(prev, next, sameSet);
 });
+
+/** A table lights up while hovered or connected to what is, and for a moment after an update added it. */
+const isTableHighlighted = (key: TableKey) => hover.highlight.value.tableKeys.has(key) || props.marked.has(key);
 
 function highlightedFieldsOf (key: TableKey): ReadonlySet<FieldKey> {
   return highlightedFieldsByTable.value.get(key) ?? NO_FIELDS;
@@ -914,6 +926,7 @@ const ctx: DiagramContext = {
       : target, origin);
   },
   toggleGroup: (key: string) => emit('toggle-group', key),
+  pickColors: toRef(props, 'pickColors'),
   toggleRecords: (key: TableKey) => {
     colorTarget.value = null;
     recordsKey.value = recordsKey.value === key ? null : key;
@@ -982,8 +995,10 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   const hl = hover.highlight.value;
   const all = props.highlightAll;
   const list: RenderEdge[] = [];
-  const push = (edge: RefVM | DepLineVM, kind: 'ref' | 'dep', g: RefGeometry | undefined, hot: boolean, passive?: boolean) => {
+  const push = (edge: RefVM | DepLineVM, kind: 'ref' | 'dep', g: RefGeometry | undefined, lit: boolean, passive?: boolean) => {
     if (!g) return;
+    // What an update just added walks with the ants for a moment, like a hovered edge.
+    const hot = lit || props.marked.has(edge.key);
     list.push({
       edge,
       kind,
@@ -1066,7 +1081,7 @@ watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading
         ...(t.groupKey && groupOrder.has(t.groupKey) ? { groupOrder: groupOrder.get(t.groupKey)! } : {}),
       };
     });
-    for (const [key, pos] of placeNewItems(items, occupied)) {
+    const take = (key: string, pos: Point) => {
       changes.push({
         key,
         x: pos.x,
@@ -1079,7 +1094,16 @@ watch([geo.unplacedTables, geo.unplacedNotes, geo.fullSizes, () => props.loading
         w: item.w,
         h: item.h,
       });
-    }
+    };
+    // Next to a placed table lineage connects them to; the rest packed in columns at the right.
+    const placed = new Map([...geo.boxes.value].filter(([k]) => model.value.tablesByKey.has(k)));
+    const links = model.value.deps.map((d) => ({
+      upstream: d.upstream.tableKey,
+      downstream: d.downstream.tableKey,
+    }));
+    const byLineage = placeByLineage(items, links, placed, occupied);
+    for (const [key, pos] of byLineage) take(key, pos);
+    for (const [key, pos] of placeNewItems(items.filter((i) => !byLineage.has(i.key)), occupied)) take(key, pos);
   }
   if (notes.length > 0) {
     for (const [key, pos] of placeNewNotes(notes, occupied)) {
@@ -1170,6 +1194,31 @@ watch([geo.contentBounds, pz.viewSize], ([bounds, size]) => {
   flush: 'post',
 });
 
+// An update marked what it added. Zoom and pan stay where they are, except to bring the new tables
+// into view once placed, if they landed off screen.
+let toShow: ReadonlySet<TableKey> | null = null;
+watch(() => props.marked, (marked, before) => {
+  if (marked.size === 0) return;
+  stopAutoFit();
+  // The tables this update added, not those still lit from the one before.
+  const tables = [...marked].filter((k) => !before?.has(k) && model.value.tablesByKey.has(k) && !props.hidden.has(k));
+  toShow = tables.length > 0 ? new Set(tables) : null;
+});
+watch([() => props.marked, geo.boxes], () => {
+  if (!toShow) return;
+  const boxes = [...toShow].map((k) => geo.boxes.value.get(k));
+  if (boxes.some((b) => !b)) return;
+  toShow = null;
+  pz.panToShow(union(boxes as Rect[])!);
+}, {
+  flush: 'post',
+});
+
+/** The drawn element of a table, field, group, note, or edge, by key. */
+function element (key: string): Element | null {
+  return root.value?.querySelector(`[data-key="${key.replace(/["\\]/g, '\\$&')}"]`) ?? null;
+}
+
 // Entering or leaving the lineage layout changes every position: refit once the new geometry is in.
 watch(() => props.lineageLayout, () => {
   autoFit = true;
@@ -1197,5 +1246,6 @@ defineExpose({
   },
   arrange,
   refit,
+  element,
 });
 </script>

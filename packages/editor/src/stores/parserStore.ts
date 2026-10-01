@@ -168,7 +168,11 @@ export const useParserStore = defineStore('parser', () => {
     isLoading.value = false;
   }
 
+  /** The text last read, so a change to exactly that text, read already, is not read again after the pause. */
+  let lastRead: string | null = null;
+
   function parseNow (text: string = editor.text): void {
+    lastRead = text;
     if (editor.language === 'json') {
       readModelFile(text);
       return;
@@ -272,7 +276,12 @@ export const useParserStore = defineStore('parser', () => {
 
   const scheduleParse = debounce(() => parseNow(), DEBOUNCE_MS);
 
-  watch(() => editor.text, () => {
+  watch(() => editor.text, (text) => {
+    // Text handed in and read at once, such as a model from the embedding page, is up to date.
+    if (text === lastRead) {
+      scheduleParse.cancel();
+      return;
+    }
     isLoading.value = true;
     scheduleParse();
   });

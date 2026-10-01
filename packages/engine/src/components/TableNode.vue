@@ -142,6 +142,7 @@
       v-for="(f, i) in rows"
       :key="f.key"
       class="dg-field"
+      :data-key="f.key"
       :class="{ 'is-pk': isKeyField(f), 'is-highlighted': highlightedFields.has(f.key) }"
       :transform="`translate(0 ${ROW_H * (i + 1)})`"
       @pointerenter="onFieldEnter(f)"
@@ -297,7 +298,7 @@ const showHeaderIcon = computed(() => hasTableDetails(props.table));
 
 /** The gear shows while this table (or one of its fields or badges) is the hovered or pinned element. */
 const showGear = computed(() => {
-  if (lod.value !== 'full' || props.isDragging) return false;
+  if (!ctx.pickColors.value || lod.value !== 'full' || props.isDragging) return false;
   const s = ctx.highlight.value.source;
   if (!s) return false;
   if (s.kind === 'table') return s.key === props.table.key;

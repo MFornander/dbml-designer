@@ -11,11 +11,13 @@
     :lineage-columns="display.lineageColumns"
     :partial-ref-mode="display.partialRefMode"
     :show-values="display.showValues"
+    :pick-colors="display.pickColors"
     :lineage-layout="display.lineageLayout"
     :highlight-all="display.highlightAll"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"
+    :marked="engine.marked.value"
     @position-change="(changes, origin) => engine.layout.applyPositionChanges(changes, origin)"
     @edge-route-change="(key, rails) => engine.layout.setEdgeRoute(key, rails)"
     @toggle-group="(key) => engine.layout.toggleGroup(key)"
@@ -73,6 +75,7 @@ const handle: DiagramHandle = {
   zoomOut: () => canvas.value?.zoomOut(),
   arrange: (only) => canvas.value?.arrange(only) ?? false,
   refit: () => canvas.value?.refit(),
+  element: (key) => canvas.value?.element(key) ?? null,
 };
 
 onMounted(() => props.engine.attach(handle));

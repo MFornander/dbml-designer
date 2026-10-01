@@ -4,14 +4,21 @@
  * passes refs for what it wants kept, or reads `snapshot()` and hands it back to `restore()`.
  *
  * Each input can be a value, which the matching setter replaces later, or a getter the engine
- * follows, for a host that already keeps it in reactive state.
+ * follows, for a host that already keeps it in reactive state. A host that gives the model as a
+ * value can also grow it a little at a time (`addTables`, `addEdges`, `setRows`, `addToView`).
  */
 import {
-  computed, effectScope, nextTick, shallowRef, watch, type Ref,
+  computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
-import type { DetailLevel, PartialRefMode } from '../types';
+import type { DetailLevel, DiagramModel, PartialRefMode } from '../types';
 import { fromModel } from '../fromModel';
-import type { Model } from '../model';
+import type {
+  Model, ModelDep, ModelRecord, ModelTable,
+} from '../model';
+import { addedKeys } from './changes';
+import {
+  withEdges, withRows, withTables, withViewTables,
+} from './modelEdits';
 import type { LayoutSnapshot } from './layers';
 import { createLayout, layoutKeysOfModel, type LayoutState } from './layout';
 import { createViews } from './views';
@@ -38,6 +45,8 @@ export interface DisplayOptions {
   lineageLayout: boolean;
   /** Highlight every edge: walking ants, names, and cardinalities. */
   highlightAll: boolean;
+  /** Offer the color picker on hovered tables, groups, and notes and on a selected relationship; the host writes the color. */
+  pickColors: boolean;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -50,6 +59,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   showValues: true,
   lineageLayout: false,
   highlightAll: false,
+  pickColors: true,
 };
 
 /** A value given once, or a getter to follow. */
@@ -88,7 +98,14 @@ export interface DiagramHandle {
   arrange (only?: ReadonlySet<string>): boolean;
   /** Fit the view to the diagram once positions just stored are in. */
   refit (): void;
+  /** The drawn element of a table, field, group, note, or edge, by key; null when it is not drawn. */
+  element (key: string): Element | null;
 }
+
+/** How long what an update added stays highlighted. */
+export const MARK_MS = 2000;
+/** How long a request to mark the next update waits for it, such as a text being read. */
+export const MARK_WAIT_MS = 5000;
 
 function follow<T> (input: Input<T> | undefined, fallback: T) {
   const source = shallowRef<() => T>(typeof input === 'function' ? input as () => T : () => (input === undefined ? fallback : input));
@@ -137,6 +154,44 @@ export function createEngine (options: EngineOptions = {}) {
     watch(diagram, (m) => views.sync(m), {
       immediate: true,
     });
+
+    /** What the last marked update added, by key, while it is highlighted. */
+    const marked = shallowRef<ReadonlySet<string>>(new Set());
+    /** The diagram to compare the next one with, while a request to mark it waits. */
+    let markFrom: { diagram: DiagramModel; at: number } | null = null;
+    let markTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Highlight what the next model adds to the current one; the editor asks when a followed file changes on disk. */
+    function markChanges (): void {
+      markFrom ??= {
+        diagram: diagram.value,
+        at: Date.now(),
+      };
+    }
+    watch(diagram, (next) => {
+      const from = markFrom;
+      markFrom = null;
+      if (!from || Date.now() - from.at > MARK_WAIT_MS) return;
+      const added = addedKeys(from.diagram, next);
+      if (added.size === 0) return;
+      // Updates in quick succession light up together, so one does not put out the one before.
+      marked.value = new Set([...marked.value, ...added]);
+      if (markTimer) clearTimeout(markTimer);
+      markTimer = setTimeout(() => {
+        marked.value = new Set();
+        markTimer = null;
+      }, MARK_MS);
+    });
+    onScopeDispose(() => {
+      if (markTimer) clearTimeout(markTimer);
+    });
+
+    /** The model as given, with what was added since, for the methods that add to it. */
+    const current = (): Model => model.value.value ?? { tables: [] };
+    /** Show the model with a change made, marking what it adds and placing new tables by their neighbours. */
+    function change (update: (m: Model) => Model): void {
+      markChanges();
+      model.set(update(current()));
+    }
     // The layout drops what the model no longer has, but not while the model is behind.
     watch(() => (loading.value.value ? undefined : diagram.value), (m) => {
       if (m) layout.pruneTo(layoutKeysOfModel(m));
@@ -183,11 +238,44 @@ export function createEngine (options: EngineOptions = {}) {
         });
       },
       setBases: bases.set,
+      /** The model being shown: as given, with what the methods below added. */
+      model: computed(() => model.value.value),
+      /** What the last marked update added, by key, while it is highlighted. */
+      marked: computed(() => marked.value),
+      markChanges,
+      /**
+       * Add tables, or replace those with the same key. Like every method that adds to the model,
+       * it keeps the layout, places new tables next to a placed table lineage connects them to, and
+       * marks what is new for a moment. For a host that gives the model as a value, not a getter.
+       */
+      addTables (tables: readonly ModelTable[]): void {
+        change((m) => withTables(m, tables));
+      },
+      /** Add lineage edges, column to column with a kind, or between whole tables. */
+      addEdges (deps: readonly ModelDep[]): void {
+        change((m) => withEdges(m, deps));
+      },
+      /** Replace the rows of a table, by key: one row shows its values on the fields. */
+      setRows (table: string, rows: readonly ModelRecord[]): void {
+        change((m) => withRows(m, table, rows));
+      },
+      /** Add tables to a named view by key, creating the view when there is none. */
+      addToView (name: string, tables: readonly string[]): void {
+        change((m) => withViewTables(m, name, tables));
+      },
+      /** The drawn element of a table, field, group, note, or edge, by key, to anchor the host's own overlays to. */
+      elementOf (key: string): Element | null {
+        return handle.value?.element(key) ?? null;
+      },
       /**
        * Switch to a view by name, or to the Default View (null), and fit it; a named view with no
        * arrangement of its own is arranged first (see `arrangeViews`).
        */
       selectView (name: string | null): void {
+        views.select(name, diagram.value);
+      },
+      /** `selectView` by another name. */
+      setView (name: string | null): void {
         views.select(name, diagram.value);
       },
       /** What the diagram adds to the layouts it inherits, to save. */

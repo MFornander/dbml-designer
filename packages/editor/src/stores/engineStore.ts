@@ -83,6 +83,8 @@ export const useEngineStore = defineStore('engine', () => {
       showValues: ui.showValues,
       lineageLayout: ui.lineageLayout,
       highlightAll: ui.highlightAll,
+      // A picked color is written into the text, which a read-only page never does.
+      pickColors: !editor.readOnly,
     }),
     layoutState,
     activeView,

@@ -43,6 +43,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     togglePin: (t) => pins.push(t),
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
+    pickColors: ref(true),
     openColorPicker: (t) => colorPicks.push(t),
     toggleRecords: (k) => recordsOpened.push(k),
     hovers,

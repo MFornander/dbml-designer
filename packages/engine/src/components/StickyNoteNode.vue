@@ -96,7 +96,7 @@ const textStyle = computed(() => (props.note.color
 
 const gearColor = computed(() => (props.note.color ? textColorFor(props.note.color) : LIGHT.noteText));
 const showGear = computed(() => {
-  if (props.isDragging) return false;
+  if (!ctx.pickColors.value || props.isDragging) return false;
   const s = ctx.highlight.value.source;
   return !!s && s.kind === 'note' && s.key === props.note.key;
 });

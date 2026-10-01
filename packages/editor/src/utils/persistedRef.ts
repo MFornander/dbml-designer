@@ -1,5 +1,6 @@
 import { ref, watch, type Ref } from 'vue';
 import { debounce } from 'lodash-es';
+import { isEmbedded } from './embedded';
 
 /** Bump the version segment when the persisted shape changes incompatibly. */
 export const STORAGE_PREFIX = 'dbml-edit:v1:';
@@ -36,6 +37,8 @@ export class MemoryStorage implements Storage {
 const fallbackStorage = new MemoryStorage();
 
 function defaultStorage (): Storage {
+  // An embedded editor is its page's instance, and leaves the state of the editor opened on its own alone.
+  if (isEmbedded()) return fallbackStorage;
   try {
     if (typeof localStorage !== 'undefined' && localStorage !== null) {
       return localStorage;

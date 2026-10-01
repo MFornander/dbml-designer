@@ -110,6 +110,32 @@ export function usePanZoom (container: Ref<HTMLElement | null>) {
     viewport.value = resetZoom(content, viewSize.value);
   }
 
+  /**
+   * Pan just enough, at the same zoom, to bring a world rect into view with a margin; nothing moves
+   * when it is in view already. A rect too big for the pane shows its top left.
+   */
+  function panToShow (r: Rect, margin = 40): void {
+    measure();
+    const { x, y, k } = viewport.value;
+    const { w, h } = viewSize.value;
+    if (w === 0 || h === 0) return;
+    const shift = (start: number, end: number, size: number) => {
+      let d = 0;
+      if (end > size - margin) d = size - margin - end;
+      if (start + d < margin) d = margin - start;
+      return d;
+    };
+    const dx = shift(r.x * k + x, (r.x + r.w) * k + x, w);
+    const dy = shift(r.y * k + y, (r.y + r.h) * k + y, h);
+    if (dx !== 0 || dy !== 0) {
+      viewport.value = {
+        x: x + dx,
+        y: y + dy,
+        k,
+      };
+    }
+  }
+
   function zoomBy (factor: number): void {
     measure();
     viewport.value = zoomAt(viewport.value, {
@@ -126,6 +152,7 @@ export function usePanZoom (container: Ref<HTMLElement | null>) {
     onBackgroundPointerDown,
     fitTo,
     reset,
+    panToShow,
     zoomIn: () => zoomBy(ZOOM_STEP ** 4),
     zoomOut: () => zoomBy(1 / ZOOM_STEP ** 4),
     measure,

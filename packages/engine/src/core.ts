@@ -5,9 +5,13 @@
  */
 
 export {
-  createEngine, DEFAULT_DISPLAY,
+  createEngine, DEFAULT_DISPLAY, MARK_MS, MARK_WAIT_MS,
   type DiagramHandle, type DisplayOptions, type Engine, type EngineOptions, type Input,
 } from './engine/engine';
+export { addedKeys } from './engine/changes';
+export {
+  withEdges, withRows, withTables, withViewTables,
+} from './engine/modelEdits';
 
 // The model
 export type * from './model';
@@ -37,6 +41,9 @@ export {
   arrangeByGroup, arrangePending,
   type ArrangeInput, type ArrangeOptions, type ArrangeResult, type PendingInput,
 } from './geometry/arrange';
+export {
+  placeByLineage, placeNewItems, type LineageLink, type PlacementItem,
+} from './geometry/layout';
 export { createMeasurer, type Measurer } from './geometry/measure';
 export { computeTableSize, type TableSize } from './geometry/tableSize';
 export { visibleFields } from './geometry/lod';

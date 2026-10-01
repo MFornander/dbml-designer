@@ -8,7 +8,10 @@
       <div class="h-full bg-blue-500 animate-pulse w-full" />
     </div>
     <main class="flex-1 min-h-0">
+      <!-- Read-only: the diagram alone -->
+      <DiagramPane v-if="editor.readOnly" />
       <SplitPanel
+        v-else
         v-model="ui.splitSizes"
         :min-size="20"
         collapsible
@@ -31,9 +34,13 @@ import AppHeader from '@/components/AppHeader.vue';
 import SplitPanel from '@/components/SplitPanel.vue';
 import DiagramPane from '@/components/DiagramPane.vue';
 import EditorPane from '@/components/EditorPane.vue';
+import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
+import { useHostMessages } from '@/host/useHostMessages';
 
+const editor = useEditorStore();
 const parser = useParserStore();
 const ui = useUiStore();
+useHostMessages();
 </script>

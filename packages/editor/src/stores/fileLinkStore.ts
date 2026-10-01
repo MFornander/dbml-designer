@@ -16,6 +16,7 @@ import { languageOf, splitDocument } from '@/model/documentFormat';
 import { useFileIO } from '@/layout/useFileIO';
 import { usePersistedRef } from '@/utils/persistedRef';
 import { useEditorStore } from './editorStore';
+import { useEngineStore } from './engineStore';
 import { useLayoutStore } from './layoutStore';
 import { useParserStore } from './parserStore';
 import { useViewStore } from './viewStore';
@@ -104,6 +105,7 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   const parser = useParserStore();
   const layout = useLayoutStore();
   const views = useViewStore();
+  const { engine } = useEngineStore();
   const io = useFileIO();
 
   const state = usePersistedRef<FileLinkState>('fileLink', () => ({ ...FORGOTTEN }), {
@@ -179,12 +181,14 @@ export const useFileLinkStore = defineStore('fileLink', () => {
   const footerChanged = (footer: string | null) => footer !== null && footer !== synced.value?.footer;
 
   /**
-   * A change on disk is about to be taken in. When it changes the text, the views it adds may be
-   * switched to once the text is read (see the view store); one that leaves the text alone is
-   * never read again, so it is not noted.
+   * A change on disk is about to be taken in. When it changes the text, what it adds is marked on
+   * the diagram for a moment and the views it adds may be switched to, once the text is read (see
+   * the view store); one that leaves the text alone is never read again, so it is not noted.
    */
   function noteDiskChange (text: string): void {
-    if (splitDocument(text, languageOfPath(path.value)).body !== editor.text) views.noteDiskChange();
+    if (splitDocument(text, languageOfPath(path.value)).body === editor.text) return;
+    views.noteDiskChange();
+    engine.markChanges();
   }
 
   /** Put a file's text, minus its layout, into the editor, and give the diagram the layout asked for. */
@@ -379,10 +383,10 @@ export const useFileLinkStore = defineStore('fileLink', () => {
     applyFile(p.text, p.mtimeMs, footerChanged(splitDocument(p.text, languageOfPath(path.value)).layout) ? 'footer' : 'keep');
   }
 
-  /** Write the editor text with its layout. Refuses when the file changed since it was read, unless forced. */
+  /** Write the editor text with its layout. Refuses when the file changed since it was read, unless forced, and always while read-only. */
   async function save (force = false): Promise<boolean> {
     const p = path.value;
-    if (!p) return false;
+    if (!p || editor.readOnly) return false;
     const text = io.exportText();
     lastWritten = text;
     try {

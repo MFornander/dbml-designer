@@ -16,7 +16,7 @@ import {
   fromModel, layoutKeysOfModel, type EdgeEndpointVM, type FieldVM, type Model, type RefEndpointVM,
 } from '@dbml-designer/engine/core';
 import { splitLayoutComment, validateLayout } from '@/layout';
-import { readModelDocument, splitModelFile } from '@/model/modelFile';
+import { readModelDocument, splitModelFile, withoutSources } from '@/model/modelFile';
 import { layoutKeysOf } from '@/layout/schemaKeys';
 import type { ParserDiagnostic } from '@/types/diagnostics';
 
@@ -208,10 +208,7 @@ export function checkModelFileText (text: string): CheckResult & { model: Model 
 
 // The model: the schema as the engine's input, in declaration order, for reading without parsing DBML by eye.
 
-/** The model without the DBML text positions the adapter keeps as sources: what a model file holds. */
-export function withoutSources (model: Model): Model {
-  return JSON.parse(JSON.stringify(model, (key, value: unknown) => (key === 'source' ? undefined : value))) as Model;
-}
+export { withoutSources };
 
 /** The engine's model of a text, or null with the check result when the DBML has errors. */
 export function modelOf (text: string, opts: CompileOptions = {}): { model: Model | null; check: CheckResult } {

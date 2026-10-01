@@ -56,6 +56,7 @@
       :transform="`translate(${geo.mid.x} ${geo.mid.y}) scale(${1 / k})`"
     >
       <g
+        v-if="ctx.pickColors.value"
         class="dg-edge-tool"
         :transform="`translate(${customized ? -24 : -11} -36)`"
         role="button"
@@ -80,7 +81,7 @@
       <g
         v-if="customized"
         class="dg-edge-tool"
-        transform="translate(2 -36)"
+        :transform="`translate(${ctx.pickColors.value ? 2 : -11} -36)`"
         role="button"
         aria-label="Reset route"
         @pointerdown.stop

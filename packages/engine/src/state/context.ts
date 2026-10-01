@@ -19,6 +19,8 @@ export interface DiagramContext {
   togglePin (target: HoverTarget): void;
   beginDrag (e: PointerEvent, target: DragTarget, origin: Point): void;
   toggleGroup (key: string): void;
+  /** Whether hovered tables, groups, notes, and selected edges offer the color picker. */
+  pickColors: Ref<boolean>;
   /** Open the color picker beside a table header, group header, or sticky note. */
   openColorPicker (target: ColorTarget): void;
   /** Open a table's records as a table beside its header, or close them when they are open. */

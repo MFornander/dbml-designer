@@ -86,6 +86,70 @@ export function placeNewItems (
   return result;
 }
 
+/** A lineage edge between two tables, by key. */
+export interface LineageLink {
+  upstream: string;
+  downstream: string;
+}
+
+/**
+ * Place new tables that lineage connects to a placed table next to it, so a diagram that grows a
+ * few tables at a time extends from where they connect: an upstream table left of the table that
+ * reads it, else a downstream table right of the one it reads, level with it and pushed down past
+ * whatever is in the way, so several stack top to bottom. Tables placed here anchor the ones
+ * after; placed tables never move. Only the tables it could place are returned: the others have
+ * no placed neighbour.
+ */
+export function placeByLineage (
+  pending: readonly PlacementItem[],
+  links: readonly LineageLink[],
+  placed: ReadonlyMap<string, Rect>,
+  occupied: readonly Rect[],
+  opts: Partial<PlacementOptions> = {},
+): Map<string, Point> {
+  const o = {
+    ...DEFAULTS,
+    ...opts,
+  };
+  const result = new Map<string, Point>();
+  const at = new Map(placed);
+  const taken: Rect[] = [...occupied];
+  let waiting = [...pending].sort((a, b) => a.order - b.order);
+  for (let progress = true; progress && waiting.length > 0;) {
+    progress = false;
+    const still: PlacementItem[] = [];
+    for (const item of waiting) {
+      const reader = links.find((l) => l.upstream === item.key && l.downstream !== item.key && at.has(l.downstream));
+      const source = reader ? undefined : links.find((l) => l.downstream === item.key && l.upstream !== item.key && at.has(l.upstream));
+      if (!reader && !source) {
+        still.push(item);
+        continue;
+      }
+      const anchor = at.get(reader ? reader.downstream : source!.upstream)!;
+      const r: Rect = {
+        x: snap8(reader ? anchor.x - o.colGap - item.w : right(anchor) + o.colGap),
+        y: snap8(anchor.y),
+        w: item.w,
+        h: item.h,
+      };
+      for (let guard = 0; guard < 10_000; guard++) {
+        const hit = taken.find((t) => intersects(inflate(r, o.rowGap / 2), t));
+        if (!hit) break;
+        r.y = snap8(bottom(hit) + o.rowGap);
+      }
+      result.set(item.key, {
+        x: r.x,
+        y: r.y,
+      });
+      at.set(item.key, r);
+      taken.push(r);
+      progress = true;
+    }
+    waiting = still;
+  }
+  return result;
+}
+
 /** Stack new sticky notes in a column to the right of the current content. */
 export function placeNewNotes (keys: readonly string[], occupied: readonly Rect[]): Map<string, Point> {
   const result = new Map<string, Point>();

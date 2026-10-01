@@ -147,10 +147,6 @@ describe('fileLinkStore', () => {
     disk.set(`${DBML}DiagramView only_users {\n  Tables {\n    users\n  }\n}\n${FOOTER}`);
     disk.change();
     await flush();
-    // Nothing yet: the text is read after the typing pause.
-    expect(views.activeView).toBeNull();
-    useParserStore().parseNow();
-    await flush();
     expect(views.activeView).toBe('only_users');
   });
 

@@ -71,8 +71,13 @@ const engine = createEngine({
 |---|---|
 | `diagram` | The view model being drawn, computed from the model |
 | `setModel(model)` | Show another model. The layout is kept, tables without a position are placed, and what the model no longer has is dropped from the layout |
+| `addTables(tables)`, `addEdges(deps)`, `setRows(table, rows)`, `addToView(name, tables)` | Grow the model a little at a time, for a host that gave it as a value: add tables (or replace those with the same key), add lineage edges, replace a table's rows, add tables to a view (creating it). Calls made together are taken in as one change; what is new is marked |
+| `model` | The model being shown, with what those calls added |
+| `markChanges()`, `marked` | Highlight what the next model adds (tables, fields, relationships, lineage) for two seconds; `marked` holds their keys meanwhile. The methods above do it themselves; the editor asks for it when a followed file changes on disk |
+| `setView(name)` | `selectView` by another name |
+| `elementOf(key)` | The drawn element of a table, field (`schema.table.field`), group, note, or edge, by key, to anchor the host's own overlays to; null when it is not drawn |
 | `setLoading(flag)` | While true, the model is taken to be behind what the host is loading: nothing is placed or dropped against it |
-| `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), lineage by column (`lineageColumns`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all |
+| `display`, `setDisplay(partial)` | Detail level (`all`, `keys`, `names`), dark theme, which edges show (`showRefs`, `showLineage`), lineage by column (`lineageColumns`), partial refs as badges or lines, record values (`showValues`), lineage layout, highlight all, and whether the color picker is offered (`pickColors`; the host writes a picked color wherever it keeps the model) |
 | `views` | The views: `activeView`, `select`, the hidden set, and toggles that can be saved back into a view |
 | `selectView(name)` | Switch to a view, or to the Default View with `null`, and fit it to the window. A named view with no arrangement of its own, as when a program just wrote it, is arranged first by group and lineage, into its own layer |
 | `layout` | Positions, folded groups, hand-drawn routes, kept as layers: the Default View's, and one per named view on top |
@@ -84,6 +89,19 @@ const engine = createEngine({
 Each input of `createEngine` (`model`, `loading`, `display`, `bases`) is a value or a getter. A Vue host that keeps them in reactive state passes getters and the engine follows them; any other host passes values and calls the setters. `bases` are layouts the diagram inherits, nearest first; the editor passes the footers of the files a DBML file imports. `layoutState` and `activeView` take refs for a host that persists the layout layers and the active view as they change. `arrangeViews: false` leaves a view switched to without an arrangement looking like the Default View instead of arranging it.
 
 Engines share nothing: several can live on one page, each with its own model, layout, and views.
+
+### A diagram that grows
+
+Tables without a position are placed as the diagram draws them. One that a dep connects to a placed table goes beside it, so a diagram that grows a few tables at a time extends from where they connect: an upstream table to the left of the table that reads it, else a downstream table to the right of the one it reads, level with it and pushed down past whatever is in the way, so several stack top to bottom. Tables placed so anchor the next; tables already placed never move. The others are packed in columns at the right. Add a table and the edges that connect it in the same task, so they are placed together.
+
+What an update adds is highlighted for two seconds, updates in quick succession together. The zoom and pan stay where they are, except to bring the tables an update added into view when they land off screen, panning just enough.
+
+```ts
+engine.addTables([{ schema: 'input', name: 'item', fields: [{ name: 'unit_cost', type: 'double' }], records: [{ unit_cost: 12.5 }] }]);
+engine.addEdges([{ from: { table: 'input.item', fields: ['unit_cost'] }, to: { table: 'money.line_price', fields: ['price'] }, kind: 'value' }]);
+engine.addToView('trace_L1_price', ['input.item']);
+const price = engine.elementOf('money.line_price.price'); // the field's row, for a tooltip of the host's own
+```
 
 ### Hosts without Vue
 

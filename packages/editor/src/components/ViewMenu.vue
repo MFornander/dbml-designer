@@ -66,7 +66,7 @@
         :class="MENU_ITEM"
         role="option"
         aria-selected="false"
-        :disabled="parser.isStale"
+        :disabled="parser.isStale || editor.readOnly"
         title="Save what is shown now as a new view, named in the panel"
         @click="startCreate"
       >
@@ -201,6 +201,7 @@ import {
 import {
   MENU_ACTIVE, MENU_DIVIDER, MENU_HINT, MENU_ITEM, MENU_PANEL, MENU_SLOT,
 } from '@/components/common/menuStyles';
+import { useEditorStore } from '@/stores/editorStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -217,12 +218,14 @@ import { useViewActions } from '@/components/useViewActions';
 const views = useViewStore();
 const ui = useUiStore();
 const parser = useParserStore();
+const editor = useEditorStore();
 const layout = useLayoutStore();
 const actions = useViewActions();
 
-/** Rename and Delete act on a named view declared in this text; the Default View has neither. */
-const canEdit = computed(() => views.view !== null && actions.editable(views.view));
+/** Rename and Delete act on a named view declared in this text; the Default View has neither, and nothing is written while read-only. */
+const canEdit = computed(() => views.view !== null && actions.editable(views.view) && !editor.readOnly);
 function actionTitle (verb: string): string {
+  if (editor.readOnly) return 'Read-only';
   if (!views.view) return `The Default View cannot be ${verb.toLowerCase()}d`;
   if (!actions.editable(views.view)) return `${views.view.name} is declared in an imported file`;
   return verb === 'Delete' ? `Remove DiagramView ${views.view.name} from the DBML` : `${verb} ${views.view.name}`;

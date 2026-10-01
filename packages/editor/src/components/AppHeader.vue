@@ -28,6 +28,7 @@
           <span :class="MENU_HINT">.dbml, layout included</span>
         </button>
         <button
+          v-if="!editor.readOnly"
           :class="ITEM"
           role="menuitem"
           @click="run(() => fileInput?.click())"
@@ -36,7 +37,7 @@
           <span>Import</span>
           <span :class="MENU_HINT">.dbml</span>
         </button>
-        <template v-if="link.available">
+        <template v-if="link.available && !editor.readOnly">
           <div :class="MENU_DIVIDER" />
           <button
             :class="ITEM"
@@ -67,6 +68,7 @@
           <span>{{ ui.isDark ? 'Light mode' : 'Dark mode' }}</span>
         </button>
         <button
+          v-if="!editor.readOnly"
           :class="ITEM"
           role="menuitem"
           title="Replace the text and layout with the starter blog schema"
@@ -123,8 +125,10 @@ import {
 import FileMenu from '@/components/FileMenu.vue';
 import ViewMenu from '@/components/ViewMenu.vue';
 import { useFileIO } from '@/layout/useFileIO';
+import { useEditorStore } from '@/stores/editorStore';
 import { useFileLinkStore } from '@/stores/fileLinkStore';
 import { useUiStore } from '@/stores/uiStore';
+import { isEmbedded } from '@/utils/embedded';
 
 import {
   MENU_DIVIDER, MENU_HINT, MENU_ITEM, MENU_PANEL,
@@ -134,16 +138,18 @@ const BUTTON = 'h-8 w-8 flex items-center justify-center rounded text-[#8696b6] 
 const ITEM = MENU_ITEM;
 
 const ui = useUiStore();
+const editor = useEditorStore();
 const io = useFileIO();
 const link = useFileLinkStore();
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput');
 const menuRoot = useTemplateRef<HTMLElement>('menuRoot');
 const menuOpen = ref(false);
 
-/** ⌘S / Ctrl-S saves the followed file, or downloads the export when nothing is followed. */
+/** ⌘S / Ctrl-S saves the followed file, or downloads the export when nothing is followed; nothing while read-only. */
 function onSaveShortcut (e: KeyboardEvent) {
   if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 's' || e.shiftKey || e.altKey) return;
   e.preventDefault();
+  if (editor.readOnly) return;
   if (link.path) void link.save();
   else io.exportFile();
 }
@@ -172,7 +178,9 @@ function onKeyDown (e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onSaveShortcut);
-  void link.resume();
+  // Embedded, the page around decides what is shown; a file is followed only when picked.
+  if (isEmbedded()) void link.refreshFiles();
+  else void link.resume();
   window.addEventListener('pointerdown', onWindowPointerDown, true);
   window.addEventListener('keydown', onKeyDown);
 });

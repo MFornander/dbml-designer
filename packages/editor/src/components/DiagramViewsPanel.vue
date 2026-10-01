@@ -20,7 +20,11 @@
           weight="fill"
         />
       </span>
-      <div class="relative ml-auto flex items-stretch rounded-md bg-blue-600 text-[13px] font-medium text-white">
+      <!-- Saving writes the view into the text, which a read-only page never does -->
+      <div
+        v-if="!editor.readOnly"
+        class="relative ml-auto flex items-stretch rounded-md bg-blue-600 text-[13px] font-medium text-white"
+      >
         <button
           type="button"
           class="h-8 rounded-l-md px-3.5 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
@@ -270,6 +274,7 @@ import {
 } from '@phosphor-icons/vue';
 import { type DiagramModel, type TableVM, visibleEntities } from '@dbml-designer/engine';
 import { MENU_ITEM, MENU_PANEL } from '@/components/common/menuStyles';
+import { useEditorStore } from '@/stores/editorStore';
 import { useParserStore } from '@/stores/parserStore';
 import { useLayoutStore } from '@/stores/layoutStore';
 import { useViewStore } from '@/stores/viewStore';
@@ -293,6 +298,7 @@ const MAX_CHIPS = 6;
 const views = useViewStore();
 const layout = useLayoutStore();
 const parser = useParserStore();
+const editor = useEditorStore();
 const { editable, writeView, renameView } = useViewActions();
 
 // The Save arrow's list; the type stays open for more.

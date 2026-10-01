@@ -123,7 +123,7 @@ const nameStyle = computed(() => (props.group.color ? { fill: textColorFor(props
 const gearColor = computed(() => (props.group.color ? textColorFor(props.group.color) : (props.dark ? DARK : LIGHT).groupName));
 
 const showGear = computed(() => {
-  if (props.isDragging) return false;
+  if (!ctx.pickColors.value || props.isDragging) return false;
   const s = ctx.highlight.value.source;
   return !!s && s.kind === 'group' && s.key === props.group.key;
 });
