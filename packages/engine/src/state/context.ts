@@ -17,6 +17,8 @@ export interface DiagramContext {
   focus: ComputedRef<Focus>;
   /** Companion tables shown beside their owner. */
   unfolded: Ref<ReadonlySet<string>>;
+  /** A value's category by cell key, with its label and color; null for a value without one. */
+  categoryOf (key: string): { name: string; label: string; color: string } | null;
   dark: Ref<boolean>;
   dragging: ShallowRef<DragTarget | null>;
   setHover (target: HoverTarget | null): void;

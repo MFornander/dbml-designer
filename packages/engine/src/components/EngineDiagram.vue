@@ -22,6 +22,8 @@
     :grid-rows="display.gridRows"
     :zoom-detail="display.zoomDetail"
     :unfolded="engine.layout.unfoldedCompanions.value"
+    :cell-categories="engine.cellCategories.value"
+    :categories="display.categories"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

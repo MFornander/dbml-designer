@@ -45,6 +45,7 @@ export function makeContext (initialLod: AutoLod = 'full'): TestContext {
     clickEdge: (t) => pins.push(t),
     focus: computed(() => NO_FOCUS),
     unfolded: ref(new Set<string>()),
+    categoryOf: () => null,
     beginDrag: (_e, t) => drags.push(t),
     toggleGroup: (k) => toggled.push(k),
     pickColors: ref(true),

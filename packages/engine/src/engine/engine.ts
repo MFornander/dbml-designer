@@ -11,7 +11,7 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  AutoLod, DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
+  AutoLod, CategoryStyle, DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
 } from '../types';
 import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import type { Rect } from '../geometry/rect';
@@ -79,6 +79,12 @@ export interface DisplayOptions {
    * drawn table to table; at `structure` (0.1) tables are boxes under their group titles.
    */
   zoomDetail: ZoomDetail;
+  /**
+   * The host's palette for value categories, by name: each a label for the legend and a color for
+   * the dot before a value of that category (see `setCategories`). A category it does not name
+   * gets a grey dot and its name in the legend.
+   */
+  categories: Readonly<Record<string, CategoryStyle>>;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -97,6 +103,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   chipWidth: CHIP_W,
   gridRows: GRID_ROWS,
   zoomDetail: { ...DEFAULT_ZOOM_DETAIL },
+  categories: {},
 };
 
 /** A value given once, or a getter to follow. */
@@ -266,6 +273,7 @@ export function createEngine (options: EngineOptions = {}) {
     const highlighted = shallowRef<Highlight | null>(null);
     const viewport = computed(() => handle.value?.viewport() ?? null);
     const chips = shallowRef<Readonly<Record<string, readonly TableChip[]>> | null>(null);
+    const cellCategories = shallowRef<Readonly<Record<string, string>> | null>(null);
 
     // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
     // has no arrangement yet (which fits it), else fit it. Waits a tick for the diagram to take the
@@ -380,6 +388,17 @@ export function createEngine (options: EngineOptions = {}) {
       },
       /** What `setChips` last set, or null. */
       chips: computed(() => chips.value),
+      /**
+       * Give values a category, by cell key (`schema.table.field[index]`; index 0 on a table with
+       * one record), replacing every category set before; null takes them all away. A value with a
+       * category is drawn with a dot of its color from `categories` before it, and the legend lists
+       * the categories in use. Like `setChips`, it is the host's: not part of the model, and not stored.
+       */
+      setCategories (next: Readonly<Record<string, string>> | null): void {
+        cellCategories.value = next;
+      },
+      /** What `setCategories` last set, or null. */
+      cellCategories: computed(() => cellCategories.value),
       /**
        * Switch to a view by name, or to the Default View (null), and fit it; a named view with no
        * arrangement of its own is arranged first (see `arrangeViews`).

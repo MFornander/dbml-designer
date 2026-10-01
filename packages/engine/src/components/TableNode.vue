@@ -309,6 +309,15 @@
             text-anchor="middle"
           >{{ badge.label }}</text>
         </g>
+        <!-- The value's category, as a dot in the gap before the value column -->
+        <circle
+          v-if="size.rows[i]?.value && ctx.categoryOf(cellKey(f.key, 0))"
+          class="dg-category-dot"
+          :cx="w - PAD_X - size.valueW - VALUE_GAP / 2"
+          :cy="ROW_H / 2"
+          :r="CATEGORY_DOT_R"
+          :fill="ctx.categoryOf(cellKey(f.key, 0))!.color"
+        />
         <!-- The record's value, right of the type; null dimmed -->
         <text
           v-if="size.rows[i]?.value"
@@ -337,6 +346,14 @@
               :width="col.w + GRID_GAP"
               :height="ROW_H - 6"
               rx="3"
+            />
+            <circle
+              v-if="size.rows[i]?.cells?.[j] && ctx.categoryOf(cellKey(f.key, col.record))"
+              class="dg-category-dot"
+              :cx="-GRID_GAP / 2"
+              :cy="ROW_H / 2"
+              :r="CATEGORY_DOT_R"
+              :fill="ctx.categoryOf(cellKey(f.key, col.record))!.color"
             />
             <text
               v-if="size.rows[i]?.cells?.[j]"
@@ -470,6 +487,8 @@ const shift = computed(() => valueShift(props.size));
 const k = computed(() => ctx.viewport.value.k);
 const nameSize = computed(() => OVERVIEW_NAME_PX / k.value);
 const nameLines = computed(() => (lod.value === 'minimal' ? overviewLines(props.table.name, w.value, h.value, k.value) : []));
+/** A value's category dot. */
+const CATEGORY_DOT_R = 3;
 /** A chip dot's radius on screen, in pixels. */
 const DOT_PX = 4;
 /** Where the grid starts, and how far the header's schema label and gear keep left of its headings. */

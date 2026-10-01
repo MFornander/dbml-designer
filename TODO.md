@@ -155,6 +155,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Companion tables (engine 0.7.0): `ModelTable.companionOf` folds a table, such as a provenance twin or an explain view, into its owner's header as a badge; a click on it, or `layout.setUnfolded(keys, open)` for any number at once, shows it below its owner inside its group, and folds it back. The fold state is the layout's, per view, like collapsed groups; a folded companion and its lineage are not drawn. Zoomed out, group titles are cut to their group's width.
 
+- [x] Value categories (engine 0.7.1): `engine.setCategories(cells)` gives values a category by cell key, drawn as a dot of the category's color before the value from the host's palette (display option `categories`), named in the value's tooltip, and listed in the legend as used. Not part of the model, and not stored.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

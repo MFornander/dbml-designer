@@ -89,6 +89,12 @@ export interface TableChip {
   note?: string;
 }
 
+/** How a category of values is drawn and named in the legend (see `DisplayOptions.categories`). */
+export interface CategoryStyle {
+  label: string;
+  color: string;
+}
+
 /** What the view does when an update adds tables: pan to bring them into view, keep the whole diagram fitted until the user pans or zooms, or nothing. */
 export type RevealAdded = 'pan' | 'fit' | 'none';
 

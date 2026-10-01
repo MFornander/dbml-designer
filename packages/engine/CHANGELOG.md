@@ -4,6 +4,16 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.7.1 - 2026-10-01
+
+Value categories, with the host's palette and a legend.
+
+### Added
+
+- `engine.setCategories(cells)` and `engine.cellCategories`: a category per value, by cell key (index 0 on a table with one record), replacing every category set before; null takes them away. Like chips, they are the host's: not part of the model, and not stored.
+- Display option `categories`: the palette, by name, a `CategoryStyle` `{ label, color }` each. A categorized value gets a dot of its color in the gap before it, its text left as it is; a category the palette does not name gets a grey dot. A value's tooltip names its category, and the legend lists the categories of the values drawn, the palette's first in its order, then the rest by name, with or without lineage by column.
+- `DiagramCanvas` props `cellCategories` and `categories`; DOM hooks `.dg-category-dot` and `.dg-legend-item.is-category`.
+
 ## 0.7.0 - 2026-10-01
 
 Companion tables folded into their owners.

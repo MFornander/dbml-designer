@@ -186,9 +186,9 @@
       @close="recordsKey = null"
     />
     <div
-      v-if="legendKinds.length"
+      v-if="legendKinds.length || legendCategories.length"
       class="dg-legend"
-      aria-label="Lineage kinds"
+      aria-label="Legend"
     >
       <span
         v-for="k in legendKinds"
@@ -208,6 +208,26 @@
         </svg>
         {{ k }}
       </span>
+      <!-- The categories of the values drawn, each with its dot -->
+      <span
+        v-for="c in legendCategories"
+        :key="c.name"
+        class="dg-legend-item is-category"
+      >
+        <svg
+          width="8"
+          height="8"
+          aria-hidden="true"
+        >
+          <circle
+            cx="4"
+            cy="4"
+            r="3.5"
+            :fill="c.color"
+          />
+        </svg>
+        {{ c.label }}
+      </span>
     </div>
   </div>
 </template>
@@ -218,7 +238,7 @@ import {
 } from 'vue';
 import type {
   ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
-  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail,
+  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail, CategoryStyle,
 } from '../types';
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
@@ -309,7 +329,13 @@ const props = withDefaults(defineProps<{
   zoomDetail?: ZoomDetail;
   /** Companion tables shown beside their owner; the rest are folded into its header, and not drawn. */
   unfolded?: ReadonlySet<string>;
+  /** The host's value categories, by cell key. */
+  cellCategories?: Readonly<Record<string, string>> | null;
+  /** The palette for value categories, by name. */
+  categories?: Readonly<Record<string, CategoryStyle>>;
 }>(), {
+  cellCategories: null,
+  categories: () => ({}),
   unfolded: () => new Set<string>(),
   zoomDetail: () => ({ ...DEFAULT_ZOOM_DETAIL }),
   gridRows: GRID_ROWS,
@@ -949,6 +975,7 @@ const tooltip = useTooltip({
   suppressed: computed(() => suppressed.value || colorTarget.value !== null || recordsKey.value !== null || routeDragOverride.value !== null),
   filter: toRef(props, 'tooltipFilter'),
   chips: toRef(props, 'chips'),
+  categoryOf,
   sizes: geo.sizes,
 });
 
@@ -1091,6 +1118,7 @@ const ctx: DiagramContext = {
   clickEdge: onEdgeClick,
   focus,
   unfolded: toRef(props, 'unfolded'),
+  categoryOf,
   beginDrag: (e: PointerEvent, target: DragTarget, origin: Point) => {
     // Lineage-layout positions are derived from the dependency order, so nothing is movable there.
     if (props.lineageLayout) return;
@@ -1234,6 +1262,37 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
 });
 
 /** The kinds the drawn column mappings have, in legend order, while lineage is drawn by column. */
+/** The grey of a category the palette does not name. */
+const UNNAMED_CATEGORY = '#9CA3AF';
+
+/** A value's category, by cell key, with its legend label and its color; null for a value without one. */
+function categoryOf (key: string): { name: string; label: string; color: string } | null {
+  const name = props.cellCategories?.[key];
+  if (!name) return null;
+  const style = props.categories[name];
+  return {
+    name,
+    label: style?.label ?? name,
+    color: style?.color ?? UNNAMED_CATEGORY,
+  };
+}
+
+/** The categories of the values drawn: those the palette names first, in its order, then the rest by name. */
+const legendCategories = computed(() => {
+  const cells = props.cellCategories;
+  if (!cells) return [];
+  const tableOfField = new Map(model.value.tables.flatMap((t) => t.fields.map((f) => [f.key, t.key] as const)));
+  const used = new Set<string>();
+  for (const [key, name] of Object.entries(cells)) {
+    const cell = parseCellKey(key);
+    const table = cell && tableOfField.get(cell.fieldKey);
+    if (table && geo.boxes.value.has(table)) used.add(name);
+  }
+  const named = Object.keys(props.categories).filter((n) => used.has(n));
+  const rest = [...used].filter((n) => !(n in props.categories)).sort();
+  return [...named, ...rest].map((n) => categoryOf(Object.keys(cells).find((k) => cells[k] === n)!)!);
+});
+
 const legendKinds = computed<('value' | 'row')[]>(() => {
   if (!props.showLineage || !props.lineageColumns) return [];
   const kinds = new Set<string>();

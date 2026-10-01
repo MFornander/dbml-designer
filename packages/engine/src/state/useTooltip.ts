@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import type { ModelRecord } from '../model';
 import { fullValue } from '../geometry/values';
-import { DEFAULT_SCHEMA } from '../keys';
+import { cellKey, DEFAULT_SCHEMA } from '../keys';
 import type { NoteKey, TableKey } from '../keys';
 import type { TableSize } from '../geometry/tableSize';
 import type { Point, Rect } from '../geometry/rect';
@@ -79,6 +79,8 @@ export interface UseTooltipInputs {
   chips?: Ref<Readonly<Record<string, readonly TableChip[]>> | null>;
   /** Table sizes, which say whether a chip's label was cut to fit. */
   sizes?: Ref<Map<TableKey, TableSize>>;
+  /** A value's category by cell key, which its tooltip names. */
+  categoryOf?: (key: string) => { label: string } | null;
   delayMs?: number;
 }
 
@@ -332,6 +334,20 @@ export function useTooltip (input: UseTooltipInputs) {
   const delay = input.delayMs ?? 150;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
+  /** A value's tooltip names its category: a cell's, or the one value of a table with one record. */
+  function withCategory (content: TooltipContent | null, target: HoverTarget): TooltipContent | null {
+    if (!content || target.kind !== 'field' || !input.categoryOf) return content;
+    const records = input.model.value.tablesByKey.get(target.tableKey)?.records?.length ?? 0;
+    const row = target.row ?? (records === 1 ? 0 : undefined);
+    const category = row === undefined ? null : input.categoryOf(cellKey(target.fieldKey, row));
+    return category
+      ? {
+          ...content,
+          lines: [...(content.lines ?? []), `category: ${category.label}`],
+        }
+      : content;
+  }
+
   function cancel (): void {
     if (timer !== null) {
       clearTimeout(timer);
@@ -440,7 +456,7 @@ export function useTooltip (input: UseTooltipInputs) {
           input.chips?.value?.[target.tableKey]?.find((c) => c.id === target.chip),
           input.sizes?.value.get(target.tableKey)?.chips.find((c) => c.chip.id === target.chip)?.text,
         )
-      : buildTooltipContent(input.model.value, target);
+      : withCategory(buildTooltipContent(input.model.value, target), target);
     if (!next) {
       hide();
       return;
