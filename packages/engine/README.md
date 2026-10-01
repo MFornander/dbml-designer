@@ -2,7 +2,7 @@
 
 A diagram engine for database schemas and their lineage. Give it a model as plain JSON (tables, relationships, lineage edges, groups, sticky notes, views, and rows of data) and it draws an interactive diagram: drag, pan and zoom, hover highlights, tooltips, detail levels, light and dark themes, and an Arrange that lays out pipelines by group and lineage. It knows nothing of DBML, editors, or files.
 
-This README documents version 0.6.0. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
+This README documents version 0.6.1. [CHANGELOG.md](CHANGELOG.md) says what each version changed, [api.json](api.json) lists the complete public API of this version with every signature, and [model.schema.json](model.schema.json) is the model as a JSON Schema. The type declarations in `dist/types` carry a doc comment on every member.
 
 **Contents:** [Quick start](#quick-start) · [Install](#install) · [The model](#the-model) · [The engine](#the-engine) · [Drawing it](#drawing-it) · [Keys and the DOM](#keys-and-the-dom) · [A diagram that grows](#a-diagram-that-grows) · [Limitations](#limitations) · [All exports](#all-exports) · [Versioning](#versioning) · [Development](#development)
 
@@ -59,7 +59,7 @@ cd packages/engine
 npm pack
 ```
 
-Then `npm install /path/to/dbml-designer-engine-0.6.0.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
+Then `npm install /path/to/dbml-designer-engine-0.6.1.tgz` in the other project. The tarball keeps one copy of Vue, so a Vue host's own Vue serves the engine. Linking the folder instead (`npm install /path/to/dbml-designer/packages/engine`) also works, but a Vue host then needs `resolve: { dedupe: ['vue'] }` in its Vite config. The standalone entry bundles its own Vue and needs neither.
 
 ## The model
 
@@ -218,6 +218,7 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `fit(keys?)` | Fit the view to these elements by key, or to the whole diagram like `fitToScreen()`. |
 | `viewport` | The pan and zoom, `DiagramViewport` `{ x, y, zoom }`: a point at diagram coordinates (px, py) is drawn at (px·zoom + x, py·zoom + y) in the pane. Null while no diagram is mounted. |
 | `setViewport(partial)` | Pan and zoom; what is left out stays. |
+| `lod` | The level of detail the zoom draws at, an `AutoLod`: `'full'`, `'minimal'`, or `'structure'` (see `zoomDetail`); null while no diagram is mounted. |
 | `rectOf(key)` | Where a table, field, group, note, or edge is drawn, in client coordinates like `getBoundingClientRect`, worked out from the layout, so it stays right as elements redraw; a mapping of one kind (`…#kind`) is where its column pair is. Null when it is not drawn. |
 | `elementOf(key)` | The drawn element of a table, field, group, note, or edge, by key; null when it is not drawn. See [Keys and the DOM](#keys-and-the-dom). |
 | `highlight(keys, { dim?, accent? })` | Highlight tables, fields, edges, groups, and notes by key, on top of the engine's own hover and pin, until the next call; `null` clears it. A mapping key (`…#kind`) lights its column pair, drawn even while lineage is drawn by table pair. `dim` fades everything the highlight does not keep: the keys, the tables of their fields and at the ends of their edges, a column pair's table pair, and their groups. `accent` draws some keys more strongly. Nothing moves or is stored; dimmed elements still take hovers and clicks, and a hover lights them through the dim. |
@@ -240,6 +241,7 @@ A `ModelRecord` maps field names to a `ModelValue`: a string, number, boolean, o
 | `lineageKinds` | `null` | The lineage kinds drawn, such as `['value']`, or null for every kind. A dep without a kind always shows; a column pair shows while one of its mappings does, styled by the strongest of those; a table pair while one of its deps does; the legend lists only the kinds drawn. `engine.diagram` is the model drawn, so placement and Arrange follow the lineage drawn too. |
 | `partialRefMode` | `'badges'` | `PartialRefMode`: refs from a table partial as a badge in the table header, or `'lines'`. |
 | `showValues` | `true` | Record values on fields, and the grid or row-count badge of several. |
+| `zoomDetail` | `{ minimal: 0.4, structure: 0.1 }` | `ZoomDetail`: the zooms at or below which less is drawn, so many tables stay readable when fitted. At `minimal`, each table shows its name in place of its fields, wrapped to its box at 12px on screen whatever the zoom, chips shrink to dots, group titles show above their groups at 16px, lines keep their width on screen, and lineage is drawn table to table (a column pair the host highlights lights its pair). At `structure`, tables are boxes under their group titles. `{ minimal: 0, structure: 0 }` always draws full detail. |
 | `gridRows` | `5` | How many records a table with several shows as a grid, those a lineage edge's `row` names first; a "+N" column opens the rest. 0 shows a row-count badge instead. |
 | `lineageLayout` | `false` | Lay tables out by dependency order instead of their stored positions; nothing can be moved meanwhile. |
 | `highlightAll` | `false` | Highlight every edge. |
@@ -328,7 +330,7 @@ Everything drawn has a key, the same in the drawn model, the layout, `marked`, a
 
 - `data-key` on every drawn table (`.dg-table`), field row (`.dg-field`), group (`.dg-group`), note (`.dg-note`), and edge (`.dg-ref`, lineage edges also `.dg-dep`). `elementOf(key)` finds them.
 - `is-highlighted` on highlighted tables, fields, and edges; `is-dimmed` on what a host's `highlight` dims and `is-accent` on its accent; `--dg-dim-opacity` on the page sets how faint dimmed elements are (0.15); `is-kind-value` and `is-kind-row` on column pairs drawn by kind, after the strongest kind among their mappings (`value`, then `row`).
-- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-cell` (a cell of a grid, with its cell key in `data-key`), `.dg-grid-heading`, `.dg-grid-more` (the "+N" that opens the rest), `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
+- `.dg-chip` (a host's chip in a table header, with its id in `data-chip`), `.dg-cell` (a cell of a grid, with its cell key in `data-key`), `.dg-grid-heading`, `.dg-grid-more` (the "+N" that opens the rest), and zoomed out `is-overview` on `.dg-root`, `.dg-overview-name`, `.dg-overview-group`, `.dg-chip-dot`, `.dg-field-value` (a record value), `.dg-records-badge`, `.dg-records` (the records table), `.dg-legend`, and `.dg-tooltip`.
 - The colors are `--dg-*` CSS variables on the diagram's root, `.dg-root`; `paletteToCssVars(LIGHT)` and `paletteToCssVars(DARK)` list them.
 
 ## A diagram that grows
@@ -363,7 +365,7 @@ Every entry has all of `core`; `index` and `standalone` add the components and `
 - **Cardinality:** `parseMultiplicity`, `Multiplicity`, `isOneSide`, `isManySide`.
 - **Layout and views:** `createLayout`, `Layout`, `LayoutOptions`, `LayoutState`, `LayerState`, `LayoutKeys`, `LayoutSnapshot`, `LayoutLayer`, `PositionOrigin`, `XY`, `PositionsMap`, `PositionChange`, `emptyLayer`, `emptyLayout`, `emptyLayoutState`, `isLayoutState`, `layerFrom`, `layoutStateFrom`, `layoutKeysOfModel`, `baseLayoutFrom`, `minimizeLayout`, `isEmptyLayout`, `createViews`, `Views`, `ViewsOptions`, `hiddenForView`, `visibleEntities`, `sameHidden`.
 - **Placing and arranging:** `placeByLineage`, `placeNewItems`, `LineageLink`, `PlacementItem`, `PlacementOptions`, `arrangeByGroup`, `arrangePending`, `ArrangeInput`, `ArrangeOptions`, `ArrangeResult`, `PendingInput`, `createMeasurer`, `Measurer`, `computeTableSize`, `TableSize`, `visibleFields`, `Point`, `Size`, `Rect`.
-- **Events and the viewport:** `ElementEvent`, `ElementClickEvent`, `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`, `DiagramViewport`, `RevealAdded`, `Highlight`, `TableChip`.
+- **Events and the viewport:** `ElementEvent`, `ElementClickEvent`, `TableLinkPayload`, `ColorTarget`, `ColorChangePayload`, `DiagramViewport`, `RevealAdded`, `Highlight`, `TableChip`, `ZoomDetail`.
 - **Look:** `LIGHT`, `DARK`, `Palette`, `paletteToCssVars`, `normalizeHexColor`, `normalizeHex`, `isValidRails`, `isTypingTarget`.
 - **Components and mounting** (`index`, `standalone`): `EngineDiagram`, `DiagramCanvas`, `renderNoteMarkdown`, `mount`, `MountOptions`, `MountedDiagram`.
 

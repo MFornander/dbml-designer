@@ -6,6 +6,7 @@
       'is-panning': pz.isPanning.value,
       'is-pan': panning,
       'is-marquee': marquee !== null,
+      'is-overview': lod !== 'full',
       'dg-dark': dark,
     }"
     :style="cssVars"
@@ -217,7 +218,7 @@ import {
 } from 'vue';
 import type {
   ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
-  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload,
+  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail,
 } from '../types';
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
@@ -226,7 +227,7 @@ import {
   cellKey, parseCellKey, type FieldKey, type TableKey,
 } from '../keys';
 import { createMeasurer, loadDiagramFonts } from '../geometry/measure';
-import { autoLod } from '../geometry/lod';
+import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import {
   collapsedGroupSize, placeByLineage, placeNewItems, placeNewNotes,
 } from '../geometry/layout';
@@ -304,7 +305,10 @@ const props = withDefaults(defineProps<{
   chipWidth?: number;
   /** How many records a table's grid shows before a "+N" column; 0 shows a count badge instead of a grid. */
   gridRows?: number;
+  /** The zooms at or below which less is drawn, so a diagram zoomed out stays readable. */
+  zoomDetail?: ZoomDetail;
 }>(), {
+  zoomDetail: () => ({ ...DEFAULT_ZOOM_DETAIL }),
   gridRows: GRID_ROWS,
   chips: null,
   chipWidth: CHIP_W,
@@ -365,7 +369,7 @@ const viewportTransform = computed(() => {
   const vp = pz.viewport.value;
   return `translate(${vp.x} ${vp.y}) scale(${vp.k})`;
 });
-const lod = computed(() => autoLod(pz.viewport.value.k));
+const lod = computed(() => autoLod(pz.viewport.value.k, props.zoomDetail));
 watch(() => pz.viewport.value.k, (k) => emit('zoom-change', k), {
   immediate: true,
 });
@@ -1176,7 +1180,18 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   if (props.showLineage) {
     // A hovered table lights up its mappings too when they stand in for its table-level edges.
     const tableHover = hl.source?.kind === 'table' || hl.source?.kind === 'chip';
+    // Zoomed out, lineage is drawn table to table: a column pair lit by the host lights its table pair.
+    const overview = lod.value !== 'full';
     for (const d of model.value.deps) {
+      if (overview) {
+        const held = d.columns.some((c) => hostLit.has(c.key));
+        push(d, 'dep', geo.routes.value.get(d.key), hl.depKeys.has(d.key));
+        if (held && !hostLit.has(d.key)) {
+          const last = list[list.length - 1];
+          if (last?.edge === d) last.highlighted = true;
+        }
+        continue;
+      }
       if (props.lineageColumns && d.columns.length) {
         for (const c of d.columns) {
           push(c, 'dep', geo.routes.value.get(c.key), hl.depColumnKeys.has(c.key) || (tableHover && hl.depKeys.has(d.key)));

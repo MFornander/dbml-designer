@@ -20,6 +20,7 @@
     :chips="engine.chips.value"
     :chip-width="display.chipWidth"
     :grid-rows="display.gridRows"
+    :zoom-detail="display.zoomDetail"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

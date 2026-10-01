@@ -11,8 +11,9 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip,
+  AutoLod, DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
 } from '../types';
+import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import type { Rect } from '../geometry/rect';
 import { CHIP_W, GRID_ROWS } from '../geometry/constants';
 import { fromModel } from '../fromModel';
@@ -71,6 +72,13 @@ export interface DisplayOptions {
    * the rest. 0 shows a count badge that opens them instead. Needs `showValues`.
    */
   gridRows: number;
+  /**
+   * The zooms at or below which less is drawn, so a diagram of many tables stays readable when
+   * fitted: at `minimal` (0.4) each table shows its name, wrapped to its box at a size that stays
+   * readable, in place of its fields, chips shrink to dots, group titles grow, and lineage is
+   * drawn table to table; at `structure` (0.1) tables are boxes under their group titles.
+   */
+  zoomDetail: ZoomDetail;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -88,6 +96,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   lineageKinds: null,
   chipWidth: CHIP_W,
   gridRows: GRID_ROWS,
+  zoomDetail: { ...DEFAULT_ZOOM_DETAIL },
 };
 
 /** A value given once, or a getter to follow. */
@@ -255,6 +264,7 @@ export function createEngine (options: EngineOptions = {}) {
 
     const handle = shallowRef<DiagramHandle | null>(null);
     const highlighted = shallowRef<Highlight | null>(null);
+    const viewport = computed(() => handle.value?.viewport() ?? null);
     const chips = shallowRef<Readonly<Record<string, readonly TableChip[]>> | null>(null);
 
     // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
@@ -331,7 +341,9 @@ export function createEngine (options: EngineOptions = {}) {
         return handle.value?.rectOf(key) ?? null;
       },
       /** The mounted diagram's pan and zoom; null while none is mounted. */
-      viewport: computed(() => handle.value?.viewport() ?? null),
+      viewport,
+      /** The level of detail the mounted diagram's zoom draws at (see `zoomDetail`); null while none is mounted. */
+      lod: computed<AutoLod | null>(() => (viewport.value ? autoLod(viewport.value.zoom, display.value.zoomDetail) : null)),
       /** Pan and zoom the mounted diagram; what is left out stays. */
       setViewport (next: Partial<DiagramViewport>): void {
         handle.value?.setViewport(next);

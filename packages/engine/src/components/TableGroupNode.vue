@@ -79,6 +79,14 @@
       :y="GROUP_HEADER_H + (box.h - GROUP_HEADER_H) / 2"
       text-anchor="middle"
     >{{ memberCount }} {{ memberCount === 1 ? 'table' : 'tables' }}</text>
+    <!-- Zoomed out: the title above the group, at a size that stays readable -->
+    <text
+      v-if="ctx.lod.value !== 'full'"
+      class="dg-overview-group"
+      :font-size="OVERVIEW_GROUP_PX / ctx.viewport.value.k"
+      x="0"
+      :y="-6 / ctx.viewport.value.k"
+    >{{ group.name }}</text>
   </g>
 </template>
 
@@ -90,6 +98,7 @@ import {
   GEAR_SIZE, GROUP_HEADER_H, GROUP_NAME_X, GROUP_RADIUS, GROUP_TOGGLE_X, ICON_GAP, ICON_W,
 } from '../geometry/constants';
 import { roundedTopRectPath } from '../geometry/pathBuilder';
+import { OVERVIEW_GROUP_PX } from '../geometry/lod';
 import { groupBodyFill, textColorFor } from '../geometry/color';
 import { DARK, LIGHT } from '../theme/palette';
 import { useDiagramContext } from '../state/context';

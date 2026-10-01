@@ -113,14 +113,16 @@ describe('TableNode', () => {
     expect(hl[0]!.find('.dg-field-name').text()).toBe('email');
   });
 
-  it('replaces text with placeholders at low zoom and drops rows entirely at structure level', async () => {
+  it('shows the name in place of the fields at low zoom, and drops rows entirely at structure level', async () => {
     const ctx = makeContext('minimal');
     const { wrapper } = mountTable('all', ctx);
     expect(wrapper.findAll('.dg-field-name')).toHaveLength(0);
-    expect(wrapper.findAll('.dg-placeholder').length).toBeGreaterThan(0);
+    expect(wrapper.find('.dg-overview-name').text()).toBe('users');
+    expect(wrapper.findAll('.dg-placeholder')).toHaveLength(0);
 
     ctx.setLod('structure');
     await nextTick();
+    expect(wrapper.find('.dg-overview-name').exists()).toBe(false);
     expect(wrapper.findAll('.dg-placeholder')).toHaveLength(0);
     expect(wrapper.findAll('.dg-field-name')).toHaveLength(0);
     expect(wrapper.find('.dg-table-name').exists()).toBe(false);
@@ -313,7 +315,7 @@ describe('TableNode partial badges', () => {
     wrapper.unmount();
   });
 
-  it('hides the badges at low zoom, where the header is a placeholder, and draws no placeholder at full zoom', async () => {
+  it('hides the badges at low zoom, where the name stands in for the table, and draws no placeholder at full zoom', async () => {
     const ctx = makeContext();
     // In the default schema, which has no schema label.
     const { wrapper } = mountSite({
@@ -329,7 +331,7 @@ describe('TableNode partial badges', () => {
     ctx.setLod('minimal');
     await nextTick();
     expect(wrapper.findAll('.dg-partial-badge')).toHaveLength(0);
-    expect(wrapper.findAll('.dg-placeholder').length).toBeGreaterThan(0);
+    expect(wrapper.find('.dg-overview-name').exists()).toBe(true);
     wrapper.unmount();
   });
 });

@@ -4,6 +4,21 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.6.1 - 2026-10-01
+
+A diagram of many tables stays readable when fitted.
+
+### Added
+
+- Display option `zoomDetail` (`ZoomDetail`, `{ minimal: 0.4, structure: 0.1 }`): the zooms at or below which less is drawn. Below 0.4, 12px field text is drawn under 5px on screen, so a readable name is shown instead. At `minimal`, each table shows its name in place of its fields, wrapped to its box (after `_`, `.`, `-`, or between words) at 12px on screen whatever the zoom; chips shrink to dots; group titles show above their groups at 16px; lines keep their width on screen; and lineage is drawn table to table, a column pair the host highlights lighting its pair. At `structure`, tables are boxes under their group titles. `{ minimal: 0, structure: 0 }` always draws full detail.
+- `engine.lod`: the level of detail the mounted diagram's zoom draws at.
+- DOM hooks `is-overview` on `.dg-root`, `.dg-overview-name`, `.dg-overview-group`, and `.dg-chip-dot`.
+
+### Changed
+
+- Tables show their names in place of their fields from zoom 0.4 down, where they used to draw fields down to 0.2 and placeholder bars below; the bars remain only for a box too small for its name.
+- A grid heading's whole label is the native tooltip of its group, no longer inside the heading's text.
+
 ## 0.6.0 - 2026-10-01
 
 Several records as a grid in their table, and lineage between cells.

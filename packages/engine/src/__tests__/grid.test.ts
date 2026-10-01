@@ -122,8 +122,8 @@ describe('the grid', () => {
 
   it('draws headed cells, and a hovered cell lights the cells its records lead to', async () => {
     const { element, hovers, done } = await setup();
-    expect([...element.querySelectorAll('.dg-table[data-key="power.line_power"] .dg-grid-heading')].map((h) => h.textContent?.replace(/^.*?\n?/, '').trim()))
-      .toEqual(expect.arrayContaining([expect.stringContaining('CPU')]));
+    expect([...element.querySelectorAll('.dg-table[data-key="power.line_power"] .dg-grid-heading')].map((h) => h.textContent))
+      .toEqual(['CPU', 'GPU', 'TRAY']);
     const gpu = element.querySelector('[data-key="power.line_power.input_watts[1]"]')!;
     expect(gpu.textContent).toContain('340');
     gpu.dispatchEvent(new PointerEvent('pointerenter'));

@@ -35,8 +35,8 @@ describe('autoLod', () => {
     expect(autoLod(0.05)).toBe('structure');
     expect(autoLod(0.1)).toBe('structure');
     expect(autoLod(0.15)).toBe('minimal');
-    expect(autoLod(0.2)).toBe('minimal');
-    expect(autoLod(0.21)).toBe('full');
+    expect(autoLod(0.4)).toBe('minimal');
+    expect(autoLod(0.41)).toBe('full');
     expect(autoLod(1)).toBe('full');
   });
 });

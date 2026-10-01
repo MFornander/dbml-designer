@@ -1,9 +1,9 @@
 {
-  "version": "0.6.0",
+  "version": "0.6.1",
   "note": "The public API of @dbml-designer/engine at this version, written by `npm run api` (see the README, \"Versioning\"). Keys: `<entry> <name>` for what an entry exports, `type <Name>.<member>` for members of exported types (`?` when optional), `component <Name>.props` and `.emits` for components. CHANGELOG.md says what changed between versions.",
   "api": {
     "component DiagramCanvas.emits": "arrange, edge-route-change, element-click, element-hover, position-change, set-color, table-click, table-hover, toggle-group, viewport-change, zoom-change",
-    "component DiagramCanvas.props": "chipWidth?, chips?, collapsedGroups?, dark, detailLevel, edgeRoutes?, gridRows?, hidden?, highlightAll?, highlighted?, lineageColumns?, lineageLayout?, loading?, marked?, model, partialRefMode?, pickColors?, positions, revealAdded?, showLineage?, showRefs?, showValues?, tooltipFilter?",
+    "component DiagramCanvas.props": "chipWidth?, chips?, collapsedGroups?, dark, detailLevel, edgeRoutes?, gridRows?, hidden?, highlightAll?, highlighted?, lineageColumns?, lineageLayout?, loading?, marked?, model, partialRefMode?, pickColors?, positions, revealAdded?, showLineage?, showRefs?, showValues?, tooltipFilter?, zoomDetail?",
     "component EngineDiagram.emits": "arrange, element-click, element-hover, set-color, table-click, table-hover, viewport-change, zoom-change",
     "component EngineDiagram.props": "engine, tooltipFilter?",
     "core ArrangeInput": "interface",
@@ -105,6 +105,7 @@
     "core Views": "type",
     "core ViewsOptions": "interface",
     "core XY": "interface",
+    "core ZoomDetail": "interface",
     "core addedKeys": "(before: DiagramModel, after: DiagramModel) => Set<string>",
     "core arrangeByGroup": "(input: ArrangeInput, opts?: Partial<ArrangeOptions>) => ArrangeResult",
     "core arrangePending": "(input: PendingInput, opts?: Partial<ArrangeOptions>) => Map<string, Point>",
@@ -270,6 +271,7 @@
     "type DisplayOptions.showLineage": "boolean",
     "type DisplayOptions.showRefs": "boolean",
     "type DisplayOptions.showValues": "boolean",
+    "type DisplayOptions.zoomDetail": "ZoomDetail",
     "type EdgeEndpointVM.fieldIndices": "number[]",
     "type EdgeEndpointVM.fieldKeys": "string[]",
     "type EdgeEndpointVM.fieldNames": "string[]",
@@ -322,6 +324,7 @@
     "type Engine.layout.undoArrange": "() => boolean",
     "type Engine.layout.undoableArrangeTables": "ComputedRef<number>",
     "type Engine.loading": "ComputedRef<boolean>",
+    "type Engine.lod": "ComputedRef<AutoLod | null>",
     "type Engine.markChanges": "() => void",
     "type Engine.marked": "ComputedRef<ReadonlySet<string>>",
     "type Engine.model": "ComputedRef<Model | null>",
@@ -595,6 +598,7 @@
     "type MountedDiagram.engine.highlighted": "ComputedRef<Highlight | null>",
     "type MountedDiagram.engine.layout": "{ … }",
     "type MountedDiagram.engine.loading": "ComputedRef<boolean>",
+    "type MountedDiagram.engine.lod": "ComputedRef<AutoLod | null>",
     "type MountedDiagram.engine.markChanges": "() => void",
     "type MountedDiagram.engine.marked": "ComputedRef<ReadonlySet<string>>",
     "type MountedDiagram.engine.model": "ComputedRef<Model | null>",
@@ -797,6 +801,8 @@
     "type XY.h?": "number | undefined",
     "type XY.w?": "number | undefined",
     "type XY.x": "number",
-    "type XY.y": "number"
+    "type XY.y": "number",
+    "type ZoomDetail.minimal": "number",
+    "type ZoomDetail.structure": "number"
   }
 }

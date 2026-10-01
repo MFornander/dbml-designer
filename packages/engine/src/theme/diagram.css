@@ -195,6 +195,48 @@
   pointer-events: none;
 }
 
+/* Zoomed out: names wrapped to their tables, chips as dots, group titles, and lines that keep their width on screen */
+
+.dg-overview-name {
+  fill: var(--dg-field-name);
+  font-family: "Open Sans", system-ui, sans-serif;
+  font-weight: 600;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: var(--dg-field-bg);
+  stroke-width: 0.25em;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dg-chip-dot {
+  fill: var(--dg-chip-dot);
+}
+
+.dg-chip-dot.is-outline {
+  fill: none;
+  stroke: var(--dg-chip-dot);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.dg-overview-group {
+  fill: var(--dg-field-name);
+  font-family: "Open Sans", system-ui, sans-serif;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--dg-bg);
+  stroke-width: 0.3em;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dg-root.is-overview .dg-ref-line,
+.dg-root.is-overview .dg-table-border,
+.dg-root.is-overview .dg-group-body {
+  vector-effect: non-scaling-stroke;
+}
+
 /* A table's grid: a value column per record, headed by the record's label in the header */
 
 .dg-grid-heading {

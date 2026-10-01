@@ -113,6 +113,12 @@ export type MarkerKind = 'one' | 'maybe' | 'some' | 'many' | 'none' | 'arrow';
 /** Automatic level of detail driven by zoom. */
 export type AutoLod = 'full' | 'minimal' | 'structure';
 
+/** The zooms at or below which the diagram draws less: `minimal`, names in place of fields; `structure`, boxes and group titles. */
+export interface ZoomDetail {
+  minimal: number;
+  structure: number;
+}
+
 export interface FieldVM {
   key: FieldKey;
   name: string;

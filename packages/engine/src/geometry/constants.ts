@@ -107,7 +107,7 @@ export const FIT_PADDING = 40;
 
 // Automatic level of detail thresholds (zoom scale)
 export const LOD_STRUCTURE_MAX = 0.1;
-export const LOD_MINIMAL_MAX = 0.2;
+export const LOD_MINIMAL_MAX = 0.4;
 export const PLACEHOLDER_HEIGHT_RATIO = 0.3;
 
 // Initial placement

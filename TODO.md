@@ -151,6 +151,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Several records as a grid, and lineage between cells (engine 0.6.0): a table with several records shows a value column per record on its field rows, headed by the record's label (key values that differ, else 1, 2, 3), up to `gridRows`, referenced records first, with a "+N" column for the rest; `gridRows: 0` keeps the count badge. A dep end's `row` names a record by index or key values; row edges between the same columns stay one curve that lists its record pairs. Cells have keys (`t.c[2]`), take hover, click, `highlight`, and `rectOf`, and a hovered cell lights the cells its records lead to.
 
+- [x] Readable when zoomed out (engine 0.6.1): below `zoomDetail.minimal` (0.4) each table shows its name wrapped to its box at a constant 12px on screen in place of its fields, chips become dots, group titles show above their groups at 16px, lines keep their width, and lineage is drawn table to table; below `structure` (0.1) tables are boxes under their group titles. `engine.lod` tells the level.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

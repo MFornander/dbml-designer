@@ -57,7 +57,7 @@
         :y="ROW_H / 2"
       >{{ table.schema }}</text>
       <rect
-        v-if="lod === 'minimal'"
+        v-if="lod === 'minimal' && !nameLines.length"
         class="dg-placeholder"
         :x="PAD_X"
         :y="(ROW_H - placeholderH) / 2"
@@ -77,16 +77,21 @@
       <template v-if="lod === 'full'">
         <!-- The grid's headings: each record's label over its column, the whole label on hover; "+N" opens the rest -->
         <template v-if="size.grid">
-          <text
+          <!-- The whole label is the native tooltip of the group, so the text holds only what is drawn -->
+          <g
             v-for="col in size.grid.columns"
             :key="col.record"
-            class="dg-grid-heading"
-            :class="{ 'is-highlighted': litRecords.has(col.record) }"
-            :x="gridLeft + col.x + col.w"
-            :y="ROW_H / 2"
-            text-anchor="end"
-            :style="{ fill: headerTextColor }"
-          ><title>{{ col.title }}</title>{{ col.heading }}</text>
+          >
+            <title>{{ col.title }}</title>
+            <text
+              class="dg-grid-heading"
+              :class="{ 'is-highlighted': litRecords.has(col.record) }"
+              :x="gridLeft + col.x + col.w"
+              :y="ROW_H / 2"
+              text-anchor="end"
+              :style="{ fill: headerTextColor }"
+            >{{ col.heading }}</text>
+          </g>
           <g
             v-if="size.grid.more"
             class="dg-grid-more"
@@ -317,7 +322,7 @@
           </g>
         </template>
       </template>
-      <template v-else-if="lod === 'minimal'">
+      <template v-else-if="lod === 'minimal' && !nameLines.length">
         <rect
           class="dg-placeholder"
           :x="PAD_X"
@@ -337,6 +342,35 @@
       </template>
     </g>
 
+    <!-- Zoomed out: the name, wrapped to the box at a size that stays readable, in place of the fields -->
+    <text
+      v-if="nameLines.length"
+      class="dg-overview-name"
+      :font-size="nameSize"
+      text-anchor="middle"
+    >
+      <tspan
+        v-for="(line, i) in nameLines"
+        :key="i"
+        :x="w / 2"
+        :y="(h - nameLines.length * nameSize * OVERVIEW_LINE_H) / 2 + (i + 0.5) * nameSize * OVERVIEW_LINE_H"
+      >{{ line }}</tspan>
+    </text>
+    <!-- Zoomed out, chips shrink to dots at the header's right: filled, or a ring for an outlined chip -->
+    <template v-if="lod !== 'full'">
+      <circle
+        v-for="(c, i) in size.chips"
+        :key="c.chip.id"
+        class="dg-chip-dot"
+        :class="{ 'is-outline': c.chip.outline }"
+        :cx="w - (DOT_PX * 2 + i * DOT_PX * 3) / k"
+        :cy="ROW_H / 2"
+        :r="DOT_PX / k"
+        :style="{ '--dg-chip-dot': c.chip.color ?? headerTextColor }"
+      >
+        <title>{{ c.chip.label }}</title>
+      </circle>
+    </template>
     <rect
       class="dg-table-border"
       x="0.5"
@@ -356,7 +390,9 @@ import type { Rect } from '../geometry/rect';
 import {
   BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, valueShift, type FieldBadge, type TableSize,
 } from '../geometry/tableSize';
-import { isKeyField } from '../geometry/lod';
+import {
+  isKeyField, OVERVIEW_LINE_H, OVERVIEW_NAME_PX, overviewLines,
+} from '../geometry/lod';
 import {
   GEAR_SIZE, GRID_GAP, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_H, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
   VALUE_GAP,
@@ -403,6 +439,12 @@ const headerStyle = computed(() => ({
 const placeholderH = ROW_H * PLACEHOLDER_HEIGHT_RATIO;
 /** How far the type and its badges sit left of the row's right padding: the width of the value column. */
 const shift = computed(() => valueShift(props.size));
+/** Zoomed out to `minimal`: the name's size in diagram units, so it is the same on screen at every zoom, and its lines. */
+const k = computed(() => ctx.viewport.value.k);
+const nameSize = computed(() => OVERVIEW_NAME_PX / k.value);
+const nameLines = computed(() => (lod.value === 'minimal' ? overviewLines(props.table.name, w.value, h.value, k.value) : []));
+/** A chip dot's radius on screen, in pixels. */
+const DOT_PX = 4;
 /** Where the grid starts, and how far the header's schema label and gear keep left of its headings. */
 const gridLeft = computed(() => (props.size.grid ? w.value - PAD_X - props.size.grid.w : 0));
 const gridRight = computed(() => (props.size.grid ? props.size.grid.w + VALUE_GAP : 0));
