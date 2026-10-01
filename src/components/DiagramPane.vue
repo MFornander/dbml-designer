@@ -117,11 +117,8 @@
       <div :class="[TOOLBAR, 'px-1.5 gap-1 ml-auto']">
         <DetailLevelSelect />
         <span :class="DIVIDER" />
-        <EdgeModeSelect />
-        <span :class="DIVIDER" />
-        <!-- Only while some partial carries refs; pressed while they show as badges, the default -->
+        <!-- Pressed while partial refs show as badges, the default -->
         <button
-          v-if="hasPartialRefs"
           :class="[BUTTON, ui.partialRefMode === 'badges' ? ACTIVE : '']"
           :title="ui.partialRefMode === 'badges' ? 'Draw partial refs as lines' : 'Show partial refs as badges'"
           aria-label="Partial refs as badges"
@@ -130,6 +127,9 @@
         >
           <PhPuzzlePiece class="w-4 h-4" />
         </button>
+        <span :class="DIVIDER" />
+        <EdgeModeSelect />
+        <span :class="DIVIDER" />
         <button
           :class="[BUTTON, ui.highlightAll ? ACTIVE : '']"
           :title="ui.highlightAll ? 'Unhighlight relationships' : 'Highlight relationships'"
@@ -193,8 +193,6 @@ const canvas = useTemplateRef<InstanceType<typeof DiagramCanvas>>('canvas');
 const zoom = ref(1);
 
 const model = computed(() => buildDiagramModel(parser.rawDatabase));
-/** Some TablePartial brings refs, so the badges-or-lines toggle has something to switch. */
-const hasPartialRefs = computed(() => model.value.refs.some((r) => r.viaPartial));
 // The view store follows every parse so its hidden set matches the current definitions.
 watch(model, (m) => views.sync(m), {
   immediate: true,

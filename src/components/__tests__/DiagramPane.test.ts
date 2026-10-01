@@ -30,9 +30,9 @@ describe('DiagramPane partial refs toggle', () => {
     setActivePinia(createPinia());
   });
 
-  it('is left out while no partial carries refs', async () => {
+  it('shows even while no partial carries refs', async () => {
     const wrapper = await mountPane('TablePartial stamped { created_at timestamp }\nTable users {\n  id int [pk]\n  ~stamped\n}\n');
-    expect(wrapper.find(TOGGLE).exists()).toBe(false);
+    expect(wrapper.find(TOGGLE).exists()).toBe(true);
     wrapper.unmount();
   });
 
