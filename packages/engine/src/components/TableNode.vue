@@ -74,8 +74,35 @@
         :width="ICON_W"
         :height="ICON_W"
       />
-      <!-- One badge per partial whose refs are not drawn as lines; hovering it draws them and lights up what they reach -->
       <template v-if="lod === 'full'">
+        <!-- The host's chips: outlined for what does not change, filled for what does -->
+        <g
+          v-for="c in size.chips"
+          :key="c.chip.id"
+          class="dg-chip"
+          :class="{ 'is-outline': c.chip.outline }"
+          :data-chip="c.chip.id"
+          :transform="`translate(${c.x} ${(ROW_H - PARTIAL_BADGE_H) / 2})`"
+          :style="chipStyle(c.chip)"
+          @pointerenter="onChipEnter(c.chip.id)"
+          @pointerleave="onBadgeLeave"
+        >
+          <rect
+            class="dg-chip-bg"
+            x="0.5"
+            y="0.5"
+            :width="c.w - 1"
+            :height="PARTIAL_BADGE_H - 1"
+            :rx="(PARTIAL_BADGE_H - 1) / 2"
+          />
+          <text
+            class="dg-chip-text"
+            :x="c.w / 2"
+            :y="PARTIAL_BADGE_H / 2"
+            text-anchor="middle"
+          >{{ c.text }}</text>
+        </g>
+        <!-- One badge per partial whose refs are not drawn as lines; hovering it draws them and lights up what they reach -->
         <g
           v-for="b in size.badges"
           :key="b.partial"
@@ -254,7 +281,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { FieldVM, TableVM } from '../types';
+import type { FieldVM, TableChip, TableVM } from '../types';
 import type { FieldKey } from '../keys';
 import type { Rect } from '../geometry/rect';
 import {
@@ -385,6 +412,38 @@ function onFieldLeave () {
     kind: 'table',
     key: props.table.key,
   });
+}
+
+function onChipEnter (chip: string) {
+  ctx.setHover({
+    kind: 'chip',
+    tableKey: props.table.key,
+    chip,
+  });
+}
+
+/** A chip's colors: an outline in its color, or filled with its color and text that reads on it; the header's text color without one. */
+function chipStyle (chip: TableChip): Record<string, string | number> {
+  const color = chip.color ?? headerTextColor.value;
+  if (chip.outline) {
+    return {
+      '--dg-chip-fill': 'none',
+      '--dg-chip-stroke': color,
+      '--dg-chip-text': color,
+    };
+  }
+  return chip.color
+    ? {
+        '--dg-chip-fill': chip.color,
+        '--dg-chip-stroke': 'none',
+        '--dg-chip-text': textColorFor(chip.color),
+      }
+    : {
+        '--dg-chip-fill': color,
+        '--dg-chip-fill-opacity': 0.14,
+        '--dg-chip-stroke': 'none',
+        '--dg-chip-text': color,
+      };
 }
 
 function onBadgeEnter (partial: string) {

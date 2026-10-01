@@ -217,7 +217,7 @@ import {
 } from 'vue';
 import type {
   ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
-  PositionChange, PositionsMap, RevealAdded, TableLinkPayload,
+  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload,
 } from '../types';
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
@@ -231,7 +231,7 @@ import {
 import { arrangeByGroup, arrangePending } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
 import {
-  FONT_GROUP_NAME, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, ROW_H,
+  CHIP_W, FONT_GROUP_NAME, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, PARTIAL_BADGE_H, ROW_H,
 } from '../geometry/constants';
 import {
   intersects, snap8, union, type Point, type Rect,
@@ -296,7 +296,13 @@ const props = withDefaults(defineProps<{
   highlighted?: Highlight | null;
   /** Whether the engine shows its tooltip for a hovered element; false leaves the element to the host's own. */
   tooltipFilter?: (target: HoverTarget) => boolean;
+  /** The host's chips in table headers, by table key. */
+  chips?: Readonly<Record<string, readonly TableChip[]>> | null;
+  /** How wide every chip is drawn, whatever its label. */
+  chipWidth?: number;
 }>(), {
+  chips: null,
+  chipWidth: CHIP_W,
   revealAdded: 'pan',
   highlighted: null,
   loading: false,
@@ -395,6 +401,8 @@ const geo = useDiagramGeometry({
   edgeRoutes: toRef(props, 'edgeRoutes'),
   routeDragOverride,
   hidden: toRef(props, 'hidden'),
+  chips: toRef(props, 'chips'),
+  chipWidth: toRef(props, 'chipWidth'),
   measurer,
   measureVersion,
 });
@@ -534,7 +542,7 @@ function onElementClick (key: string) {
   const over = hover.hover.value;
   // On a table, what is under the pointer: one of its fields or partial badges, or the table itself.
   const target: HoverTarget = table
-    ? ((over?.kind === 'field' || over?.kind === 'partial') && over.tableKey === key
+    ? ((over?.kind === 'field' || over?.kind === 'partial' || over?.kind === 'chip') && over.tableKey === key
         ? over
         : {
             kind: 'table',
@@ -593,7 +601,7 @@ function elementEvent (target: HoverTarget): ElementEvent {
   return {
     target,
     ...(source !== undefined ? { source } : {}),
-    rect: rectOf(target.kind === 'field' ? target.fieldKey : target.kind === 'partial' ? target.tableKey : target.key),
+    rect: target.kind === 'chip' ? chipRect(target.tableKey, target.chip) : rectOf(target.kind === 'field' ? target.fieldKey : target.kind === 'partial' ? target.tableKey : target.key),
     point: lastPointer ? { ...lastPointer } : null,
   };
 }
@@ -604,6 +612,7 @@ function sourceOf (target: HoverTarget): Source | undefined {
     case 'table':
       return m.tablesByKey.get(target.key)?.source;
     case 'partial':
+    case 'chip':
       return m.tablesByKey.get(target.tableKey)?.source;
     case 'field':
       return m.tablesByKey.get(target.tableKey)?.fields.find((f) => f.key === target.fieldKey)?.source;
@@ -897,6 +906,8 @@ const tooltip = useTooltip({
   // The picker sits where the tooltip would; keep the two from stacking. No tooltips mid route-drag either.
   suppressed: computed(() => suppressed.value || colorTarget.value !== null || recordsKey.value !== null || routeDragOverride.value !== null),
   filter: toRef(props, 'tooltipFilter'),
+  chips: toRef(props, 'chips'),
+  sizes: geo.sizes,
 });
 
 function onWheel (e: WheelEvent) {
@@ -1145,7 +1156,7 @@ const edgesInRenderOrder = computed<RenderEdge[]>(() => {
   }
   if (props.showLineage) {
     // A hovered table lights up its mappings too when they stand in for its table-level edges.
-    const tableHover = hl.source?.kind === 'table';
+    const tableHover = hl.source?.kind === 'table' || hl.source?.kind === 'chip';
     for (const d of model.value.deps) {
       if (props.lineageColumns && d.columns.length) {
         for (const c of d.columns) {
@@ -1383,9 +1394,26 @@ function worldRectOf (key: string): Rect | null {
   return null;
 }
 
+/** Where a host's chip is drawn, in client coordinates; null when it is not drawn. */
+function chipRect (tableKey: string, id: string): Rect | null {
+  const box = geo.boxes.value.get(tableKey);
+  const chip = geo.sizes.value.get(tableKey)?.chips.find((c) => c.chip.id === id);
+  if (!box || !chip) return null;
+  return toClient({
+    x: box.x + chip.x,
+    y: box.y + (ROW_H - PARTIAL_BADGE_H) / 2,
+    w: chip.w,
+    h: PARTIAL_BADGE_H,
+  });
+}
+
 /** Where an element is drawn, in client coordinates; null when it is not drawn. */
 function rectOf (key: string): Rect | null {
-  const world = worldRectOf(key);
+  return toClient(worldRectOf(key));
+}
+
+/** A rectangle in diagram coordinates as it is drawn, in client coordinates. */
+function toClient (world: Rect | null): Rect | null {
   const pane = root.value?.getBoundingClientRect();
   if (!world || !pane) return null;
   const vp = pz.viewport.value;

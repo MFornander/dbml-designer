@@ -11,9 +11,10 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded,
+  DetailLevel, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip,
 } from '../types';
 import type { Rect } from '../geometry/rect';
+import { CHIP_W } from '../geometry/constants';
 import { fromModel } from '../fromModel';
 import type {
   Model, ModelDep, ModelRecord, ModelTable,
@@ -62,6 +63,8 @@ export interface DisplayOptions {
    * while one of its deps does. Placement and Arrange follow the lineage drawn.
    */
   lineageKinds: readonly string[] | null;
+  /** How wide every chip `setChips` puts in a table header is drawn, whatever its label; longer labels are cut with an ellipsis. */
+  chipWidth: number;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -77,6 +80,7 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   pickColors: true,
   revealAdded: 'pan',
   lineageKinds: null,
+  chipWidth: CHIP_W,
 };
 
 /** A value given once, or a getter to follow. */
@@ -244,6 +248,7 @@ export function createEngine (options: EngineOptions = {}) {
 
     const handle = shallowRef<DiagramHandle | null>(null);
     const highlighted = shallowRef<Highlight | null>(null);
+    const chips = shallowRef<Readonly<Record<string, readonly TableChip[]>> | null>(null);
 
     // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
     // has no arrangement yet (which fits it), else fit it. Waits a tick for the diagram to take the
@@ -345,6 +350,17 @@ export function createEngine (options: EngineOptions = {}) {
       },
       /** What `highlight` last set, or null. */
       highlighted: computed(() => highlighted.value),
+      /**
+       * Put chips in table headers, by table key, replacing every chip set before; null takes them
+       * all away. A chip is `chipWidth` wide whatever its label, so new labels never resize a table;
+       * only a table's number of chips does. Like `highlight`, it is the host's: not part of the
+       * model, and not stored.
+       */
+      setChips (next: Readonly<Record<string, readonly TableChip[]>> | null): void {
+        chips.value = next;
+      },
+      /** What `setChips` last set, or null. */
+      chips: computed(() => chips.value),
       /**
        * Switch to a view by name, or to the Default View (null), and fit it; a named view with no
        * arrangement of its own is arranged first (see `arrangeViews`).

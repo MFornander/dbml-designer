@@ -17,6 +17,8 @@
     :reveal-added="display.revealAdded"
     :highlighted="engine.highlighted.value"
     :tooltip-filter="tooltipFilter"
+    :chips="engine.chips.value"
+    :chip-width="display.chipWidth"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

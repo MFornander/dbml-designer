@@ -73,6 +73,22 @@ export interface Highlight {
   dim: boolean;
 }
 
+/**
+ * A chip in a table's header, after its name: a kind, a status, or anything short the host keeps
+ * current. Every chip is `chipWidth` wide, its label cut to fit, so updates never resize a table.
+ */
+export interface TableChip {
+  /** Names the chip within its table, in click and hover events. */
+  id: string;
+  label: string;
+  /** Fill, or the outline of an outlined chip; the header's text color when absent. */
+  color?: string;
+  /** Drawn as an outline, for what does not change, rather than filled, for what does. */
+  outline?: boolean;
+  /** Its tooltip, after the full label when the label was cut to fit. */
+  note?: string;
+}
+
 /** What the view does when an update adds tables: pan to bring them into view, keep the whole diagram fitted until the user pans or zooms, or nothing. */
 export type RevealAdded = 'pan' | 'fit' | 'none';
 

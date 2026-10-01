@@ -11,6 +11,8 @@ export type HoverTarget =
   | { kind: 'field'; tableKey: TableKey; fieldKey: FieldKey }
   /** A partial badge in a table header: the refs that partial gives the table. */
   | { kind: 'partial'; tableKey: TableKey; partial: string }
+  /** A chip the host put in a table header (see `Engine.setChips`), by its id. */
+  | { kind: 'chip'; tableKey: TableKey; chip: string }
   | { kind: 'ref'; key: RefKey }
   | { kind: 'dep'; key: DepKey }
   | { kind: 'group'; key: GroupKey }
@@ -55,6 +57,12 @@ export function deriveHighlight (model: DiagramModel, target: HoverTarget | null
       tableKeys.add(target.key);
       refList = model.refsByTable.get(target.key) ?? [];
       depList = model.depsByTable.get(target.key) ?? [];
+      break;
+    // A chip lights up its table as the header around it does.
+    case 'chip':
+      tableKeys.add(target.tableKey);
+      refList = model.refsByTable.get(target.tableKey) ?? [];
+      depList = model.depsByTable.get(target.tableKey) ?? [];
       break;
     case 'field':
       tableKeys.add(target.tableKey);
@@ -135,6 +143,7 @@ export function sameTarget (a: HoverTarget | null, b: HoverTarget | null): boole
   if (!a || !b || a.kind !== b.kind) return false;
   if (a.kind === 'field' && b.kind === 'field') return a.fieldKey === b.fieldKey;
   if (a.kind === 'partial' && b.kind === 'partial') return a.tableKey === b.tableKey && a.partial === b.partial;
+  if (a.kind === 'chip' && b.kind === 'chip') return a.tableKey === b.tableKey && a.chip === b.chip;
   if ('key' in a && 'key' in b) return a.key === b.key;
   return false;
 }
@@ -148,6 +157,8 @@ export function targetExists (model: DiagramModel, t: HoverTarget): boolean {
       return model.tablesByKey.get(t.tableKey)?.fields.some((f) => f.key === t.fieldKey) ?? false;
     case 'partial':
       return model.tablesByKey.get(t.tableKey)?.partialRefs?.some((p) => p.partial === t.partial) ?? false;
+    case 'chip':
+      return model.tablesByKey.has(t.tableKey);
     case 'ref':
       return model.refs.some((r) => r.key === t.key);
     case 'dep':

@@ -195,6 +195,22 @@
   pointer-events: none;
 }
 
+/* The host's chips in a table header: a fixed-width pill, outlined or filled (colors set per chip) */
+
+.dg-chip-bg {
+  fill: var(--dg-chip-fill);
+  fill-opacity: var(--dg-chip-fill-opacity, 1);
+  stroke: var(--dg-chip-stroke, none);
+  stroke-width: 1;
+}
+
+.dg-chip-text {
+  fill: var(--dg-chip-text);
+  font: 600 11px "Open Sans", system-ui, sans-serif;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
 /* Record values: one record's values right of the types, and the count of several, which opens them */
 .dg-field-value {
   fill: var(--dg-field-name);

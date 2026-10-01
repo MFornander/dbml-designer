@@ -1,12 +1,12 @@
 import {
   FONT_FIELD, FONT_FIELD_BOLD, FONT_PARTIAL_BADGE, FONT_TABLE_NAME, FONT_TYPE, FONT_TYPE_BOLD, FONT_VALUE,
-  ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, VALUE_GAP, VALUE_MAX_W, WIDTH_EXTRA,
+  CHIP_W, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_GAP, PARTIAL_BADGE_PAD_X, ROW_H, SCHEMA_GAP, VALUE_GAP, VALUE_MAX_W, WIDTH_EXTRA,
 } from './constants';
 import type { Measurer } from './measure';
 import { fitText, formatValue, type ValueKind } from './values';
 import { isKeyField } from './lod';
 import { DEFAULT_SCHEMA } from '../keys';
-import type { FieldVM, TableVM } from '../types';
+import type { FieldVM, TableChip, TableVM } from '../types';
 
 export interface RowMetrics {
   nameW: number;
@@ -31,6 +31,16 @@ export interface HeaderBadge {
   w: number;
 }
 
+/** A host's chip in the header: where it sits and its label, cut to its fixed width. */
+export interface HeaderChip {
+  chip: TableChip;
+  /** Left edge, from the table's left edge. */
+  x: number;
+  w: number;
+  /** The label, with an ellipsis when it does not fit. */
+  text: string;
+}
+
 export interface TableSize {
   width: number;
   height: number;
@@ -40,7 +50,9 @@ export interface TableSize {
   nameW: number;
   /** The faded schema label at the right, 0 for the default schema. */
   schemaW: number;
-  /** Partial badges after the name and its icon, in order; empty unless partial refs are drawn as badges. */
+  /** The host's chips after the name and its icon, in order. */
+  chips: HeaderChip[];
+  /** Partial badges after the chips, in order; empty unless partial refs are drawn as badges. */
   badges: HeaderBadge[];
   /** The count of a table's records, after the partial badges, when it has several and values show; it opens them. */
   recordsBadge?: {
@@ -134,16 +146,31 @@ export function valueShift (size: Pick<TableSize, 'valueW'>): number {
 }
 
 /**
- * Size of a table and the layout of its header. `badges` names the partials whose refs show as
- * badges after the name; the header, and so the table, widens to fit them before the schema label.
- * With `values`, a table with one record gets a value column, capped at `VALUE_MAX_W`, and one
- * with several gets a badge with their count.
+ * Size of a table and the layout of its header. `chips` are the host's chips after the name, each
+ * `chipWidth` wide whatever its label, so a new label never resizes the table; `badges` names the
+ * partials whose refs show as badges after them. The header, and so the table, widens to fit both
+ * before the schema label. With `values`, a table with one record gets a value column, capped at
+ * `VALUE_MAX_W`, and one with several gets a badge with their count.
  */
-export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measurer, badges: readonly string[] = [], values = false): TableSize {
+export function computeTableSize (
+  t: TableVM, rows: readonly FieldVM[], m: Measurer, badges: readonly string[] = [], values = false,
+  chips: readonly TableChip[] = [], chipWidth = CHIP_W,
+): TableSize {
   const nameW = m.measure(t.name, FONT_TABLE_NAME);
   const schemaW = t.schema === DEFAULT_SCHEMA ? 0 : m.measure(t.schema, FONT_FIELD);
   const iconW = hasTableDetails(t) ? ICON_GAP + ICON_W : 0;
   let badgesW = 0;
+  const headerChips = chips.map((chip): HeaderChip => {
+    badgesW += PARTIAL_BADGE_GAP;
+    const placed = {
+      chip,
+      x: PAD_X + nameW + iconW + badgesW,
+      w: chipWidth,
+      text: fitText(chip.label, chipWidth - 2 * PARTIAL_BADGE_PAD_X, m, FONT_PARTIAL_BADGE),
+    };
+    badgesW += chipWidth;
+    return placed;
+  });
   const headerBadges = badges.map((partial): HeaderBadge => {
     const w = Math.ceil(m.measure(partialBadgeLabel(partial), FONT_PARTIAL_BADGE) + 2 * PARTIAL_BADGE_PAD_X);
     badgesW += PARTIAL_BADGE_GAP;
@@ -194,6 +221,7 @@ export function computeTableSize (t: TableVM, rows: readonly FieldVM[], m: Measu
     headerW,
     nameW,
     schemaW,
+    chips: headerChips,
     badges: headerBadges,
     ...(recordsBadge ? { recordsBadge } : {}),
     valueW,

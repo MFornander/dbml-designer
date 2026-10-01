@@ -1,7 +1,7 @@
 import { computed, type Ref } from 'vue';
 import type { PositionsMap } from '../types';
 import type {
-  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupVM, MarkerKind, PartialRefMode, RefVM, TableVM,
+  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupVM, MarkerKind, PartialRefMode, RefVM, TableChip, TableVM,
 } from '../types';
 import type {
   GroupKey, NoteKey, RefKey, TableKey,
@@ -78,6 +78,9 @@ export interface GeometryInputs {
   revealedRefs: Ref<ReadonlySet<RefKey>>;
   /** Record values on their fields, and the count of a table's records in its header. */
   showValues: Ref<boolean>;
+  /** The host's chips by table key, and the width each is drawn at. */
+  chips: Ref<Readonly<Record<string, readonly TableChip[]>> | null>;
+  chipWidth: Ref<number>;
   /** Lineage layout: tables with lineage edges laid out by dependency order; everything else hidden. */
   lineageLayout: Ref<boolean>;
   dragOverride: Ref<DragOverride | null>;
@@ -167,6 +170,8 @@ export function useDiagramGeometry (input: GeometryInputs) {
     return refs.filter((r) => !r.viaPartial || revealed.has(r.key));
   });
 
+  const chipsOf = (t: TableVM): readonly TableChip[] => input.chips.value?.[t.key] ?? [];
+
   /** The partials a table's header has a badge for in badge mode. */
   const partialsOf = (t: TableVM): string[] => (t.partialRefs ?? []).map((p) => p.partial);
 
@@ -175,7 +180,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
       const badges = partialBadges.value ? partialsOf(t) : [];
-      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges, input.showValues.value));
+      map.set(t.key, computeTableSize(t, rowsByTable.value.get(t.key) ?? [], input.measurer, badges, input.showValues.value, chipsOf(t), input.chipWidth.value));
     }
     return map;
   });
@@ -189,7 +194,7 @@ export function useDiagramGeometry (input: GeometryInputs) {
     void input.measureVersion.value;
     const map = new Map<TableKey, TableSize>();
     for (const t of input.model.value.tables) {
-      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t), true));
+      map.set(t.key, computeTableSize(t, visibleFields(t, 'all'), input.measurer, partialsOf(t), true, chipsOf(t), input.chipWidth.value));
     }
     return map;
   });

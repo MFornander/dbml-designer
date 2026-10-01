@@ -39,6 +39,8 @@ export const PARTIAL_BADGE_H = 18;
 export const PARTIAL_BADGE_PAD_X = 6;
 /** Space before each badge, after the name (or its note icon) or the previous badge. */
 export const PARTIAL_BADGE_GAP = 6;
+/** Default width of a host's chip in a table header (see `DisplayOptions.chipWidth`). */
+export const CHIP_W = 72;
 
 // Record values: a column at the right of the field rows when a table has one record
 /** Values are drawn like types, in the monospace face. */

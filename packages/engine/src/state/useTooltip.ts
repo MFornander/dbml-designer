@@ -2,12 +2,13 @@ import {
   onBeforeUnmount, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  DiagramModel, EdgeEndpointVM, EnumValueVM, FieldVM, IndexVM,
+  DiagramModel, EdgeEndpointVM, EnumValueVM, FieldVM, IndexVM, TableChip,
 } from '../types';
 import type { ModelRecord } from '../model';
 import { fullValue } from '../geometry/values';
 import { DEFAULT_SCHEMA } from '../keys';
 import type { NoteKey, TableKey } from '../keys';
+import type { TableSize } from '../geometry/tableSize';
 import type { Point, Rect } from '../geometry/rect';
 import { worldToScreen, type Viewport } from '../geometry/viewport';
 import { GROUP_HEADER_H, ROW_H } from '../geometry/constants';
@@ -74,6 +75,10 @@ export interface UseTooltipInputs {
   suppressed: Ref<boolean>;
   /** Whether to show the tooltip for a target at all; the host's, to show its own instead. */
   filter?: Ref<((target: HoverTarget) => boolean) | undefined>;
+  /** The host's chips by table key; a chip's note is its tooltip. */
+  chips?: Ref<Readonly<Record<string, readonly TableChip[]>> | null>;
+  /** Table sizes, which say whether a chip's label was cut to fit. */
+  sizes?: Ref<Map<TableKey, TableSize>>;
   delayMs?: number;
 }
 
@@ -274,6 +279,21 @@ export function buildTooltipContent (model: DiagramModel, target: HoverTarget): 
 }
 
 /**
+ * A chip's tooltip: its label with its note, and the full label alone when it was cut to fit;
+ * none for a chip whose label fits and has no note, so nothing is lost to the ellipsis.
+ */
+function chipTooltip (chip: TableChip | undefined, shown: string | undefined): TooltipContent | null {
+  if (!chip) return null;
+  const cut = shown !== undefined && shown !== chip.label;
+  if (!chip.note && !cut) return null;
+  return {
+    kind: 'chip',
+    title: chip.label,
+    ...(chip.note ? { note: chip.note } : {}),
+  };
+}
+
+/**
  * Drives the single tooltip overlay from the hover state. Shows after a short delay and hides
  * immediately when the pointer leaves, drags, pans, or zooms. Table, field, and group tooltips
  * anchor to the hovered row; edge tooltips anchor to the cursor and follow it.
@@ -311,9 +331,10 @@ export function useTooltip (input: UseTooltipInputs) {
 
   function worldAnchor (target: HoverTarget): Rect | null {
     switch (target.kind) {
-      // A partial badge opens its tooltip beside the header it sits in, like the table's own.
+      // A partial badge or a chip opens its tooltip beside the header it sits in, like the table's own.
       case 'table':
-      case 'partial': {
+      case 'partial':
+      case 'chip': {
         const b = input.boxes.value.get(target.kind === 'table' ? target.key : target.tableKey);
         return b
           ? {
@@ -386,7 +407,12 @@ export function useTooltip (input: UseTooltipInputs) {
       hide();
       return;
     }
-    const next = buildTooltipContent(input.model.value, target);
+    const next = target.kind === 'chip'
+      ? chipTooltip(
+          input.chips?.value?.[target.tableKey]?.find((c) => c.id === target.chip),
+          input.sizes?.value.get(target.tableKey)?.chips.find((c) => c.chip.id === target.chip)?.text,
+        )
+      : buildTooltipContent(input.model.value, target);
     if (!next) {
       hide();
       return;

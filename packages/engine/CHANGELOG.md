@@ -4,6 +4,21 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.5.0 - 2026-10-01
+
+Chips in table headers, kept by the host.
+
+### Added
+
+- `engine.setChips(chips)` and `engine.chips`: chips in table headers after the name, by table key, replacing every chip set before; null takes them away. A `TableChip` is `{ id, label, color?, outline?, note? }`: outlined for what does not change, filled for what does. Its tooltip is its `note`, led by the full label when the label was cut, so nothing is lost to the ellipsis. Like `highlight`, chips are the host's: not part of the model, and not stored.
+- Display option `chipWidth` (72): every chip is that wide, its label cut with an ellipsis, so a new label never resizes a table; only a table's number of chips does.
+- `DiagramCanvas` props `chips` and `chipWidth`; the DOM hook `.dg-chip` with `data-chip`.
+
+### Changed (breaking)
+
+- `HoverTarget` has a new kind, `{ kind: 'chip', tableKey, chip }`, in `element-click` and `element-hover` (with the chip's own `rect` and its table's `source`), and so has `TooltipContent.kind`. A host that switches over every kind adds it. A chip lights up its table on hover, and a click on it selects and pins its table like a click on the header.
+- `TableSize` has `chips`, and `computeTableSize` takes the chips and their width after `values`.
+
 ## 0.4.3 - 2026-10-01
 
 Lineage filtered by kind.

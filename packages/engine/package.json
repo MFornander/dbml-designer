@@ -1,6 +1,6 @@
 {
   "name": "@dbml-designer/engine",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Interactive diagrams of database schemas and data lineage, drawn from a plain JSON model: tables, relationships, lineage edges, groups, notes, views, and rows of data. Built for Vue 3 hosts, with a standalone build for any page.",
   "license": "Apache-2.0",
   "type": "module",

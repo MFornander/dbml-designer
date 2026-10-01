@@ -147,6 +147,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Lineage by kind (engine 0.4.3): display option `lineageKinds` (null for all) draws only the deps of the kinds listed, and those without a kind; a column pair shows while one of its mappings does, styled by the strongest shown, a table pair while one of its deps does, and the legend lists only what is drawn. The filter applies to the model drawn, so hover, tooltips, highlight, placement, and Arrange follow it.
 
+- [x] Chips in table headers (engine 0.5.0): `engine.setChips(map)` puts the host's chips after a table's name, outlined (a kind) or filled (a status, colored by severity), each `chipWidth` wide with its label cut to fit, so case switches never resize a table; a chip's note is its tooltip, and its clicks and hovers reach the host as a `chip` target with its own rectangle. Not part of the model, and not stored.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).
