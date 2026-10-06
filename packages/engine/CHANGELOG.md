@@ -4,6 +4,22 @@ Every version of `@dbml-designer/engine`, newest first. Each entry says what cha
 
 The version follows [semantic versioning](https://semver.org). Before 1.0, a change that can break a host raises the minor number (0.2.x to 0.3.0) and anything else the patch number; from 1.0 on, breaking changes raise the major number. `api.json` in the package lists the whole public API of its version, signatures included, so comparing two versions' `api.json` shows every change; `ENGINE_VERSION` says at run time which version a host got. How the API is kept in step with the version is in the README, under "Versioning".
 
+## 0.7.4 - 2026-10-06
+
+A large lineage diagram readable when fitted.
+
+### Added
+
+- Display option `arrangeFor` (`ArrangeFor`): `'all'`, the default, spaces tables for every field as before; `'drawn'` spaces them for the detail level drawn, closer together with names only, and arranges again when the detail level changes while nothing has changed since the arrangement. `DiagramCanvas` prop `arrangeFor`.
+- Display option `groupStyle` (`GroupStyle`): `'box'`, the default, as before, or `'band'`, open groups drawn as faint columns of their color as tall as the diagram, titled at the top, with no border. `DiagramCanvas` prop `groupStyle`; DOM hook `is-band` on `.dg-group`.
+- `ArrangeOptions.aspect`: the width over height Arrange aims for; the canvas passes its pane's, and `arrangeByGroup` defaults to 1.6. 0 never wraps.
+
+### Changed
+
+- Arrange wraps a layer taller than the pane allows into several columns, filled left to right and then down, as many as let the whole arrangement fit the pane at the largest zoom, so a group of many inputs no longer sets the fitted zoom on its own. Tables that read nothing, such as inputs, are ordered by where the tables that read them sit, after their color. Arranging again can move tables that did not move before.
+- Zoomed out to `minimal`, a table drawn as its header alone (names only, or keys with none) shows its name on one line in the header, as large as the header holds up to 12px on screen, in place of a placeholder bar.
+- Zoomed out, lineage is drawn as thin, light, solid lines; lit and accented edges keep their color. `--dg-overview-edge` sets the color.
+
 ## 0.7.3 - 2026-10-01
 
 ### Added

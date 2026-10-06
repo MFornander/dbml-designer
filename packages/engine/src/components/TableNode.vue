@@ -56,8 +56,16 @@
         :x="w - PAD_X - gridRight - (showGear ? GEAR_SIZE + ICON_GAP : 0)"
         :y="ROW_H / 2"
       >{{ table.schema }}</text>
+      <!-- Zoomed out, a table drawn as its header alone: the name on one line, as large as the header holds -->
+      <text
+        v-if="headerNameSize > 0"
+        class="dg-table-name"
+        :x="PAD_X"
+        :y="ROW_H / 2"
+        :style="{ fontSize: `${headerNameSize}px` }"
+      >{{ table.name }}</text>
       <rect
-        v-if="lod === 'minimal' && !nameLines.length"
+        v-else-if="lod === 'minimal' && !nameLines.length"
         class="dg-placeholder"
         :x="PAD_X"
         :y="(ROW_H - placeholderH) / 2"
@@ -435,7 +443,7 @@ import {
   BADGE_GAP, BADGE_H, BADGE_W, fieldBadges, fieldIcons, hasTableDetails, partialBadgeLabel, valueShift, type FieldBadge, type TableSize,
 } from '../geometry/tableSize';
 import {
-  isKeyField, OVERVIEW_LINE_H, OVERVIEW_NAME_PX, overviewLines,
+  isKeyField, OVERVIEW_LINE_H, OVERVIEW_NAME_PX, overviewHeaderSize, overviewLines,
 } from '../geometry/lod';
 import {
   GEAR_SIZE, GRID_GAP, ICON_GAP, ICON_SPACING, ICON_W, PAD_X, PARTIAL_BADGE_H, PLACEHOLDER_HEIGHT_RATIO, ROW_H, TABLE_RADIUS, TABLE_SHADOW_DY,
@@ -483,14 +491,20 @@ const headerStyle = computed(() => ({
 const placeholderH = ROW_H * PLACEHOLDER_HEIGHT_RATIO;
 /** How far the type and its badges sit left of the row's right padding: the width of the value column. */
 const shift = computed(() => valueShift(props.size));
+/** A chip dot's radius on screen, in pixels. */
+const DOT_PX = 4;
 /** Zoomed out to `minimal`: the name's size in diagram units, so it is the same on screen at every zoom, and its lines. */
 const k = computed(() => ctx.viewport.value.k);
 const nameSize = computed(() => OVERVIEW_NAME_PX / k.value);
-const nameLines = computed(() => (lod.value === 'minimal' ? overviewLines(props.table.name, w.value, h.value, k.value) : []));
+const nameLines = computed(() => (lod.value === 'minimal' && props.rows.length > 0 ? overviewLines(props.table.name, w.value, h.value, k.value) : []));
+/** Zoomed out to `minimal` with no rows: the name's size in the header, clear of the chip dots; 0 for none. */
+const headerNameSize = computed(() => {
+  if (lod.value !== 'minimal' || props.rows.length > 0) return 0;
+  const dots = props.size.chips.length * 3 * DOT_PX / k.value;
+  return overviewHeaderSize(props.size.nameW, w.value - 2 * PAD_X - dots, k.value);
+});
 /** A value's category dot. */
 const CATEGORY_DOT_R = 3;
-/** A chip dot's radius on screen, in pixels. */
-const DOT_PX = 4;
 /** Where the grid starts, and how far the header's schema label and gear keep left of its headings. */
 const gridLeft = computed(() => (props.size.grid ? w.value - PAD_X - props.size.grid.w : 0));
 const gridRight = computed(() => (props.size.grid ? props.size.grid.w + VALUE_GAP : 0));

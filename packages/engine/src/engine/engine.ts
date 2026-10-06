@@ -11,7 +11,7 @@ import {
   computed, effectScope, nextTick, onScopeDispose, shallowRef, watch, type Ref,
 } from 'vue';
 import type {
-  AutoLod, CategoryStyle, DetailLevel, LegendCorner, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
+  ArrangeFor, AutoLod, CategoryStyle, DetailLevel, GroupStyle, LegendCorner, DiagramModel, DiagramViewport, Highlight, PartialRefMode, RevealAdded, TableChip, ZoomDetail,
 } from '../types';
 import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import type { Rect } from '../geometry/rect';
@@ -87,6 +87,17 @@ export interface DisplayOptions {
   categories: Readonly<Record<string, CategoryStyle>>;
   /** The corner the legend of lineage kinds and value categories sits in. */
   legendCorner: LegendCorner;
+  /**
+   * What Arrange spaces tables for. With `drawn`, an arrangement nothing has changed since is
+   * arranged again when the detail level changes, so it follows the level.
+   */
+  arrangeFor: ArrangeFor;
+  /**
+   * How open table groups are drawn: `box` around their tables, or `band`, a faint column as tall
+   * as the diagram with the group's title at the top, which suits groups side by side as Arrange
+   * puts them.
+   */
+  groupStyle: GroupStyle;
 }
 
 export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
@@ -107,6 +118,8 @@ export const DEFAULT_DISPLAY: Readonly<DisplayOptions> = {
   zoomDetail: { ...DEFAULT_ZOOM_DETAIL },
   categories: {},
   legendCorner: 'top-left',
+  arrangeFor: 'all',
+  groupStyle: 'box',
 };
 
 /** A value given once, or a getter to follow. */
@@ -277,6 +290,13 @@ export function createEngine (options: EngineOptions = {}) {
     const viewport = computed(() => handle.value?.viewport() ?? null);
     const chips = shallowRef<Readonly<Record<string, readonly TableChip[]>> | null>(null);
     const cellCategories = shallowRef<Readonly<Record<string, string>> | null>(null);
+
+    // Arranged for the level drawn, an arrangement nothing has changed since follows the level.
+    watch(() => display.value.detailLevel, () => {
+      if (display.value.arrangeFor === 'drawn' && layout.canUndoArrange.value) handle.value?.arrange();
+    }, {
+      flush: 'post',
+    });
 
     // After a switch, once a diagram is mounted and the model is not behind: arrange the view if it
     // has no arrangement yet (which fits it), else fit it. Waits a tick for the diagram to take the

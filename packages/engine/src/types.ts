@@ -92,6 +92,15 @@ export interface TableChip {
 /** The corner of the diagram the legend sits in. */
 export type LegendCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
+/**
+ * What Arrange spaces tables for: `all`, every field, so an arrangement holds at every detail
+ * level; `drawn`, the detail level drawn, closer together with names only.
+ */
+export type ArrangeFor = 'all' | 'drawn';
+
+/** How an open table group is drawn: a box around its tables, or a faint band as tall as the diagram, titled at the top. */
+export type GroupStyle = 'box' | 'band';
+
 /** How a category of values is drawn and named in the legend (see `DisplayOptions.categories`). */
 export interface CategoryStyle {
   label: string;

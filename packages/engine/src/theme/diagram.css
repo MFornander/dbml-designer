@@ -251,6 +251,14 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* Lineage a thin, light, solid line, so the tables stay the picture; what is lit keeps its color */
+.dg-root.is-overview .dg-dep:not(.is-highlighted, .is-accent) .dg-ref-line,
+.dg-root.is-overview .dg-dep:not(.is-highlighted, .is-accent) .dg-ref-marker {
+  stroke: var(--dg-overview-edge, color-mix(in srgb, var(--dg-ref-color) 55%, var(--dg-bg)));
+  stroke-dasharray: none;
+  stroke-width: 1;
+}
+
 /* A table's grid: a value column per record, headed by the record's label in the header */
 
 .dg-grid-heading {
@@ -624,6 +632,16 @@
 
 .dg-group-header {
   cursor: grab;
+}
+
+/* A band: a faint column with no border, titled at the top on the band itself */
+.dg-group.is-band .dg-group-body {
+  fill-opacity: 0.45;
+  stroke: none;
+}
+
+.dg-group.is-band .dg-group-header-bg {
+  fill: transparent;
 }
 
 .dg-group.is-dragging .dg-group-header {

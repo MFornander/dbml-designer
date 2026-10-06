@@ -325,8 +325,9 @@ describe('arrangeByGroup for tables in no group', () => {
     const { input, result } = arrange(DBML);
     expect(result.columns.map((c) => [c.kind, c.group ?? c.layers])).toEqual([
       ['group', 'group:public.s1'],
-      // midway right after stage1, feed just before stage2 which needs it; midway sits level with its source
-      ['lineage', [['public.midway', 'public.feed']]],
+      // midway right after stage1, feed just before stage2 which needs it; midway sits level with its
+      // source and feed with its reader, both at the top, so they keep their declaration order
+      ['lineage', [['public.feed', 'public.midway']]],
       ['group', 'group:public.s2'],
       // lookup has no group upstream and feeds only report, so it comes before report in the same run
       ['lineage', [['public.lookup'], ['public.report']]],

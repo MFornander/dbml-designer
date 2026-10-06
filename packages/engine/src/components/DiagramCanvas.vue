@@ -50,6 +50,7 @@
             :name-w="g.nameW"
             :dark="dark"
             :collapsed="false"
+            :band="groupStyle === 'band'"
             :member-count="g.memberCount"
             :is-dragging="drag.dragging.value?.key === g.group.key"
           />
@@ -258,7 +259,7 @@ import {
 } from 'vue';
 import type {
   ColorChangePayload, ColorTarget, DetailLevel, DiagramViewport, ElementClickEvent, ElementEvent, Highlight, PartialRefMode,
-  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail, CategoryStyle, LegendCorner,
+  PositionChange, PositionsMap, RevealAdded, TableChip, TableLinkPayload, ZoomDetail, CategoryStyle, LegendCorner, ArrangeFor, GroupStyle,
 } from '../types';
 import { resolveFocus } from '../state/focus';
 import type { Source } from '../model';
@@ -271,7 +272,7 @@ import { autoLod, DEFAULT_ZOOM_DETAIL } from '../geometry/lod';
 import {
   collapsedGroupSize, placeBelow, placeByLineage, placeNewItems, placeNewNotes,
 } from '../geometry/layout';
-import { arrangeByGroup, arrangePending } from '../geometry/arrange';
+import { arrangeByGroup, arrangePending, NAMES_GAPS } from '../geometry/arrange';
 import type { GroupBox } from '../state/useDiagramGeometry';
 import {
   CHIP_W, FONT_GROUP_NAME, GRID_ROWS, PAD_X, GROUP_HEADER_H, NOTE_H, NOTE_MIN_H, NOTE_MIN_W, NOTE_W, PARTIAL_BADGE_H, ROW_H,
@@ -356,8 +357,14 @@ const props = withDefaults(defineProps<{
   categories?: Readonly<Record<string, CategoryStyle>>;
   /** The corner the legend sits in. */
   legendCorner?: LegendCorner;
+  /** What Arrange spaces tables for: every field, or the detail level drawn. */
+  arrangeFor?: ArrangeFor;
+  /** How open groups are drawn: boxes, or bands as tall as the diagram. */
+  groupStyle?: GroupStyle;
 }>(), {
   legendCorner: 'top-left',
+  arrangeFor: 'all',
+  groupStyle: 'box',
   cellCategories: null,
   categories: () => ({}),
   unfolded: () => new Set<string>(),
@@ -471,6 +478,7 @@ const geo = useDiagramGeometry({
   edgeRoutes: toRef(props, 'edgeRoutes'),
   routeDragOverride,
   hidden,
+  groupStyle: toRef(props, 'groupStyle'),
   chips: toRef(props, 'chips'),
   chipWidth: toRef(props, 'chipWidth'),
   gridRows: toRef(props, 'gridRows'),
@@ -1433,23 +1441,30 @@ function arrange (only?: ReadonlySet<string>): boolean {
   }));
   const pending = only && new Set(tables.filter((t) => only.has(t.key)).map((t) => t.key));
   if (props.loading || (tables.length === 0 && notes.length === 0) || pending?.size === 0) return false;
+  const drawn = props.arrangeFor === 'drawn';
   const input = {
     tables,
     groups: m.groups,
     deps: m.deps,
-    sizes: geo.fullSizes.value,
+    sizes: drawn ? geo.sizes.value : geo.fullSizes.value,
     collapsed: new Map(m.groups
       .filter((g) => props.collapsedGroups.has(g.key))
       .map((g) => [g.key, collapsedGroupSize(measurer.measure(g.name, FONT_GROUP_NAME))])),
     notes,
+  };
+  // Wrapped to the pane's shape, and closer together for names only when spaced for what is drawn.
+  const pane = pz.viewSize.value;
+  const opts = {
+    ...(pane.w > 0 && pane.h > 0 ? { aspect: pane.w / pane.h } : {}),
+    ...(drawn && props.detailLevel === 'names' ? NAMES_GAPS : {}),
   };
   const positions = pending
     ? arrangePending({
         ...input,
         current: new Map(Object.entries(props.positions)),
         pending,
-      })
-    : arrangeByGroup(input).positions;
+      }, opts)
+    : arrangeByGroup(input, opts).positions;
   // Hand-drawn routes were drawn around the old positions; those relationships go back to automatic routing.
   const shown = new Set(tables.map((t) => t.key));
   const routes = m.refs

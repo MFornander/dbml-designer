@@ -159,6 +159,8 @@ Feature coverage of DBML elements compared with dbdiagram.io, updated 2026-09-17
 
 - [x] Legend corner and fold (engine 0.7.2, 0.7.3): display option `legendCorner` puts the legend of lineage kinds and value categories in any corner, top left by default, and a button in the legend folds it out of the way and opens it again, so it need not cover a table placed under it.
 
+- [x] A large lineage diagram readable when fitted (engine 0.7.4, DCS-165): the dcsim Methodology DAG (58 tables, one group of 20 inputs) fitted at zoom 0.10, below where names show, and a table drawn with its name only had no room for its zoomed-out name. Arrange now wraps a layer too tall for the pane into columns, as many as fit the pane at the largest zoom, and orders inputs by what reads them; display option `arrangeFor: 'drawn'` spaces tables for the detail level drawn (closer with names only) and re-arranges an untouched arrangement when the level changes; a header-only table zoomed out shows its name in the header, as large as it holds. The DAG now fits at 0.35 with names (0.19 with every field) with every name drawn. For the look of the host's old SVG view, display option `groupStyle: 'band'` draws groups as faint full-height columns, and zoomed out lineage is thin, light, and solid.
+
 ### Remaining
 
 - [ ] Project note surfaced somewhere (for example a tooltip on the app title).

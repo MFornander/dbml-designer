@@ -1,7 +1,7 @@
 <template>
   <g
     class="dg-group"
-    :class="{ 'is-collapsed': collapsed, 'is-dragging': isDragging, 'is-dimmed': dimmed }"
+    :class="{ 'is-collapsed': collapsed, 'is-band': band, 'is-dragging': isDragging, 'is-dimmed': dimmed }"
     :data-key="group.key"
     :transform="`translate(${box.x} ${box.y})`"
   >
@@ -114,6 +114,8 @@ const props = defineProps<{
   nameW: number;
   dark: boolean;
   collapsed: boolean;
+  /** Drawn as a faint band, titled in the group's color, instead of a box with a header. */
+  band?: boolean;
   memberCount: number;
   isDragging: boolean;
 }>();
@@ -135,21 +137,27 @@ const headerPath = computed(() => roundedTopRectPath(props.box.w, GROUP_HEADER_H
 const bodyStyle = computed(() => (props.group.color
   ? {
       fill: groupBodyFill(props.group.color, props.dark),
-      stroke: props.group.color,
+      ...(props.band ? {} : { stroke: props.group.color }),
     }
   : undefined));
 
-const headerStyle = computed(() => (props.group.color ? { fill: props.group.color } : undefined));
+const headerStyle = computed(() => (props.group.color && !props.band ? { fill: props.group.color } : undefined));
 
-const nameStyle = computed(() => (props.group.color ? { fill: textColorFor(props.group.color) } : undefined));
-const gearColor = computed(() => (props.group.color ? textColorFor(props.group.color) : (props.dark ? DARK : LIGHT).groupName));
+/** The title's color: readable on the header's color, or on a band, the group's color itself. */
+const nameColor = computed(() => {
+  const c = props.group.color;
+  if (!c) return undefined;
+  return props.band ? c : textColorFor(c);
+});
+const nameStyle = computed(() => (nameColor.value ? { fill: nameColor.value } : undefined));
+const gearColor = computed(() => nameColor.value ?? (props.dark ? DARK : LIGHT).groupName);
 
 const showGear = computed(() => {
   if (!ctx.pickColors.value || props.isDragging) return false;
   const s = ctx.highlight.value.source;
   return !!s && s.kind === 'group' && s.key === props.group.key;
 });
-const iconStyle = computed(() => (props.group.color ? { stroke: textColorFor(props.group.color) } : undefined));
+const iconStyle = computed(() => (nameColor.value ? { stroke: nameColor.value } : undefined));
 
 function onEnter () {
   ctx.setHover({

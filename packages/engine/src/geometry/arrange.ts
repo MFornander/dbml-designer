@@ -48,8 +48,13 @@ export interface ArrangeOptions {
   colGap: number;
   /** Between the dependency layers inside a column. */
   layerGap: number;
-  /** Between tables stacked in a layer. */
+  /** Between tables stacked in a layer, and between the columns a tall layer wraps into. */
   rowGap: number;
+  /**
+   * Width over height the arrangement aims for, such as the pane's: a layer taller than that
+   * allows wraps into several columns. 0 never wraps.
+   */
+  aspect: number;
 }
 
 /** One column of the arrangement. */
@@ -69,18 +74,29 @@ export interface ArrangeResult {
   columns: ArrangeColumn[];
 }
 
+/** Width over height aimed at when packing tables that have nothing to line up with, and by default for the whole arrangement. */
+const PACK_ASPECT = 1.6;
+
+/** The most columns one layer wraps into. */
+const MAX_WRAP = 16;
+
 const DEFAULTS: ArrangeOptions = {
   colGap: 96,
   layerGap: 80,
   rowGap: PLACE_ROW_GAP,
+  aspect: PACK_ASPECT,
 };
-
-/** Width over height aimed at when packing tables that have nothing to line up with. */
-const PACK_ASPECT = 1.6;
 
 const FALLBACK_SIZE: ArrangeSize = {
   width: 200,
   height: 32,
+};
+
+/** Gaps for tables drawn with their names only, closer to each other since they are short. */
+export const NAMES_GAPS: Readonly<Partial<ArrangeOptions>> = {
+  colGap: 48,
+  layerGap: 56,
+  rowGap: 16,
 };
 
 /** Round up to the grid, so gaps never shrink below what was asked for. */
@@ -302,77 +318,137 @@ export function arrangeByGroup (input: ArrangeInput, opts: Partial<ArrangeOption
     return c ? colorRank.get(c)! : Number.POSITIVE_INFINITY;
   };
 
-  const positions = new Map<string, Point>();
-  const result: ArrangeColumn[] = [];
-  /** Where lineage edges attach to each placed table: its header, or the box of its collapsed group. */
-  const anchorY = new Map<TableKey, number>();
-  const orderLayer = (layer: TableKey[]) => {
-    const bary = new Map<TableKey, number>();
-    for (const k of layer) {
+  // Each column's dependency layers, in declaration order until placing orders them.
+  const columnLayers = columns.map((col) => {
+    const byLayer = dependencyLayers(col.keys, up, down, byOrder);
+    const layers: TableKey[][] = Array.from({ length: Math.max(...byLayer.values()) + 1 }, () => []);
+    for (const k of [...col.keys].sort(byOrder)) layers[byLayer.get(k)!]!.push(k);
+    return layers;
+  });
+
+  /** The rows a layer takes when it wraps into `n` columns, filled left to right and then down. */
+  const wrapRows = (layer: readonly TableKey[], n: number) => Array.from({ length: Math.ceil(layer.length / n) }, (_, r) => layer.slice(r * n, (r + 1) * n));
+  const rowsHeight = (rows: readonly (readonly TableKey[])[]) => rows.reduce((y, row) => ceil8(y + Math.max(...row.map((k) => sizeOf(k).height)) + o.rowGap), 0) - o.rowGap;
+
+  // Tables start low enough for group headers to fit above them.
+  const top = ceil8(GROUP_PAD + GROUP_HEADER_H);
+
+  /**
+   * Place every column from the left, wrapping a layer taller than `cap` into as few columns as
+   * keep it within. A layer is ordered by color, then by where what it reads sits, else by where
+   * what reads it sat in `readers`, then by declaration.
+   */
+  const placeColumns = (cap: number, readers: ReadonlyMap<TableKey, number> | null) => {
+    const positions = new Map<string, Point>();
+    const result: ArrangeColumn[] = [];
+    /** Where lineage edges attach to each placed table: its header, or the box of its collapsed group. */
+    const anchorY = new Map<TableKey, number>();
+    const meanY = (keys: Iterable<TableKey>, at: ReadonlyMap<TableKey, number>) => {
       let sum = 0;
       let n = 0;
-      for (const p of up.get(k)!) {
-        const y = anchorY.get(p);
+      for (const k of keys) {
+        const y = at.get(k);
         if (y === undefined) continue;
         sum += y;
         n += 1;
       }
-      bary.set(k, n > 0 ? sum / n : Number.POSITIVE_INFINITY);
-    }
-    layer.sort((a, b) => compare(colorOf(a), colorOf(b)) || compare(bary.get(a)!, bary.get(b)!) || byOrder(a, b));
+      return n > 0 ? sum / n : Number.POSITIVE_INFINITY;
+    };
+    const orderLayer = (layer: TableKey[]) => {
+      const bary = new Map(layer.map((k) => {
+        const y = meanY(up.get(k)!, anchorY);
+        return [k, y === Number.POSITIVE_INFINITY && readers ? meanY(down.get(k)!, readers) : y];
+      }));
+      layer.sort((a, b) => compare(colorOf(a), colorOf(b)) || compare(bary.get(a)!, bary.get(b)!) || byOrder(a, b));
+    };
+
+    let contentTop = top;
+    let tallest = 0;
+    let x = 0;
+    columns.forEach((col, c) => {
+      const inset = col.kind === 'group' ? GROUP_PAD : 0;
+      const left = ceil8(x + inset);
+      const placed: TableKey[][] = [];
+      let layerX = left;
+      let colRight = left;
+      let colBottom = top;
+      for (const source of columnLayers[c]!) {
+        const layer = [...source];
+        orderLayer(layer);
+        let n = 1;
+        while (n < Math.min(layer.length, MAX_WRAP) && rowsHeight(wrapRows(layer, n)) > cap) n += 1;
+        const rows = wrapRows(layer, n);
+        const widths = Array.from({ length: n }, (_, j) => Math.max(0, ...rows.map((row) => (row[j] ? sizeOf(row[j]!).width : 0))));
+        const xs = [layerX];
+        for (let j = 1; j < n; j++) xs.push(ceil8(xs[j - 1]! + widths[j - 1]! + o.rowGap));
+        let y = top;
+        for (const row of rows) {
+          row.forEach((k, j) => {
+            positions.set(k, {
+              x: xs[j]!,
+              y,
+            });
+            anchorY.set(k, y + HEADER_ANCHOR_Y);
+          });
+          const h = Math.max(...row.map((k) => sizeOf(k).height));
+          colBottom = Math.max(colBottom, y + h);
+          y = ceil8(y + h + o.rowGap);
+        }
+        placed.push(...widths.map((_, j) => rows.flatMap((row) => (row[j] ? [row[j]!] : []))));
+        colRight = xs[n - 1]! + widths[n - 1]!;
+        layerX = ceil8(colRight + o.layerGap);
+      }
+      if (col.group) contentTop = Math.min(contentTop, top - GROUP_PAD - GROUP_HEADER_H);
+      const box = col.group ? input.collapsed?.get(col.group) : undefined;
+      if (box) {
+        // Folded: the box sits at the top left of its members' bounds and stands in for them.
+        const boxX = left - GROUP_PAD;
+        const boxY = top - GROUP_PAD - GROUP_HEADER_H;
+        for (const k of col.keys) anchorY.set(k, boxY + box.h / 2);
+        tallest = Math.max(tallest, boxY + box.h - top);
+        x = ceil8(boxX + box.w + o.colGap);
+      } else {
+        tallest = Math.max(tallest, colBottom - top);
+        x = ceil8(colRight + inset + o.colGap);
+      }
+      result.push({
+        kind: col.kind,
+        ...(col.group ? { group: col.group } : {}),
+        layers: placed,
+      });
+    });
+    return {
+      positions,
+      result,
+      anchorY,
+      contentTop,
+      tallest,
+      x,
+    };
   };
 
-  // Tables start low enough for group headers to fit above them.
-  const top = ceil8(GROUP_PAD + GROUP_HEADER_H);
-  let contentTop = top;
-  let tallest = 0;
-  let x = 0;
-  for (const col of columns) {
-    const byLayer = dependencyLayers(col.keys, up, down, byOrder);
-    const layers: TableKey[][] = Array.from({ length: Math.max(...byLayer.values()) + 1 }, () => []);
-    for (const k of [...col.keys].sort(byOrder)) layers[byLayer.get(k)!]!.push(k);
-    const inset = col.kind === 'group' ? GROUP_PAD : 0;
-    const left = ceil8(x + inset);
-    let layerX = left;
-    let colRight = left;
-    let colBottom = top;
-    for (const layer of layers) {
-      orderLayer(layer);
-      let y = top;
-      let w = 0;
-      for (const k of layer) {
-        const size = sizeOf(k);
-        positions.set(k, {
-          x: layerX,
-          y,
-        });
-        anchorY.set(k, y + HEADER_ANCHOR_Y);
-        colBottom = Math.max(colBottom, y + size.height);
-        w = Math.max(w, size.width);
-        y = ceil8(y + size.height + o.rowGap);
+  // The tallest a layer may stand: of as many heights as the tallest layer wraps into, the one
+  // that lets the columns fit a pane of the aspect asked for at the largest zoom, the tallest
+  // of those that tie. Then once more with each layer that reads nothing ordered by its readers.
+  const natural = placeColumns(Number.POSITIVE_INFINITY, null);
+  let cap = Number.POSITIVE_INFINITY;
+  if (o.aspect > 0) {
+    const tallestLayer = Math.max(0, ...columnLayers.flat().map((layer) => rowsHeight(layer.map((k) => [k]))));
+    const fitScale = (p: typeof natural) => Math.max((p.x - o.colGap) / o.aspect, p.tallest + top - p.contentTop);
+    let best = fitScale(natural);
+    for (let n = 2; n <= MAX_WRAP; n++) {
+      const tryCap = tallestLayer / n;
+      const scale = fitScale(placeColumns(tryCap, null));
+      if (scale < best) {
+        best = scale;
+        cap = tryCap;
       }
-      colRight = layerX + w;
-      layerX = ceil8(colRight + o.layerGap);
     }
-    if (col.group) contentTop = Math.min(contentTop, top - GROUP_PAD - GROUP_HEADER_H);
-    const box = col.group ? input.collapsed?.get(col.group) : undefined;
-    if (box) {
-      // Folded: the box sits at the top left of its members' bounds and stands in for them.
-      const boxX = left - GROUP_PAD;
-      const boxY = top - GROUP_PAD - GROUP_HEADER_H;
-      for (const k of col.keys) anchorY.set(k, boxY + box.h / 2);
-      tallest = Math.max(tallest, boxY + box.h - top);
-      x = ceil8(boxX + box.w + o.colGap);
-    } else {
-      tallest = Math.max(tallest, colBottom - top);
-      x = ceil8(colRight + inset + o.colGap);
-    }
-    result.push({
-      kind: col.kind,
-      ...(col.group ? { group: col.group } : {}),
-      layers,
-    });
   }
+  const first = cap === Number.POSITIVE_INFINITY ? natural : placeColumns(cap, null);
+  const final = placeColumns(cap, first.anchorY);
+  const { positions, result, contentTop } = final;
+  let { tallest, x } = final;
 
   if (unrelated.length > 0) {
     const items = [...unrelated]

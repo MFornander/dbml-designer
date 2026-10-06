@@ -25,6 +25,8 @@
     :cell-categories="engine.cellCategories.value"
     :categories="display.categories"
     :legend-corner="display.legendCorner"
+    :arrange-for="display.arrangeFor"
+    :group-style="display.groupStyle"
     :edge-routes="edgeRoutes"
     :hidden="hidden"
     :loading="loading"

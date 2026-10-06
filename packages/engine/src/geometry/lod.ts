@@ -1,4 +1,6 @@
-import { LOD_MINIMAL_MAX, LOD_STRUCTURE_MAX } from './constants';
+import {
+  FONT_SIZE, LOD_MINIMAL_MAX, LOD_STRUCTURE_MAX, ROW_H,
+} from './constants';
 import type {
   AutoLod, DetailLevel, FieldVM, TableVM, ZoomDetail,
 } from '../types';
@@ -88,3 +90,16 @@ export function overviewLines (name: string, w: number, h: number, k: number, px
 }
 
 export const OVERVIEW_LINE_H = LINE_H;
+
+/** How much of the header's height a name drawn there zoomed out may take. */
+const HEADER_FILL = 0.75;
+
+/**
+ * The size, in diagram units, of the name of a table drawn as its header alone while zoomed out:
+ * one line, as large as `px` pixels on screen at zoom `k`, as the header holds, and as fits `room`
+ * for a name `nameW` wide at the header's usual size, whichever is least.
+ */
+export function overviewHeaderSize (nameW: number, room: number, k: number, px = OVERVIEW_NAME_PX): number {
+  const fits = nameW > 0 ? (FONT_SIZE * room) / nameW : Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.min(px / k, ROW_H * HEADER_FILL, fits));
+}

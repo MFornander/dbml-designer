@@ -1,7 +1,7 @@
 import { computed, type Ref } from 'vue';
 import type { PositionsMap } from '../types';
 import type {
-  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupVM, MarkerKind, PartialRefMode, RefVM, TableChip, TableVM,
+  DepLineVM, DetailLevel, DiagramModel, EdgeEndpointVM, FieldVM, GroupStyle, GroupVM, MarkerKind, PartialRefMode, RefVM, TableChip, TableVM,
 } from '../types';
 import type {
   GroupKey, NoteKey, RefKey, TableKey,
@@ -19,8 +19,12 @@ import { roundedPolylinePath, sCurve } from '../geometry/pathBuilder';
 import { markerGeometry, type MarkerGeometry } from '../geometry/markers';
 import { collapsedGroupSize, groupBounds, contentBounds as boundsOf } from '../geometry/layout';
 import { lineageLayout } from '../geometry/lineageLayout';
-import { FONT_GROUP_NAME, NOTE_H, NOTE_W } from '../geometry/constants';
-import type { Point, Rect, Size } from '../geometry/rect';
+import {
+  FONT_GROUP_NAME, GROUP_HEADER_H, GROUP_PAD, NOTE_H, NOTE_W,
+} from '../geometry/constants';
+import {
+  union, type Point, type Rect, type Size,
+} from '../geometry/rect';
 import { samePlain, sameRect, shareMap } from './share';
 
 export interface RefGeometry {
@@ -91,6 +95,8 @@ export interface GeometryInputs {
   routeDragOverride: Ref<RouteDragOverride | null>;
   /** Tables and notes the active diagram view hides; they get no box, so their edges vanish too. */
   hidden: Ref<ReadonlySet<string>>;
+  /** Open groups as boxes around their tables, or as bands as tall as the diagram. */
+  groupStyle?: Ref<GroupStyle>;
   measurer: Measurer;
   /** Bumped when fonts finish loading so sizes are recomputed. */
   measureVersion: Ref<number>;
@@ -292,6 +298,14 @@ export function useDiagramGeometry (input: GeometryInputs) {
     const out: GroupBox[] = [];
     if (input.lineageLayout.value) return prev?.length === 0 ? prev : out;
     const before = new Map((prev ?? []).map((g) => [g.group.key, g]));
+    // Bands reach from above the highest table outside a collapsed group to below the lowest.
+    const collapsedGroups = input.collapsedGroups.value;
+    const span = input.groupStyle?.value === 'band'
+      ? union(input.model.value.tables
+          .filter((t) => !(t.groupKey && collapsedGroups.has(t.groupKey)))
+          .map((t) => boxes.value.get(t.key))
+          .filter((b): b is Rect => !!b))
+      : null;
     for (const group of input.model.value.groups) {
       const members = group.tableKeys.map((k) => boxes.value.get(k)).filter((b): b is Rect => !!b);
       const bounds = groupBounds(members);
@@ -304,7 +318,14 @@ export function useDiagramGeometry (input: GeometryInputs) {
             y: bounds.y,
             ...collapsedGroupSize(nameW),
           }
-        : bounds;
+        : span
+          ? {
+              x: bounds.x,
+              y: span.y - GROUP_PAD - GROUP_HEADER_H,
+              w: bounds.w,
+              h: span.h + 2 * GROUP_PAD + GROUP_HEADER_H,
+            }
+          : bounds;
       const old = before.get(group.key);
       const same = old && old.group === group && old.collapsed === collapsed && old.memberCount === members.length
         && old.nameW === nameW && sameRect(old.box, box);
